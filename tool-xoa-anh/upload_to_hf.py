@@ -29,6 +29,7 @@ PROJECT_FILES = [
     "requirements.txt",
     "README.md",
     "Dockerfile",
+    "prompt.txt",
 ]
 PROJECT_FOLDERS = [
     ("examples", "examples"),

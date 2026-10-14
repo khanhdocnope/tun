@@ -322,7 +322,9 @@ def run_ocr_on_crop(
 
     if engine_type == "ja_manga":
         mocr = get_manga_ocr()
-        text = mocr(crop_pil)
+        import torch
+        with torch.inference_mode():
+            text = mocr(crop_pil)
         return text.strip() if text else ""
 
     # Multilingual: PaddleOCR
@@ -351,12 +353,14 @@ def process_page_ocr(
     reading_order: Literal["manga", "webtoon"] = "manga",
     source_lang: str = "ch",
     det_threshold: float = 0.20,
+    chat_only: bool = True,
 ) -> Tuple[int, List[Dict[str, Any]]]:
     """
     Quy trình nhận diện và OCR toàn bộ trang truyện:
     1. BBox Detection (ComicTextDetector)
-    2. Sắp xếp thứ tự đọc (Manga RTL hoặc Webtoon TTB)
-    3. Cắt từng box và chạy OCR (manga-ocr hoặc PaddleOCR)
+    2. Lọc chỉ lấy chữ trong bong bóng chat (chat_only=True), loại bỏ SFX vẽ tay
+    3. Sắp xếp thứ tự đọc (Manga RTL hoặc Webtoon TTB)
+    4. Cắt từng box và chạy OCR (manga-ocr hoặc PaddleOCR)
     Trả về: (total_boxes, list_of_objects)
     """
     if isinstance(image, np.ndarray):
@@ -371,10 +375,41 @@ def process_page_ocr(
     if not raw_boxes:
         return 0, []
 
+    # 2. Lọc chỉ lấy chữ trong Bong Bóng Thoại (Chat Bubble Only) nếu bật tùy chọn
+    if chat_only:
+        try:
+            from manga_cleaner import cleaner_pipeline
+            if cleaner_pipeline.ready:
+                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                regions = cleaner_pipeline._detect_regions(img_rgb, thr=0.15, force_cpu=True)
+                chat_boxes = [d.box for d in regions if d.cls == 1]  # CLS_TEXT_BUBBLE
+                if chat_boxes:
+                    filtered_boxes = []
+                    for b in raw_boxes:
+                        ymin, xmin, ymax, xmax = b
+                        b_area = max(1, (xmax - xmin) * (ymax - ymin))
+                        inside_bubble = False
+                        for (cx1, cy1, cx2, cy2) in chat_boxes:
+                            ix1 = max(xmin, cx1)
+                            iy1 = max(ymin, cy1)
+                            ix2 = min(xmax, cx2)
+                            iy2 = min(ymax, cy2)
+                            iw = max(0, ix2 - ix1)
+                            ih = max(0, iy2 - iy1)
+                            if (iw * ih) / b_area >= 0.20:
+                                inside_bubble = True
+                                break
+                        if inside_bubble:
+                            filtered_boxes.append(b)
+                    if filtered_boxes:
+                        raw_boxes = filtered_boxes
+        except Exception as exc:
+            logger.warning("Không thể lọc bong bóng chat (dùng toàn bộ box): %s", exc)
+
     # Định dạng thành list dicts để chuẩn bị sort
     box_items = [{"bbox": list(b)} for b in raw_boxes]
 
-    # 2. Sắp xếp thứ tự đọc
+    # 3. Sắp xếp thứ tự đọc
     sorted_items = sort_reading_order(box_items, mode=reading_order)
 
     # 3. Chạy OCR từng box theo đúng thứ tự

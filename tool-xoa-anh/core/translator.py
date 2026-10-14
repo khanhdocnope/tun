@@ -27,15 +27,26 @@ DEFAULT_API_KEY = os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY") or os.ge
 
 def build_system_prompt(target_lang: str = "Vietnamese") -> str:
     return (
-        f"Bạn là một biên dịch viên manga/manhwa/comic chuyên nghiệp dịch sang tiếng {target_lang}.\n"
-        "Nhiệm vụ của bạn là dịch toàn bộ các đoạn thoại trên một trang truyện được cung cấp dưới dạng danh sách JSON.\n\n"
-        "QUY TẮC BẮT BUỘC:\n"
-        "1. Dịch chuẩn xác theo ngữ cảnh tổng thể của toàn trang truyện.\n"
-        "2. Sử dụng xưng hô và văn phong truyện tranh tự nhiên, mượt mà, đúng tâm lý nhân vật.\n"
-        "3. Tự động nhận diện và sửa các lỗi chính tả, nhận diện sai ký tự phát sinh do OCR (ví dụ: chữ bị đứt nét, nhầm ký tự tương tự).\n"
-        "4. Nếu một câu bị ngắt dòng qua nhiều bóng thoại, hãy ghép nối ngữ nghĩa cho liền mạch.\n"
-        "5. Giữ nguyên cấu trúc JSON đầu ra tương ứng 100% với các 'id' đã cho. Không thêm bớt id.\n"
-        "6. CHỈ trả về duy nhất chuỗi JSON hợp lệ theo định dạng: [{\"id\": 1, \"translated\": \"...\"}, ...]. Không giải thích, không thêm lời mở đầu hay kết thúc."
+        f"You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating into {target_lang}.\n"
+        f"Your task is to translate an entire page of comic speech bubbles provided as a structured JSON list.\n\n"
+        "## CRITICAL TRANSLATION GUIDELINES & RULES:\n\n"
+        "1. CONTEXTUAL COHESION & VISUAL ALIGNMENT:\n"
+        f"   - Translate accurately into natural, expressive, modern {target_lang} suited to the comic genre (shonen, shojo, seinen, webtoon).\n"
+        "   - MULTI-BUBBLE SENTENCES: When a single sentence is split across consecutive bubbles, comprehend the full sentence first, then distribute the translation naturally across those exact IDs without losing grammatical flow.\n"
+        "   - OCR ERROR AUTO-CORRECTION: Comics frequently suffer from OCR noise (confused characters like l/I/|, broken punctuation, broken Kanji/furigana). Automatically infer and repair OCR typos using narrative context.\n\n"
+        "2. TONE, HONORIFICS & ADDRESSING:\n"
+        f"   - Reflect character relationships, ages, and intimacy levels accurately using appropriate pronouns and honorifics in {target_lang} (e.g. Vietnamese xưng hô: anh/em, cậu/tớ, mày/tao, tiền bối/hậu bối, đại nhân).\n"
+        "   - Maintain consistent character voice across all bubbles on the page.\n\n"
+        "3. SOUND EFFECTS (SFX):\n"
+        f"   - If a text item is a standalone sound effect / onomatopoeia (e.g., BANG, THUD, DOKI-DOKI, MEOW), translate or transliterate it BRIEFLY into a punchy {target_lang} sound equivalent.\n"
+        "   - Do NOT translate sound effects literally as full explanatory sentences.\n\n"
+        "4. CAPITALIZATION & SPECIAL PUNCTUATION:\n"
+        f"   - DE-CAPITALIZE ALL-CAPS: Comic source fonts often use ALL-CAPS by default, NOT because characters are shouting. Always convert to natural sentence case (capitalize only the first letter and proper nouns) following standard {target_lang} spelling.\n"
+        f"   - JAPANESE WAVE DASH ('〜' / '～'): Indicates a drawn-out, sing-song, or playful trailing tone. Do NOT replace with ellipsis ('...'), which wrongly implies hesitation. Keep the wave dash or naturally elongate the final sound in {target_lang}.\n\n"
+        "5. STRICT OUTPUT INTEGRITY:\n"
+        "   - TRULY EMPTY BUBBLES: If a text item has no translatable text or contains only unreadable noise, return an empty string \"\" for 'translated'. NEVER output placeholder notes like '(blank)', '(empty)', '(no text)', 'N/A', or '(để trống)'.\n"
+        "   - PRESERVE EVERY ID: Output MUST map 1-to-1 with every single input 'id'. Never merge, skip, or create new IDs.\n"
+        "   - STRICT JSON OUTPUT: Return ONLY a valid JSON array of objects: [{\"id\": 1, \"translated\": \"...\"}, ...]. Absolutely NO markdown commentary, NO introduction, and NO notes."
     )
 
 
@@ -82,7 +93,7 @@ class MangaTranslator:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: float = 60.0,
+        timeout: float = 12.0,
     ):
         self.api_key = (api_key or DEFAULT_API_KEY).strip()
         self.base_url = (base_url or DEFAULT_BASE_URL).strip().rstrip("/")
@@ -105,9 +116,10 @@ class MangaTranslator:
 
         active_key = (api_key or self.api_key).strip()
         if not active_key:
-            raise ValueError(
-                "Thiếu API Key cho DeepSeek. Vui lòng truyền api_key trong request hoặc cấu hình biến môi trường DEEPSEEK_API_KEY / API_KEY."
-            )
+            logger.info("Không có API Key cho DeepSeek, giữ nguyên bản OCR gốc (bỏ qua bước dịch).")
+            for it in items:
+                it["translated_text"] = it.get("original_text", "")
+            return items
 
         # Lọc ra các item có nội dung chữ
         payload_input = []
@@ -159,12 +171,9 @@ class MangaTranslator:
                 logger.info("Dịch thành công %d đoạn thoại.", len(items))
                 return items
 
-            except httpx.HTTPStatusError as exc:
-                logger.error("HTTP error từ DeepSeek API (%s): %s", exc.response.status_code, exc.response.text)
-                raise RuntimeError(f"DeepSeek API trả về lỗi {exc.response.status_code}: {exc.response.text}")
             except Exception as exc:
-                logger.error("Lỗi trong quá trình dịch thuật: %s", exc)
-                # Fallback: gán translated_text = original_text để không làm sập luồng
+                logger.warning("DeepSeek API lỗi hoặc timeout (%s). Giữ nguyên kết quả OCR gốc.", exc)
                 for it in items:
-                    it["translated_text"] = it.get("original_text", "")
-                raise RuntimeError(f"Lỗi dịch thuật: {exc}")
+                    if "translated_text" not in it or not it["translated_text"]:
+                        it["translated_text"] = it.get("original_text", "")
+                return items

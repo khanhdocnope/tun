@@ -31,6 +31,8 @@ from fastapi import FastAPI, APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.utils import get_openapi
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
@@ -535,6 +537,26 @@ def health():
     }
 
 
+@api_router.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="⚡ Manga Cleaner & Translation API - Swagger Docs")
+
+
+@api_router.get("/redoc", include_in_schema=False)
+async def custom_redoc_html():
+    return get_redoc_html(openapi_url="/openapi.json", title="⚡ Manga Cleaner & Translation API - ReDoc")
+
+
+@api_router.get("/openapi.json", include_in_schema=False)
+async def get_open_api_endpoint():
+    return get_openapi(
+        title="⚡ Manga Cleaner & Translation API",
+        version="2.0.0",
+        description="Backend API đa chế độ cho Manga/Manhwa: OCR, Comic-Text-Detection, Inpainting & DeepSeek Translation.",
+        routes=api_router.routes,
+    )
+
+
 @api_router.post("/clean_page")
 @api_router.post("/api/clean_page")
 async def api_clean_page(req: CleanPagePayload):
@@ -590,6 +612,7 @@ async def api_translate_page(
     reading_order: str = Form("manga", description="Thứ tự đọc: 'manga' (phải qua trái) hoặc 'webtoon' (trên xuống dưới)"),
     ocr_engine: str = Form("ja_manga", description="Cơ chế OCR: 'ja_manga' (manga-ocr) hoặc 'multilingual' (PaddleOCR)"),
     source_lang: Optional[str] = Form("ch", description="Ngôn ngữ nguồn nếu chọn multilingual (vd: 'ch', 'korean', 'en', 'japan')"),
+    chat_only: bool = Form(True, description="Chỉ nhận diện & dịch chữ trong bong bóng chat (bỏ SFX vẽ tay)"),
     api_key: Optional[str] = Form(None, description="DeepSeek / OpenAI API Key (tùy chọn, mặc định đọc từ ENV DEEPSEEK_API_KEY)"),
     target_lang: str = Form("vi", description="Ngôn ngữ đích (mặc định: 'vi' hoặc 'Vietnamese')"),
     det_threshold: Optional[float] = Form(0.20, description="Ngưỡng phát hiện khung thoại (0.1 - 0.5)"),
@@ -607,7 +630,7 @@ async def api_translate_page(
     order_val = "webtoon" if reading_order.lower() in ("webtoon", "manhwa") else "manga"
 
     try:
-        # Bước 1 & 2: Phát hiện text box & chạy Lazy OCR theo Reading Order
+        # Bước 1 & 2: Phát hiện text box & chạy Lazy OCR theo Reading Order (có hỗ trợ chat_only)
         total_boxes, ocr_items = await run_in_threadpool(
             process_page_ocr,
             image=img_pil,
@@ -615,6 +638,7 @@ async def api_translate_page(
             reading_order=order_val,
             source_lang=source_lang or "ch",
             det_threshold=float(det_threshold or 0.20),
+            chat_only=bool(chat_only),
         )
 
         # Bước 3: Gửi toàn bộ trang truyện sang DeepSeek LLM dịch ngữ cảnh
@@ -647,6 +671,109 @@ async def api_translate_page(
     except Exception as exc:
         logger.error("Lỗi khi xử lý translate-page: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post(
+    "/api/v1/translate-zip",
+    tags=["Translation & OCR"],
+    summary="Dịch hàng loạt trang truyện từ tệp ZIP (Hỗ trợ lọc bóng thoại & xuất kịch bản)",
+)
+async def api_translate_zip(
+    file: UploadFile = File(..., description="Tệp ZIP chứa nhiều trang truyện (.zip)"),
+    reading_order: str = Form("manga", description="Thứ tự đọc ('manga' hoặc 'webtoon')"),
+    ocr_engine: str = Form("ja_manga", description="Cơ chế OCR ('ja_manga' hoặc 'multilingual')"),
+    source_lang: Optional[str] = Form("ch", description="Ngôn ngữ gốc nếu dùng multilingual"),
+    chat_only: bool = Form(True, description="Chỉ nhận diện & dịch chữ trong bong bóng chat (bỏ SFX)"),
+    api_key: Optional[str] = Form(None, description="API Key DeepSeek / OpenAI"),
+    target_lang: str = Form("vi", description="Ngôn ngữ dịch đích"),
+    det_threshold: Optional[float] = Form(0.20),
+):
+    start_t = time.perf_counter()
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Tệp ZIP tải lên rỗng.")
+        zip_buf = io.BytesIO(content)
+        in_zip = zipfile.ZipFile(zip_buf, "r")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Không thể đọc tệp ZIP: {exc}")
+
+    valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".jfif"}
+    file_list = [f for f in in_zip.namelist() if not f.startswith("__MACOSX/") and not Path(f).name.startswith(".")]
+    image_files = [f for f in file_list if Path(f).suffix.lower() in valid_exts]
+    image_files.sort(key=natural_sort_key)
+
+    if not image_files:
+        raise HTTPException(status_code=400, detail="Không tìm thấy tệp ảnh hợp lệ (.jpg, .png, .webp) trong file ZIP.")
+
+    engine_val = "ja_manga" if ocr_engine.lower() in ("ja", "ja_manga") else "multilingual"
+    order_val = "webtoon" if reading_order.lower() in ("webtoon", "manhwa") else "manga"
+    translator = MangaTranslator(api_key=api_key)
+
+    pages_result = []
+    total_all_boxes = 0
+
+    for idx, img_rel in enumerate(image_files, start=1):
+        try:
+            raw_data = in_zip.read(img_rel)
+            img_pil = Image.open(io.BytesIO(raw_data)).convert("RGB")
+
+            total_boxes, ocr_items = await run_in_threadpool(
+                process_page_ocr,
+                image=img_pil,
+                ocr_engine=engine_val,
+                reading_order=order_val,
+                source_lang=source_lang or "ch",
+                det_threshold=float(det_threshold or 0.20),
+                chat_only=bool(chat_only),
+            )
+
+            if total_boxes > 0:
+                translated_items = await translator.translate_page(
+                    items=ocr_items,
+                    target_lang=target_lang,
+                    api_key=api_key,
+                )
+            else:
+                translated_items = []
+
+            total_all_boxes += total_boxes
+            page_data = []
+            for it in translated_items:
+                page_data.append({
+                    "id": it.get("id"),
+                    "box": it.get("bbox") or it.get("box", [0, 0, 0, 0]),
+                    "original_text": it.get("original_text", ""),
+                    "translated_text": it.get("translated_text", ""),
+                })
+
+            pages_result.append({
+                "page_index": idx,
+                "filename": Path(img_rel).name,
+                "total_boxes": total_boxes,
+                "data": page_data,
+            })
+        except Exception as exc:
+            logger.error("Lỗi trang %s trong ZIP: %s", img_rel, exc)
+            pages_result.append({
+                "page_index": idx,
+                "filename": Path(img_rel).name,
+                "total_boxes": 0,
+                "error": str(exc),
+                "data": [],
+            })
+
+    elapsed_s = round(time.perf_counter() - start_t, 2)
+    return {
+        "status": "success",
+        "total_pages": len(image_files),
+        "total_dialogue_boxes": total_all_boxes,
+        "chat_only": chat_only,
+        "reading_order": order_val,
+        "ocr_engine": engine_val,
+        "execution_time_seconds": elapsed_s,
+        "pages": pages_result,
+    }
 
 
 
@@ -947,11 +1074,11 @@ def create_ui() -> gr.Blocks:
                             outputs=[brush_output_image, brush_download_btn],
                         )
 
-            # ================= TAB 3: DỊCH TRUYỆN TRANH (AI MANGA TRANSLATOR) =================
-            with gr.TabItem("🌐 Dịch Truyện Tranh (AI Manga & Webtoon Translator)"):
+            # ================= TAB 3: NHẬN DIỆN & OCR CHỮ (COMIC TEXT OCR) =================
+            with gr.TabItem("📖 Nhận Diện & Đọc Chữ OCR Manga (Comic Text OCR)"):
                 with gr.Row():
                     with gr.Column(scale=5):
-                        trans_img_input = gr.Image(label="1. Tải ảnh trang truyện cần dịch", type="pil")
+                        trans_img_input = gr.Image(label="1. Tải ảnh trang truyện cần OCR chữ", type="pil")
                         with gr.Row():
                             trans_order_radio = gr.Radio(
                                 choices=[("Manga (Phải -> Trái, Trên -> Dưới)", "manga"), ("Webtoon (Trên -> Dưới)", "webtoon")],
@@ -965,14 +1092,20 @@ def create_ui() -> gr.Blocks:
                                 label="Bộ nhận diện OCR",
                             )
                         with gr.Row():
+                            trans_chat_only_chk = gr.Checkbox(value=True, label="🎯 Chỉ lấy chữ trong Bong Bóng Thoại (Bỏ qua SFX)")
                             trans_source_lang_dd = gr.Dropdown(
                                 choices=[("Tiếng Trung (ch)", "ch"), ("Tiếng Hàn (korean)", "korean"), ("Tiếng Anh (en)", "en"), ("Tiếng Nhật (japan)", "japan")],
                                 value="ch",
                                 label="Ngôn ngữ nguồn (khi dùng PaddleOCR)",
                             )
-                            trans_target_lang_txt = gr.Textbox(value="Tiếng Việt", label="Dịch sang ngôn ngữ")
 
-                        with gr.Accordion("⚙️ Cấu hình API DeepSeek / OpenAI (Tùy chọn)", open=False):
+                        trans_enable_llm_chk = gr.Checkbox(
+                            value=False,
+                            label="Dịch sang tiếng Việt bằng LLM DeepSeek (Tùy chọn - Mặc định TẮT để OCR siêu tốc)",
+                        )
+
+                        with gr.Accordion("⚙️ Cấu hình Dịch thuật & API Key (Chỉ dùng khi bật Dịch)", open=False):
+                            trans_target_lang_txt = gr.Textbox(value="Tiếng Việt", label="Dịch sang ngôn ngữ")
                             trans_api_key_txt = gr.Textbox(
                                 label="API Key",
                                 type="password",
@@ -989,26 +1122,28 @@ def create_ui() -> gr.Blocks:
                                 placeholder="deepseek-chat",
                             )
 
-                        btn_run_translate = gr.Button("🚀 AI Nhận Diện & Dịch Toàn Trang", variant="primary", elem_classes="action-btn")
+                        btn_run_translate = gr.Button("⚡ Bắt Đầu OCR Chữ (Nhận Diện Siêu Tốc)", variant="primary", elem_classes="action-btn")
 
                     with gr.Column(scale=7):
-                        trans_status_md = gr.Markdown("💡 *Tải ảnh lên và bấm nút để AI tự động nhận diện khung thoại, sắp xếp thứ tự đọc và dịch chuẩn văn cảnh toàn trang.*")
+                        trans_status_md = gr.Markdown("💡 *Tải ảnh lên và bấm nút để AI tự động nhận diện khung thoại, sắp xếp thứ tự đọc và trích xuất chữ OCR ngay lập tức.*")
                         trans_annotated_img = gr.Image(label="Bản đồ thứ tự đọc (#1, #2, #3...)", type="pil", interactive=False)
                         trans_dataframe = gr.Dataframe(
-                            headers=["Thứ tự", "Văn bản gốc (OCR)", "Bản dịch ngữ cảnh (DeepSeek)"],
+                            headers=["Thứ tự", "Văn bản nhận diện (OCR)", "Bản dịch (Nếu bật LLM)"],
                             datatype=["number", "str", "str"],
                             wrap=True,
                             label="Bảng đối chiếu câu thoại chi tiết",
                         )
-                        with gr.Accordion("📝 Kịch bản thoại & Tải về", open=True):
+                        with gr.Accordion("📝 Danh sách câu thoại OCR & Tải về", open=True):
                             trans_script_md = gr.Markdown()
-                            trans_download_file = gr.File(label="⬇️ Tải file kịch bản dịch (.txt)", interactive=False)
+                            trans_download_file = gr.File(label="⬇️ Tải tệp văn bản OCR (.txt)", interactive=False)
 
                 async def on_translate_page_ui(
                     image_in,
                     order_in,
                     engine_in,
+                    chat_only_in,
                     source_lang_in,
+                    enable_llm_in,
                     target_lang_in,
                     api_key_in,
                     base_url_in,
@@ -1025,49 +1160,54 @@ def create_ui() -> gr.Blocks:
                         reading_order=order_in,
                         source_lang=source_lang_in or "ch",
                         det_threshold=0.20,
+                        chat_only=bool(chat_only_in),
                     )
 
                     if total_boxes == 0:
                         empty_md = "⚠️ Không tìm thấy khung thoại văn bản nào trên trang truyện này."
                         return None, [], empty_md, None, empty_md
 
-                    translator = MangaTranslator(
-                        api_key=api_key_in.strip() if api_key_in else None,
-                        base_url=base_url_in.strip() if base_url_in else None,
-                        model=model_in.strip() if model_in else None,
-                    )
-
-                    try:
+                    if enable_llm_in:
+                        translator = MangaTranslator(
+                            api_key=api_key_in.strip() if api_key_in else None,
+                            base_url=base_url_in.strip() if base_url_in else None,
+                            model=model_in.strip() if model_in else None,
+                        )
                         translated_items = await translator.translate_page(
                             items=ocr_items,
                             target_lang=target_lang_in or "Tiếng Việt",
                             api_key=api_key_in.strip() if api_key_in else None,
                         )
-                    except Exception as exc:
-                        raise gr.Error(f"Lỗi khi gọi DeepSeek dịch thuật: {exc}")
+                    else:
+                        for it in ocr_items:
+                            it["translated_text"] = it.get("original_text", "")
+                        translated_items = ocr_items
 
                     elapsed_s = round(time.perf_counter() - start_t, 2)
                     annotated_pil = draw_reading_order_boxes(image_in, translated_items)
 
                     table_rows = []
-                    md_lines = [f"### 📖 Kịch bản dịch ({total_boxes} bóng thoại - {elapsed_s}s)\n"]
+                    md_lines = [f"### 📖 Kết quả OCR ({total_boxes} bóng thoại - {elapsed_s}s)\n"]
                     for it in translated_items:
                         i_id = it.get("id")
                         orig = it.get("original_text", "")
                         trans = it.get("translated_text", "")
                         table_rows.append([i_id, orig, trans])
-                        md_lines.append(f"**[#{i_id}]**\n* 🔤 Gốc: `{orig}`\n* 💬 Dịch: **{trans}**\n")
+                        if enable_llm_in and trans != orig:
+                            md_lines.append(f"**[#{i_id}]**\n* 🔤 Gốc: `{orig}`\n* 💬 Dịch: **{trans}**\n")
+                        else:
+                            md_lines.append(f"**[#{i_id}]** `{orig}`\n")
 
                     pages_dir = OUTPUT_STORAGE_DIR / "scripts"
                     pages_dir.mkdir(parents=True, exist_ok=True)
                     ts = int(time.time() * 1000)
-                    script_path = str(pages_dir / f"translated_script_{ts}.txt")
+                    script_path = str(pages_dir / f"ocr_script_{ts}.txt")
                     with open(script_path, "w", encoding="utf-8") as f:
-                        f.write(f"=== KỊCH BẢN DỊCH ({total_boxes} CÂU THOẠI) ===\n\n")
+                        f.write(f"=== KẾT QUẢ OCR ({total_boxes} CÂU THOẠI - {elapsed_s}s) ===\n\n")
                         for it in translated_items:
-                            f.write(f"#{it.get('id')} | Gốc: {it.get('original_text')} -> Dịch: {it.get('translated_text')}\n")
+                            f.write(f"#{it.get('id')} | {it.get('original_text')}\n")
 
-                    status_msg = f"✅ **Hoàn thành xuất sắc:** Đã nhận diện & dịch {total_boxes} bóng thoại trong **{elapsed_s}s**!"
+                    status_msg = f"⚡ **Hoàn thành xuất sắc:** Đã nhận diện & đọc xong {total_boxes} bóng thoại OCR trong **{elapsed_s}s**!"
                     return annotated_pil, table_rows, "\n".join(md_lines), script_path, status_msg
 
                 btn_run_translate.click(
@@ -1076,7 +1216,9 @@ def create_ui() -> gr.Blocks:
                         trans_img_input,
                         trans_order_radio,
                         trans_engine_radio,
+                        trans_chat_only_chk,
                         trans_source_lang_dd,
+                        trans_enable_llm_chk,
                         trans_target_lang_txt,
                         trans_api_key_txt,
                         trans_base_url_txt,
@@ -1174,38 +1316,7 @@ def create_ui() -> gr.Blocks:
 
 demo = create_ui()
 
-# --------------------------------------------------------------------------------------
-# FastAPI App Instance & Gradio Integration
-# --------------------------------------------------------------------------------------
-fastapi_app = FastAPI(
-    title="⚡ Manga Cleaner & Translation API",
-    description=(
-        "Backend API đa chế độ cho Manga/Manhwa: Bóc tách bóng thoại (ComicTextDetector), "
-        "Sắp xếp thứ tự đọc (Manga RTL / Webtoon TTB), Lazy A/B OCR (manga-ocr & PaddleOCR), "
-        "Dịch thuật ngữ cảnh toàn trang (DeepSeek LLM) và Inpainting xóa chữ (Anime-LaMa / Big-LaMa)."
-    ),
-    version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
-
-fastapi_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-fastapi_app.include_router(api_router)
-
-# Mount Gradio UI at root ("/") while FastAPI Swagger is available at "/docs"
-app = gr.mount_gradio_app(fastapi_app, demo, path="/")
-
-
 if __name__ == "__main__":
-    import uvicorn
-
     logger.info("🚀 Ensuring models at boot...")
     try:
         ensure_models()
@@ -1214,8 +1325,30 @@ if __name__ == "__main__":
         logger.warning("Model download check warning: %s", e)
 
     port = int(os.environ.get("PORT", 7860))
-    logger.info("🚀 Starting Manga Backend at http://0.0.0.0:%d", port)
+    logger.info("🚀 Starting Manga Cleaner & Translation Server on port %d...", port)
+
+    # Khởi chạy Gradio Server chuẩn theo cơ chế quản lý lifecycle của Hugging Face Gradio SDK
+    app, local_url, share_url = demo.launch(
+        server_name="0.0.0.0",
+        server_port=port,
+        prevent_thread_lock=True,
+        show_error=True,
+    )
+
+    # Gắn toàn bộ router REST API (/api/v1/translate-page, /clean_page, /health) và Swagger Docs (/docs)
+    if hasattr(app, "include_router"):
+        app.include_router(api_router)
+    if hasattr(app, "router") and hasattr(app.router, "routes"):
+        try:
+            for route in reversed(api_router.routes):
+                if route not in app.router.routes:
+                    app.router.routes.insert(0, route)
+            logger.info("✅ Custom REST API & Swagger /docs routes attached successfully.")
+        except Exception as e:
+            logger.warning("Router insertion notice: %s", e)
+
     logger.info("📖 Swagger UI Docs: http://0.0.0.0:%d/docs", port)
     logger.info("🎨 Gradio Web UI:  http://0.0.0.0:%d/", port)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    demo.block_thread()
+
 
