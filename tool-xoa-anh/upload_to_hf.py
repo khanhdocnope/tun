@@ -28,12 +28,16 @@ PROJECT_FILES = [
     "download_models.py",
     "requirements.txt",
     "README.md",
+    "Dockerfile",
 ]
 PROJECT_FOLDERS = [
     ("examples", "examples"),
+    ("core", "core"),
 ]
 # ============================================
 
+
+BASE_DIR = Path(__file__).resolve().parent
 
 def main():
     token = os.environ.get("HF_TOKEN") or HF_TOKEN
@@ -45,10 +49,11 @@ def main():
     api = HfApi(token=token)
 
     print(f"[*] Bat dau dong bo ma nguon len Space: {REPO_ID} ...")
+    print(f"[*] Thu muc goc du an: {BASE_DIR}")
 
     # 1. Upload cac file ma nguon goc
     for fname in PROJECT_FILES:
-        fpath = Path(fname)
+        fpath = BASE_DIR / fname
         if fpath.is_file():
             print(f" -> Dang tai file: {fname} ...")
             try:
@@ -57,15 +62,17 @@ def main():
                     path_in_repo=fname,
                     repo_id=REPO_ID,
                     repo_type=REPO_TYPE,
-                    commit_message=f"Update {fname} (multi-model inpainting: anime-lama, big-lama, opencv)",
+                    commit_message=f"Update {fname} (AI Manga Translator & FastAPI backend)",
                 )
                 print(f"    [OK] Da cap nhat {fname}")
             except Exception as e:
                 print(f"    [!] Loi khi upload {fname}: {e}")
+        else:
+            print(f"    [?] Khong tim thay file: {fpath}")
 
-    # 2. Upload thu muc examples
+    # 2. Upload thu muc
     for local_f, repo_f in PROJECT_FOLDERS:
-        fpath = Path(local_f)
+        fpath = BASE_DIR / local_f
         if fpath.is_dir():
             print(f" -> Dang tai thu muc: {local_f} -> {repo_f} ...")
             try:

@@ -1,0 +1,44 @@
+Agents-A1	
+Agents-A1
+
+多模态模型	文本、图像	256K	工具调用 · 科学推理	OpenAI Chat / Anthropic Messages / OpenAI Responses
+Atria-Dawn	
+Atria-Dawn
+
+大语言模型	文本	512K	科学推理	OpenAI Chat / Anthropic Messages / OpenAI Responses
+Atria-Dawn-Preview	
+Atria-Dawn-Preview
+
+大语言模型	文本	512K	科学推理	OpenAI Chat / Anthropic Messages / OpenAI Responses
+DeepSeek-V4-Flash-0731	
+deepseek-v4-flash-0731
+
+大语言模型	文本	1M	深度思考 · 工具调用	OpenAI Chat / Anthropic Messages / OpenAI Responses
+DeepSeek-V4-Flash-Vision	
+deepseek-v4-flash-vision
+
+多模态模型	文本、图像	1M	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages / OpenAI Responses
+DeepSeek-V4-Pro-0813	
+deepseek-v4-pro-0813
+
+大语言模型	文本	1M	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages / OpenAI Responses
+GLM-5.3	
+glm-5.3
+
+大语言模型	文本	1M	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages / OpenAI Responses
+书生-S2	
+intern-s2
+
+多模态模型	文本、图像	256K	工具调用 · 科学推理	OpenAI Chat / Anthropic Messages
+Kimi-K2.6	
+kimi-k2.6
+
+多模态模型	文本、图像	256K	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages / OpenAI Responses
+MiniMax-M3	
+minimax-m3
+
+大语言模型	文本	1M	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages / OpenAI Responses
+Qwen3.8-27B	
+qwen3.8-27b
+
+多模态模型	文本、图像	256K	工具调用 · 深度思考	OpenAI Chat / Anthropic Messages

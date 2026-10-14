@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Studio - Trò chuyện & Quản lý Mô hình</title>
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Highlight.js for Code Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <!-- Marked.js for Markdown Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-logo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                        </svg>
+                    </div>
+                    <div class="brand-info">
+                        <span class="brand-title">Intern-AI Studio</span>
+                        <div class="brand-badge">
+                            <span class="status-dot"></span>
+                            <span id="connection-status-text">Đang kết nối...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- New Chat Button -->
+            <button class="btn btn-primary btn-new-chat" id="btn-new-chat">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Đoạn chat mới</span>
+            </button>
+
+            <!-- Active Model Card -->
+            <div class="section-title">Mô hình hiện tại</div>
+            <div class="model-active-card" id="active-model-card" title="Bấm để mở danh sách mô hình">
+                <div class="model-card-header">
+                    <div class="model-name-wrapper">
+                        <span class="model-display-name" id="current-model-name">Đang tải...</span>
+                        <span class="model-id-tag" id="current-model-id">...</span>
+                    </div>
+                    <button class="btn-icon-subtle" id="btn-open-model-modal" title="Quản lý model_list.txt">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="model-meta-tags" id="current-model-tags">
+                    <!-- Badges injected via JS -->
+                </div>
+            </div>
+
+            <!-- Protocol Switcher -->
+            <div class="section-title">Giao thức kết nối</div>
+            <div class="protocol-switcher">
+                <button class="protocol-tab active" data-protocol="openai" id="tab-openai">
+                    <span class="protocol-icon">⚡</span>
+                    <div class="protocol-labels">
+                        <span class="protocol-name">OpenAI Protocol</span>
+                        <span class="protocol-desc">/v1/chat/completions</span>
+                    </div>
+                </button>
+                <button class="protocol-tab" data-protocol="native" id="tab-native">
+                    <span class="protocol-icon">🌐</span>
+                    <div class="protocol-labels">
+                        <span class="protocol-name">Giao thức Nhân sinh</span>
+                        <span class="protocol-desc">Native Base URL</span>
+                    </div>
+                </button>
+            </div>
+
+            <!-- Parameters Accordion -->
+            <div class="section-title">Tham số cấu hình</div>
+            <div class="settings-box">
+                <div class="setting-item">
+                    <div class="setting-label-row">
+                        <label for="param-temp">Nhiệt độ (Temperature)</label>
+                        <span class="param-val" id="val-temp">0.7</span>
+                    </div>
+                    <input type="range" id="param-temp" min="0" max="1.5" step="0.05" value="0.7">
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label-row">
+                        <label for="param-tokens">Max Tokens</label>
+                        <span class="param-val" id="val-tokens">2048</span>
+                    </div>
+                    <input type="range" id="param-tokens" min="256" max="8192" step="256" value="2048">
+                </div>
+                <div class="setting-item">
+                    <label for="param-system">Lời nhắc hệ thống (System Prompt)</label>
+                    <textarea id="param-system" rows="2" placeholder="Nhập chỉ dẫn hệ thống (tùy chọn)..."></textarea>
+                </div>
+            </div>
+
+            <!-- Chat History List -->
+            <div class="section-title history-title-row">
+                <span>Lịch sử trò chuyện</span>
+                <button class="btn-text-action" id="btn-clear-history" title="Xóa toàn bộ lịch sử">Xóa hết</button>
+            </div>
+            <div class="history-list" id="history-list">
+                <!-- Injected via JS -->
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <button class="btn-footer-action" id="btn-open-manage-modal">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Quản lý model_list.txt</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CHAT PANEL -->
+        <main class="chat-main">
+            <!-- Topbar -->
+            <header class="chat-topbar">
+                <div class="topbar-left">
+                    <button class="btn-icon sidebar-toggle" id="btn-toggle-sidebar" title="Đóng/Mở thanh bên">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <div class="active-chat-info">
+                        <span class="active-chat-title" id="topbar-model-display">Đang tải mô hình...</span>
+                        <div class="topbar-badges">
+                            <span class="badge badge-protocol" id="topbar-protocol-badge">OpenAI Protocol</span>
+                            <span class="badge badge-ctx" id="topbar-ctx-badge">1M Context</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <button class="btn-topbar-action" id="btn-export-chat" title="Xuất nội dung chat (Markdown)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Xuất Markdown</span>
+                    </button>
+                    <button class="btn-topbar-action" id="btn-clear-chat" title="Xóa đoạn chat hiện tại">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat Messages Scroll Container -->
+            <div class="chat-messages-container" id="messages-container">
+                <!-- Welcome View when empty -->
+                <div class="welcome-screen" id="welcome-screen">
+                    <div class="welcome-glow"></div>
+                    <div class="welcome-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
+                            <path d="M12 12L2.5 7.5"></path>
+                            <path d="M12 12v9.5"></path>
+                        </svg>
+                    </div>
+                    <h2>Xin chào! Bạn muốn sáng tạo gì hôm nay?</h2>
+                    <p class="welcome-subtitle">Đã kết nối trực tiếp với <strong>Intern-AI Discovery API</strong>. Hỗ trợ đầy đủ suy luận chuyên sâu, đa phương thức thị giác (Vision) và xử lý ngữ cảnh lên tới 1M tokens.</p>
+                    
+                    <div class="quick-prompts">
+                        <button class="quick-prompt-card" data-prompt="Giải thích ngắn gọn cơ chế hoạt động của mô hình suy luận DeepSeek V4?">
+                            <span class="card-icon">💡</span>
+                            <div class="card-text">
+                                <strong>Cơ chế DeepSeek V4</strong>
+                                <span>Khám phá khả năng suy luận sâu</span>
+                            </div>
+                        </button>
+                        <button class="quick-prompt-card" data-prompt="Viết 1 đoạn code Python mẫu sử dụng OpenAI SDK để gọi API Intern-AI">
+                            <span class="card-icon">⚡</span>
+                            <div class="card-text">
+                                <strong>Code Python mẫu</strong>
+                                <span>Tích hợp API với OpenAI SDK</span>
+                            </div>
+                        </button>
+                        <button class="quick-prompt-card" data-prompt="So sánh ưu điểm giữa Giao thức OpenAI và Giao thức Native (Nhân sinh)">
+                            <span class="card-icon">🔄</span>
+                            <div class="card-text">
+                                <strong>So sánh giao thức</strong>
+                                <span>Ưu điểm OpenAI vs Native Protocol</span>
+                            </div>
+                        </button>
+                        <button class="quick-prompt-card" data-prompt="Hãy tóm tắt và phân tích các mô hình AI hiện có trong danh sách model_list.txt">
+                            <span class="card-icon">📋</span>
+                            <div class="card-text">
+                                <strong>Phân tích Model List</strong>
+                                <span>Tổng hợp 11 mô hình trong danh sách</span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Messages stream injected here -->
+                <div class="chat-thread" id="chat-thread"></div>
+            </div>
+
+            <!-- Input Bar Area -->
+            <div class="chat-input-area">
+                <!-- Image Preview Tag if attached -->
+                <div class="image-preview-bar" id="image-preview-bar" style="display: none;">
+                    <div class="image-preview-item">
+                        <img id="preview-img" src="" alt="Ảnh đính kèm">
+                        <button class="btn-remove-image" id="btn-remove-image" title="Xóa ảnh">&times;</button>
+                    </div>
+                    <span class="image-attached-label">🖼️ Đã đính kèm ảnh (Sử dụng với Model Vision)</span>
+                </div>
+
+                <div class="input-card">
+                    <!-- Attach Button -->
+                    <button class="btn-attach" id="btn-attach-image" title="Đính kèm hình ảnh (dành cho mô hình Vision)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21 15 16 10 5 21"></polyline>
+                        </svg>
+                        <input type="file" id="file-input-image" accept="image/*" style="display: none;">
+                    </button>
+
+                    <!-- Textarea -->
+                    <textarea 
+                        id="chat-textarea" 
+                        rows="1" 
+                        placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter xuống dòng)"
+                    ></textarea>
+
+                    <!-- Action buttons -->
+                    <div class="input-actions">
+                        <button class="btn-send" id="btn-send" title="Gửi tin nhắn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                        <button class="btn-stop" id="btn-stop" title="Dừng phản hồi" style="display: none;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="input-footer-note">
+                    Mô hình: <span id="footer-model-label">deepseek-v4-flash-0731</span> • Giao thức: <span id="footer-protocol-label">OpenAI</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL QUẢN LÝ MODEL_LIST.TXT -->
+    <div class="modal-overlay" id="modal-manage">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="modal-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3>Quản lý Danh sách Mô hình (model_list.txt)</h3>
+                        <p class="modal-subtitle">Xem, tìm kiếm, chọn làm mặc định hoặc chỉnh sửa trực tiếp nội dung file</p>
+                    </div>
+                </div>
+                <button class="btn-modal-close" id="btn-close-modal">&times;</button>
+            </div>
+
+            <!-- Modal Tabs -->
+            <div class="modal-tabs">
+                <button class="modal-tab active" data-tab="cards" id="tab-modal-cards">
+                    <span>Danh sách trực quan</span>
+                    <span class="tab-badge" id="modal-model-count">0</span>
+                </button>
+                <button class="modal-tab" data-tab="raw" id="tab-modal-raw">
+                    <span>Chỉnh sửa File Thô (Raw Editor)</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: Cards View -->
+            <div class="tab-content active" id="content-modal-cards">
+                <div class="modal-search-bar">
+                    <input type="text" id="model-search-input" placeholder="Tìm theo tên mô hình, tính năng (Vision, Deep Thinking, 1M)...">
+                    <div class="filter-chips">
+                        <button class="chip active" data-filter="all">Tất cả</button>
+                        <button class="chip" data-filter="vision">🖼️ Vision (Đa phương thức)</button>
+                        <button class="chip" data-filter="deepseek">🧠 Deep Thinking</button>
+                        <button class="chip" data-filter="1m">⚡ 1M Context</button>
+                    </div>
+                </div>
+                <div class="models-grid" id="models-grid">
+                    <!-- Model cards injected via JS -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Raw Editor View -->
+            <div class="tab-content" id="content-modal-raw">
+                <div class="raw-editor-desc">
+                    Bạn có thể chỉnh sửa trực tiếp cấu trúc file <code>model_list.txt</code> tại đây và bấm <strong>Lưu file</strong> để áp dụng ngay lập tức.
+                </div>
+                <textarea id="raw-model-textarea" spellcheck="false"></textarea>
+                <div class="raw-actions-bar">
+                    <span id="raw-save-msg" class="save-status-msg"></span>
+                    <button class="btn btn-primary" id="btn-save-raw">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        <span>Lưu file model_list.txt</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
