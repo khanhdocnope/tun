@@ -274,14 +274,18 @@ _PADDLE_OCR_INSTANCES: Dict[str, Any] = {}
 
 
 def get_manga_ocr():
-    """Nạp lazy manga-ocr (chuyên xử lý tiếng Nhật)."""
+    """Nạp lazy manga-ocr (chuyên xử lý tiếng Nhật trên CPU)."""
     global _MANGA_OCR_INSTANCE
     if _MANGA_OCR_INSTANCE is None:
         logger.info("📦 Đang nạp manga-ocr vào CPU RAM...")
         try:
             from manga_ocr import MangaOcr
-            _MANGA_OCR_INSTANCE = MangaOcr()
-            logger.info("✅ manga-ocr đã nạp thành công.")
+            # Cần force_cpu=True để tránh chạm vào low-level CUDA init trên ZeroGPU
+            try:
+                _MANGA_OCR_INSTANCE = MangaOcr(force_cpu=True)
+            except TypeError:
+                _MANGA_OCR_INSTANCE = MangaOcr()
+            logger.info("✅ manga-ocr đã nạp thành công trên CPU.")
         except Exception as exc:
             logger.error("Không thể nạp manga-ocr: %s", exc)
             raise RuntimeError(f"Lỗi nạp manga-ocr: {exc}")
