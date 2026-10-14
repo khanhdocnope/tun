@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv/
+env/
+venv/
+
+# Weights (Downloaded dynamically on Hugging Face Space boot to keep Git repo < 1MB)
+weights/*.onnx
+weights/*.tmp
+
+# Temporary files
+*.tmp
+*.log
+Do-not-touch/

@@ -1,0 +1,4 @@
+.env
+Do-not-touch/
+__pycache__
+weights/
