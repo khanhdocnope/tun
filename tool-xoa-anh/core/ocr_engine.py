@@ -249,15 +249,18 @@ def get_manga_ocr():
     if _MANGA_OCR_INSTANCE is None:
         with _LOAD_LOCK:
             if _MANGA_OCR_INSTANCE is None:
-                logger.info("📦 Đang nạp manga-ocr (CPU)...")
+                use_cuda = torch.cuda.is_available() if torch else False
+                logger.info("📦 Đang nạp manga-ocr (Device: %s)...", "CUDA" if use_cuda else "CPU")
                 try:
                     from manga_ocr import MangaOcr
 
                     try:
-                        inst = MangaOcr(force_cpu=True)
+                        inst = MangaOcr(force_cpu=not use_cuda)
                     except TypeError:
                         inst = MangaOcr()
                     inst.model.eval()
+                    if use_cuda and hasattr(inst.model, "cuda"):
+                        inst.model.cuda()
                     _MANGA_OCR_INSTANCE = inst
                 except Exception as exc:  # noqa: BLE001
                     logger.error("Không thể nạp manga-ocr: %s", exc)
@@ -307,7 +310,7 @@ def warmup_ocr(engine_type: str = "ja_manga", source_lang: str = "ch") -> None:
 
 
 def _ocr_manga_batch(crops: List[Image.Image], batch_size: int = OCR_BATCH_SIZE) -> List[str]:
-    """manga-ocr theo lô. Nhóm crop có kích thước gần nhau để giảm padding khi sinh chuỗi."""
+    """manga-ocr theo lô tối ưu tốc độ. Giới hạn max_new_tokens và bật cache giải mã."""
     mocr = get_manga_ocr()
     results = [""] * len(crops)
     if not crops:
@@ -327,7 +330,14 @@ def _ocr_manga_batch(crops: List[Image.Image], batch_size: int = OCR_BATCH_SIZE)
             try:
                 imgs = [crops[i].convert("L").convert("RGB") for i in idxs]
                 pix = mocr.processor(imgs, return_tensors="pt").pixel_values.to(device)
-                ids = mocr.model.generate(pix, max_length=300, num_beams=1, do_sample=False)
+                # Tối ưu: max_new_tokens=64 (manga thoại ngắn, tránh lãng phí 300 bước lặp), use_cache=True
+                ids = mocr.model.generate(
+                    pix,
+                    max_new_tokens=64,
+                    num_beams=1,
+                    do_sample=False,
+                    use_cache=True,
+                )
                 texts = mocr.tokenizer.batch_decode(ids, skip_special_tokens=True)
                 for i, t in zip(idxs, texts):
                     results[i] = post_process(t).strip()
@@ -342,18 +352,31 @@ def _ocr_manga_batch(crops: List[Image.Image], batch_size: int = OCR_BATCH_SIZE)
 
 
 def _ocr_paddle_batch(crops: List[Image.Image], lang: str) -> List[str]:
+    """PaddleOCR tối ưu: Chạy trực tiếp recognition (det=False) trên toàn bộ danh sách crop."""
     pocr = get_paddle_ocr(lang)
     out: List[str] = []
-    for c in crops:
-        try:
-            res = pocr.ocr(np.array(c.convert("RGB")), cls=False)
-            if not res or not res[0]:
+    if not crops:
+        return out
+
+    arrs = [np.array(c.convert("RGB")) for c in crops]
+    try:
+        # det=False: Vùng ảnh đã là crop bóng thoại, không cần chạy lại mạng phát hiện text (DBNet)
+        res_list = pocr.ocr(arrs, det=False, cls=False)
+        for res in res_list:
+            if not res:
                 out.append("")
                 continue
-            out.append(" ".join(l[1][0] for l in res[0] if l and len(l) > 1 and l[1]).strip())
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("PaddleOCR crop error: %s", exc)
-            out.append("")
+            line_txt = " ".join(item[0] for item in res if item and len(item) > 0 and item[0]).strip()
+            out.append(line_txt)
+    except Exception as exc:
+        logger.warning("PaddleOCR batch det=False lỗi (%s), fallback từng crop:", exc)
+        for arr in arrs:
+            try:
+                res = pocr.ocr(arr, det=False, cls=False)
+                txt = " ".join(item[0] for item in res if item and len(item) > 0 and item[0]).strip() if res else ""
+                out.append(txt)
+            except Exception:
+                out.append("")
     return out
 
 
@@ -380,7 +403,8 @@ def _bubble_text_boxes(img_rgb: np.ndarray, min_size: int = 12) -> Optional[List
         if not cleaner_pipeline.ready:
             return None
         h, w = img_rgb.shape[:2]
-        regions = cleaner_pipeline._detect_regions(img_rgb, thr=0.15, force_cpu=True)
+        use_cuda = torch.cuda.is_available() if torch else False
+        regions = cleaner_pipeline._detect_regions(img_rgb, thr=0.15, force_cpu=not use_cuda)
         boxes = []
         for d in regions:
             if d.cls != CLS_TEXT_BUBBLE:
