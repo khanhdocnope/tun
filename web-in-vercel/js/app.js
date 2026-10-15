@@ -589,9 +589,9 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
         model: state.llmModel || "minimax-m3",
         messages,
         temperature: 0.3,
-        max_tokens: 1500,
+        max_tokens: 4096,
       }),
-      signal: AbortSignal.timeout(45000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (directRes.ok) {
@@ -618,6 +618,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
           baseUrl: state.llmBaseUrl,
           apiKey: activeKey,
           temperature: 0.3,
+          max_tokens: 4096,
         }),
         signal: AbortSignal.timeout(65000),
       });
@@ -644,6 +645,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
           base_url: state.llmBaseUrl,
           api_key: activeKey,
           temperature: 0.3,
+          max_tokens: 4096,
         }),
         signal: AbortSignal.timeout(70000),
       });
@@ -663,7 +665,12 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   }
 
   // 4. Trích xuất và phân tích kết quả dịch
-  let rawContent = responseData?.choices?.[0]?.message?.content || "";
+  const msgObj = responseData?.choices?.[0]?.message;
+  let rawContent = msgObj?.content || "";
+  if (!rawContent && msgObj?.reasoning_content) {
+    console.warn("LLM content empty, falling back to reasoning_content");
+    rawContent = msgObj.reasoning_content;
+  }
   rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
   // Ưu tiên trích xuất theo từng dòng [#ID] Câu dịch
@@ -676,10 +683,12 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
     }
   }
 
+  let translatedCount = 0;
   if (map.size > 0) {
     items.forEach((it) => {
       if (map.has(it.id)) {
         it.translated_text = map.get(it.id);
+        translatedCount++;
       }
     });
   } else {
@@ -703,16 +712,24 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
         }
       });
       items.forEach((it) => {
-        if (map.has(it.id)) it.translated_text = map.get(it.id);
+        if (map.has(it.id)) {
+          it.translated_text = map.get(it.id);
+          translatedCount++;
+        }
       });
     } else {
       const cleanLines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
       items.forEach((it, idx) => {
         if (cleanLines[idx]) {
           it.translated_text = cleanLines[idx].replace(/^\[#?\d+\]\s*/, "");
+          translatedCount++;
         }
       });
     }
+  }
+
+  if (translatedCount === 0) {
+    throw new Error(`AI trả về nội dung rỗng hoặc không có bản dịch tiếng Việt (${rawContent.slice(0, 80)}...)`);
   }
 
   return items;
@@ -1126,8 +1143,8 @@ function initBatch() {
           logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📝 Tìm thấy tổng cộng ${allItems.length} câu thoại từ ${totalPages} trang. Bắt đầu dịch AI...<br>`;
           logBox.scrollTop = logBox.scrollHeight;
 
-          // Chia thành các đợt (chunks) 35 câu để giữ mạch ngữ cảnh mà không bị timeout LLM
-          const chunkSize = 35;
+          // Chia thành các đợt (chunks) 50 câu theo yêu cầu người dùng
+          const chunkSize = 50;
           const totalChunks = Math.ceil(allItems.length / chunkSize);
 
           for (let c = 0; c < totalChunks; c++) {

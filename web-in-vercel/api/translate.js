@@ -25,6 +25,7 @@ module.exports = async (req, res) => {
       baseUrl = DEFAULT_BASE_URL,
       apiKey = "",
       temperature = 0.3,
+      max_tokens = 4096,
     } = req.body || {};
 
     if (!messages || !Array.isArray(messages)) {
@@ -49,6 +50,7 @@ module.exports = async (req, res) => {
         model: model || DEFAULT_MODEL,
         messages,
         temperature,
+        max_tokens: max_tokens || 4096,
       }),
       signal: AbortSignal.timeout(60000),
     });
