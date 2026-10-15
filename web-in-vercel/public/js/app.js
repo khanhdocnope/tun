@@ -10,7 +10,7 @@ const state = {
   backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
   apiKey: localStorage.getItem("manga_api_key") || "",
   llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://discovery-api.intern-ai.org.cn/v1",
-  llmModel: localStorage.getItem("manga_llm_model") || "deepseek-v4-flash-0731",
+  llmModel: localStorage.getItem("manga_llm_model") || "minimax-m3",
   
   // Cleaner Tab State
   cleanerFile: null,
@@ -481,7 +481,8 @@ function initTranslator() {
       const data = await res.json();
       state.transResultData = data.data || [];
       const ocrElapsed = Math.round(performance.now() - startT);
-      badge.textContent = `🔍 Đã nhận diện ${data.total_boxes} bóng thoại (${ocrElapsed}ms)`;
+      const totalCount = data.total_boxes || data.totalBoxes || state.transResultData.length || 0;
+      badge.textContent = `🔍 Đã nhận diện ${totalCount} bóng thoại (${ocrElapsed}ms)`;
 
       // Render ngay lập tức kết quả OCR lên canvas và bảng
       renderBubbleOverlay(state.transResultData);
@@ -498,14 +499,14 @@ function initTranslator() {
       await translateSpeechBubblesFrontend(state.transResultData, targetLang);
 
       const totalElapsed = Math.round(performance.now() - startT);
-      badge.textContent = `✅ ${data.total_boxes} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
+      badge.textContent = `✅ ${totalCount} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
 
       // Cập nhật lại giao diện với bản dịch tiếng Việt hoàn chỉnh
       renderBubbleOverlay(state.transResultData);
       renderTranslationTable(state.transResultData);
       updateScriptDownloadLink();
 
-      showToast(`Đã dịch thành công ${data.total_boxes} câu thoại sang Tiếng Việt!`, "success");
+      showToast(`Đã dịch thành công ${totalCount} câu thoại sang Tiếng Việt!`, "success");
     } catch (err) {
       showToast(`Lỗi khi xử lý: ${err.message}`, "error");
       badge.textContent = "Lỗi Xử Lý";
@@ -515,17 +516,20 @@ function initTranslator() {
     }
   });
 
-  // Copy Markdown Script Button
+  // Copy Script Button (Format: === filename ===)
   document.getElementById("btn-copy-script").addEventListener("click", () => {
     if (!state.transResultData.length) {
       showToast("Chưa có kịch bản để sao chép!", "info");
       return;
     }
-    const md = state.transResultData
-      .map((it) => `**[#${it.id}]**\n* Gốc: \`${it.original_text}\`\n* Dịch: **${it.translated_text}**`)
-      .join("\n\n");
-    navigator.clipboard.writeText(md);
-    showToast("Đã sao chép kịch bản Markdown vào Clipboard!", "success");
+    const fileName = state.transFile?.name || "script.webp";
+    const lines = [`=== ${fileName} ===`];
+    state.transResultData.forEach((it) => {
+      const text = (it.translated_text || it.original_text || "").trim();
+      if (text) lines.push(text);
+    });
+    navigator.clipboard.writeText(lines.join("\n"));
+    showToast("Đã sao chép kịch bản vào Clipboard!", "success");
   });
 }
 
@@ -533,40 +537,21 @@ function initTranslator() {
 // FRONTEND CLIENT-SIDE TRANSLATION ENGINE (Prompt.txt Compliant)
 // -----------------------------------------------------------------------------
 function buildMangaSystemPrompt(targetLang = "vi") {
-  const targetName = targetLang === "vi" ? "Vietnamese" : targetLang;
-  return `You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating to ${targetName}.
+  const targetName = targetLang === "vi" ? "Tiếng Việt" : targetLang;
+  return `Bạn là chuyên gia dịch thuật manga/comic sang ${targetName}.
+Quy tắc dịch:
+1. Xưng hô tự nhiên, linh hoạt theo quan hệ, tuổi tác, tính cách (mày/tao, cậu/tớ, anh/em, cô/cháu...).
+2. Câu thoại ngắt nhiều bóng: Giữ câu liền mạch tự nhiên.
+3. Từ tượng thanh / SFX: Dịch ngắn gọn, sinh động.
 
-## TRANSLATION GUIDELINES & RULES
+QUY ĐỊNH ĐẦU RA BẮT BUỘC:
+Trả về kết quả dịch theo từng dòng:
+[#ID] Câu dịch ${targetName}
+Ví dụ:
+[#1] Về sớm nhỉ.
+[#2] Ừ, hôm nay xong sớm.
 
-### 1. Contextual Cohesion & Natural Flow
-- Multi-bubble Sentences: When a single sentence is split across consecutive bubbles, comprehend the complete thought first, then distribute the translation naturally across those exact corresponding lines without losing grammatical coherence.
-- OCR Error Auto-Correction: Comics frequently suffer from OCR noise (broken punctuation, confused characters like l/I/|, or artifact characters). Automatically infer and repair OCR typos using visual and narrative context.
-
-### 2. Tone, Honorifics & Addressing
-- Adapt pronouns and forms of address (honorifics, intimacy levels, formality - xưng hô: anh, em, cậu, tớ, tôi, mày, tao, chú, bác...) to accurately reflect character relationships, ages, and social dynamics in ${targetName}.
-- Keep dialogue natural, punchy, modern, and true to the comic genre (shonen, shojo, seinen, webtoon, etc.).
-
-### 3. Sound Effects (SFX)
-- If a line is a standalone sound effect / onomatopoeia (e.g., BANG, THUD, DOKI-DOKI, MEOW):
-  - Provide a concise, punchy equivalent in ${targetName} that preserves the acoustic impact.
-  - Do NOT translate sound effects literally as full descriptive sentences.
-
-### 4. Capitalization & Typography Conventions
-- De-capitalize ALL-CAPS: Source text in comics is often rendered in ALL-CAPS solely due to comic font styling, NOT shouting. Always convert to natural sentence case (capitalize only the first letter and proper nouns) following standard ${targetName} orthography.
-- Wave Dash ("〜" / "～"): Represents a drawn-out, sing-song, or playful trailing tone. Do NOT replace it with an ellipsis ("..."). Preserve the wave dash or naturally elongate the final sound/vowel in ${targetName}.
-
-### 5. Strict 1-to-1 Line Contract
-- Output MUST contain an exact translation corresponding to each item ID.
-- For truly blank or unreadable noise, leave an empty string. NEVER output placeholder text such as (blank), (empty), (no text), N/A, or (để trống).
-
-## OUTPUT FORMAT
-Return ONLY a valid JSON array of objects with "id" (number) and "translated" (string).
-Example:
-[
-  {"id": 1, "translated": "Về sớm thế nhỉ."},
-  {"id": 2, "translated": "..."}
-]
-Do not wrap in any extra text or conversational filler.`;
+Tuyệt đối KHÔNG sinh JSON, KHÔNG giải thích, KHÔNG chào hỏi.`;
 }
 
 async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
@@ -576,10 +561,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   if (!activeKey) return items;
 
   const systemPrompt = buildMangaSystemPrompt(targetLang);
-  const userPayload = items.map((it) => ({ id: it.id, text: it.original_text }));
-  const userMessage =
-    `Hãy dịch danh sách ${items.length} câu thoại truyện tranh sau sang ${targetLang === "vi" ? "Tiếng Việt" : targetLang}:\n` +
-    JSON.stringify(userPayload, null, 2);
+  const userMessage = items.map((it) => `[#${it.id}] ${it.original_text}`).join("\n");
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -598,11 +580,12 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
         Authorization: `Bearer ${activeKey}`,
       },
       body: JSON.stringify({
-        model: state.llmModel || "deepseek-v4-flash-0731",
+        model: state.llmModel || "minimax-m3",
         messages,
         temperature: 0.3,
+        max_tokens: 1500,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (directRes.ok) {
@@ -675,52 +658,52 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
 
   // 4. Trích xuất và phân tích kết quả dịch
   let rawContent = responseData?.choices?.[0]?.message?.content || "";
-
-  // Loại bỏ reasoning <think>...</think> của DeepSeek reasoning models
   rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
-  // Loại bỏ markdown code block nếu có
-  const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  let parsedArray = null;
-  if (jsonMatch) {
-    try {
-      parsedArray = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      console.warn("Lỗi parse JSON regex match:", e);
+  // Ưu tiên trích xuất theo từng dòng [#ID] Câu dịch
+  const map = new Map();
+  const lines = rawContent.split("\n");
+  for (const l of lines) {
+    const match = l.trim().match(/^\[?#?(\d+)\]?[:\.\-\s]+(.*)$/);
+    if (match) {
+      map.set(Number(match[1]), match[2].trim());
     }
   }
 
-  if (!parsedArray) {
-    try {
-      const cleanJson = rawContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-      parsedArray = JSON.parse(cleanJson);
-    } catch (e) {
-      console.warn("Lỗi parse toàn bộ JSON:", e);
-    }
-  }
-
-  // Áp dụng kết quả vào items
-  if (Array.isArray(parsedArray)) {
-    const map = new Map();
-    parsedArray.forEach((p) => {
-      if (p && p.id !== undefined) {
-        map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
-      }
-    });
-
+  if (map.size > 0) {
     items.forEach((it) => {
       if (map.has(it.id)) {
         it.translated_text = map.get(it.id);
       }
     });
   } else {
-    // Fallback theo từng dòng nếu LLM trả về dạng text thông thường
-    const lines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (lines.length > 0) {
+    // Fallback JSON parser nếu model vẫn cố tình xuất JSON
+    let parsedArray = null;
+    const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (jsonMatch) {
+      try { parsedArray = JSON.parse(jsonMatch[0]); } catch (e) {}
+    }
+    if (!parsedArray) {
+      try {
+        const cleanJson = rawContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+        parsedArray = JSON.parse(cleanJson);
+      } catch (e) {}
+    }
+
+    if (Array.isArray(parsedArray)) {
+      parsedArray.forEach((p) => {
+        if (p && p.id !== undefined) {
+          map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
+        }
+      });
+      items.forEach((it) => {
+        if (map.has(it.id)) it.translated_text = map.get(it.id);
+      });
+    } else {
+      const cleanLines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
       items.forEach((it, idx) => {
-        if (lines[idx]) {
-          const cleanedLine = lines[idx].replace(/^\[#?\d+\]\s*/, "").replace(/^Line\s*\d+:\s*/i, "");
-          it.translated_text = cleanedLine;
+        if (cleanLines[idx]) {
+          it.translated_text = cleanLines[idx].replace(/^\[#?\d+\]\s*/, "");
         }
       });
     }
@@ -731,15 +714,20 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
 
 function updateScriptDownloadLink() {
   if (!state.transResultData || !state.transResultData.length) return;
-  const scriptContent = state.transResultData
-    .map((it) => `[#${it.id}] Gốc: ${it.original_text} -> Dịch: ${it.translated_text}`)
-    .join("\n\n");
+  const fileName = state.transFile?.name || "17.webp";
+  const lines = [`=== ${fileName} ===`];
+  state.transResultData.forEach((it) => {
+    const text = (it.translated_text || it.original_text || "").trim();
+    if (text) lines.push(text);
+  });
+  const scriptContent = lines.join("\n");
   const blob = new Blob([scriptContent], { type: "text/plain;charset=utf-8" });
   const dlBtn = document.getElementById("btn-download-script-txt");
   if (dlBtn) {
     dlBtn.href = URL.createObjectURL(blob);
-    dlBtn.download = `kịch_bản_dịch_${Date.now()}.txt`;
-    dlBtn.style.display = "flex";
+    const baseName = fileName.replace(/\.[^/.]+$/, "") || "kich_ban";
+    dlBtn.download = `${baseName}.txt`;
+    dlBtn.style.display = "inline-flex";
   }
 }
 

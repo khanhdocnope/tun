@@ -4,7 +4,7 @@ const AdmZip = require("adm-zip");
 const BACKEND_URL = (process.env.BACKEND_URL || "https://dobietdc-backe-manga-remove.hf.space").replace(/\/$/, "");
 const DEFAULT_DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.API_KEY || "";
 const DEFAULT_LLM_URL = process.env.OPENAI_BASE_URL || "https://discovery-api.intern-ai.org.cn/v1";
-const DEFAULT_MODEL = process.env.MODEL || "deepseek-v4-flash-0731";
+const DEFAULT_MODEL = process.env.MODEL || "minimax-m3";
 
 // Cấu hình số luồng chạy song song trên Cloud
 const OCR_CONCURRENCY = 4;    // 4 trang OCR cùng lúc (do OCR chạy CPU siêu nhẹ)
@@ -14,51 +14,33 @@ function naturalSort(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
-// Hàm dịch danh sách box của 1 trang truyện bằng LLM
+// Hàm dịch danh sách box của 1 trang truyện bằng LLM (Tối ưu định dạng dòng siêu tốc)
 async function translatePageBoxes(boxes, targetLang = "vi", apiKey = "", model = DEFAULT_MODEL, baseUrl = DEFAULT_LLM_URL) {
   if (!boxes || boxes.length === 0) return boxes;
 
   const activeKey = (apiKey || DEFAULT_DEEPSEEK_KEY).trim();
   if (!activeKey) return boxes;
 
-  const targetName = targetLang === "vi" ? "Vietnamese" : targetLang;
-  const systemPrompt = `You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating to ${targetName}.
+  const targetName = targetLang === "vi" ? "Tiếng Việt" : targetLang;
+  const systemPrompt = `Bạn là chuyên gia dịch thuật manga/comic sang ${targetName}.
+Quy tắc:
+1. Xưng hô tự nhiên, linh hoạt theo quan hệ, tuổi tác, tính cách (mày/tao, cậu/tớ, anh/em...).
+2. Câu thoại ngắt nhiều bóng: Giữ câu liền mạch tự nhiên.
+3. Từ tượng thanh / SFX: Dịch ngắn gọn, sinh động.
 
-## TRANSLATION GUIDELINES & RULES
-### 1. Contextual Cohesion & Natural Flow
-- Multi-bubble Sentences: When a single sentence is split across consecutive bubbles, comprehend the complete thought first, then distribute the translation naturally without losing grammatical coherence.
-- OCR Error Auto-Correction: Comics frequently suffer from OCR noise. Automatically infer and repair OCR typos using context.
+QUY ĐỊNH ĐẦU RA BẮT BUỘC:
+Trả về kết quả dịch theo từng dòng:
+[#ID] Câu dịch ${targetName}
+Ví dụ:
+[#1] Về sớm nhỉ.
+[#2] Ừ, hôm nay xong sớm.
 
-### 2. Tone, Honorifics & Addressing
-- Adapt pronouns and forms of address (xưng hô: anh, em, cậu, tớ, tôi, mày, tao...) to accurately reflect character relationships, ages, and intimacy in ${targetName}.
-- Keep dialogue natural, punchy, modern, and true to the comic genre.
-
-### 3. Sound Effects (SFX)
-- Standalone SFX/onomatopoeia: Provide a concise, punchy equivalent in ${targetName}. Do NOT translate as descriptive sentences.
-
-### 4. Typography & Conventions
-- De-capitalize ALL-CAPS: Convert comic uppercase font styling to natural sentence case.
-- Wave Dash ("〜" / "～"): Keep or naturally elongate trailing sound.
-
-### 5. Strict 1-to-1 Line Contract
-- Output MUST contain an exact translation corresponding to each item ID.
-- For blank or unreadable noise, leave an empty string. NEVER output placeholder text like (blank), (empty), (no text), N/A, or (để trống).
-
-## OUTPUT FORMAT
-Return ONLY a valid JSON array of objects with "id" (number) and "translated" (string).
-Example:
-[
-  {"id": 1, "translated": "..."},
-  {"id": 2, "translated": "..."}
-]`;
+Tuyệt đối KHÔNG sinh JSON, KHÔNG giải thích, KHÔNG chào hỏi.`;
 
   const cleanBase = (baseUrl || DEFAULT_LLM_URL).trim().replace(/\/+$/, "").replace(/\/chat\/completions\/?$/, "");
   const endpoint = `${cleanBase}/chat/completions`;
 
-  const userPayload = boxes.map((it) => ({ id: it.id, text: it.original_text }));
-  const userMessage =
-    `Hãy dịch danh sách ${boxes.length} câu thoại truyện tranh sau sang ${targetName}:\n` +
-    JSON.stringify(userPayload, null, 2);
+  const userMessage = boxes.map((it) => `[#${it.id}] ${it.original_text}`).join("\n");
 
   try {
     const resp = await fetch(endpoint, {
@@ -74,8 +56,9 @@ Example:
           { role: "user", content: userMessage },
         ],
         temperature: 0.3,
+        max_tokens: 1500,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(45000),
     });
 
     if (!resp.ok) {
@@ -87,39 +70,45 @@ Example:
     let rawContent = data?.choices?.[0]?.message?.content || "";
     rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
-    let parsedArray = null;
-    const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (jsonMatch) {
-      try {
-        parsedArray = JSON.parse(jsonMatch[0]);
-      } catch (e) {}
-    }
-    if (!parsedArray) {
-      try {
-        const clean = rawContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-        parsedArray = JSON.parse(clean);
-      } catch (e) {}
+    const map = new Map();
+    const lines = rawContent.split("\n");
+    for (const l of lines) {
+      const match = l.trim().match(/^\[?#?(\d+)\]?[:\.\-\s]+(.*)$/);
+      if (match) {
+        map.set(Number(match[1]), match[2].trim());
+      }
     }
 
-    if (Array.isArray(parsedArray)) {
-      const map = new Map();
-      parsedArray.forEach((p) => {
-        if (p && p.id !== undefined) {
-          map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
-        }
-      });
+    if (map.size > 0) {
       boxes.forEach((b) => {
         if (map.has(b.id)) {
           b.translated_text = map.get(b.id);
         }
       });
     } else {
-      const lines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
-      boxes.forEach((b, idx) => {
-        if (lines[idx]) {
-          b.translated_text = lines[idx].replace(/^\[#?\d+\]\s*/, "").replace(/^Line\s*\d+:\s*/i, "");
-        }
-      });
+      // Fallback JSON parser nếu model vẫn cố tình xuất JSON
+      let parsedArray = null;
+      const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (jsonMatch) {
+        try { parsedArray = JSON.parse(jsonMatch[0]); } catch (e) {}
+      }
+      if (Array.isArray(parsedArray)) {
+        parsedArray.forEach((p) => {
+          if (p && p.id !== undefined) {
+            map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
+          }
+        });
+        boxes.forEach((b) => {
+          if (map.has(b.id)) b.translated_text = map.get(b.id);
+        });
+      } else {
+        const cleanLines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
+        boxes.forEach((b, idx) => {
+          if (cleanLines[idx]) {
+            b.translated_text = cleanLines[idx].replace(/^\[#?\d+\]\s*/, "");
+          }
+        });
+      }
     }
   } catch (err) {
     console.error("translatePageBoxes error:", err.message);
@@ -354,34 +343,21 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Gom kịch bản thoại text theo đúng thứ tự 1 -> N
-    const scriptLines = [
-      `# ========================================================`,
-      `# KỊCH BẢN THOẠI TRUYỆN TRANH (XUẤT TỰ ĐỘNG BỞI MANGA STUDIO)`,
-      `# Tổng số trang: ${totalPages} (Xử lý song song ${concurrency} luồng)`,
-      `# Chế độ: ${action.toUpperCase()} | Bong bóng chat: ${chatOnly ? "BẬT" : "TẤT CẢ"}`,
-      `# Thời gian: ${new Date().toLocaleString("vi-VN")}`,
-      `# ========================================================\n`,
-    ];
+    // Gom kịch bản thoại text theo đúng thứ tự 1 -> N theo format === filename ===
+    const scriptLines = [];
 
     results.forEach((resItem) => {
       if (!resItem) return;
-      const pIdx = resItem.pageIndex;
       const fName = resItem.filename;
       const boxes = resItem.data || [];
 
-      scriptLines.push(`=== TRANG ${pIdx} [${fName}] (${resItem.totalBoxes || boxes.length} câu) ===`);
+      scriptLines.push(`=== ${fName} ===`);
       if (!resItem.success) {
-        scriptLines.push(`  [Lỗi xử lý trang: ${resItem.error}]`);
-      } else if (boxes.length === 0) {
-        scriptLines.push(`  (Không phát hiện bong bóng thoại nào)`);
+        scriptLines.push(`[Lỗi xử lý: ${resItem.error}]`);
       } else {
         boxes.forEach((b) => {
-          const jp = b.original_text || "";
-          const vi = b.translated_text || "";
-          scriptLines.push(`  #${b.id}:`);
-          scriptLines.push(`    Gốc:  ${jp}`);
-          if (vi) scriptLines.push(`    Dịch: ${vi}`);
+          const text = (b.translated_text || b.original_text || "").trim();
+          if (text) scriptLines.push(text);
         });
       }
       scriptLines.push("");
