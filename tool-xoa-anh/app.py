@@ -677,6 +677,7 @@ async def api_translate_page(
         }
     except Exception as exc:
         logger.error("Lỗi khi xử lý translate-page: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý translate-page: {type(exc).__name__}: {exc}")
 class TranslateDirectRequest(BaseModel):
     messages: List[Dict[str, Any]]
     model: Optional[str] = "deepseek-v4-flash-0731"
