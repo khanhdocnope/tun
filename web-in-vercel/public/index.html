@@ -2224,12 +2224,25 @@ function initBatch() {
           progressStatus.textContent = `✅ Đã xử lý xong ${cloudData.totalPages} trang trên Cloud!`;
           logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Hoàn thành xử lý ${cloudData.totalPages} trang trong ${cloudData.elapsedSeconds}s!<br>`;
 
-          const blob = new Blob([cloudData.scriptText || "Hoàn thành"], { type: "text/plain;charset=utf-8" });
+          let downloadBlob, downloadFilename;
+          if (mode === "clean" && cloudData.cleanedZipBase64) {
+            const byteChars = atob(cloudData.cleanedZipBase64);
+            const byteNums = new Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+              byteNums[i] = byteChars.charCodeAt(i);
+            }
+            downloadBlob = new Blob([new Uint8Array(byteNums)], { type: "application/zip" });
+            downloadFilename = `cleaned_${state.batchFile.name}`;
+          } else {
+            downloadBlob = new Blob([cloudData.scriptText || "Hoàn thành"], { type: "text/plain;charset=utf-8" });
+            downloadFilename = `kich_ban_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`;
+          }
+
           showBatchResult({
             title: `Đã xử lý xong ${cloudData.totalPages} trang truyện trên Cloud`,
             desc: `Thời gian thực thi: ${cloudData.elapsedSeconds}s | Chế độ: ${mode.toUpperCase()}`,
-            downloadBlob: blob,
-            filename: `kich_ban_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`,
+            downloadBlob: downloadBlob,
+            filename: downloadFilename,
             pages: cloudData.results || [],
           });
           showToast("Đã xử lý xong tệp ZIP trên Cloud!", "success");
@@ -2340,16 +2353,25 @@ function initBatch() {
     if (pages && pages.length) {
       tableWrap.style.display = "block";
       tbody.innerHTML = pages
-        .map(
-          (p) => `
-        <tr>
-          <td>#${p.page_index}</td>
-          <td><code>${p.filename}</code></td>
-          <td><b>${p.total_boxes}</b></td>
-          <td><span style="color:var(--emerald);">Thành công</span></td>
-        </tr>
-      `
-        )
+        .map((p, idx) => {
+          const pageNum = p.page_index ?? p.pageIndex ?? idx + 1;
+          const boxCount =
+            p.total_boxes ??
+            p.totalBoxes ??
+            (p.data ? p.data.length : p.stats ? (p.stats.chat_count ?? p.stats.total_boxes ?? 0) : 0);
+          const isSuccess = p.success !== false && !p.error;
+          const statusHtml = isSuccess
+            ? `<span style="color:var(--emerald);">Thành công</span>`
+            : `<span style="color:var(--rose);" title="${escapeHtml(p.error || '')}">Lỗi</span>`;
+          return `
+            <tr>
+              <td>#${pageNum}</td>
+              <td><code>${escapeHtml(p.filename || `Trang ${pageNum}`)}</code></td>
+              <td><b>${boxCount}</b></td>
+              <td>${statusHtml}</td>
+            </tr>
+          `;
+        })
         .join("");
     } else {
       tableWrap.style.display = "none";

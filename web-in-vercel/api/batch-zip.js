@@ -122,18 +122,25 @@ module.exports = async (req, res) => {
 
             if (cleanResp.ok) {
               const cleanData = await cleanResp.json();
+              const chatBoxes = cleanData.stats?.chat_count ?? cleanData.stats?.total_boxes ?? 0;
               return {
                 pageIndex,
+                page_index: pageIndex,
                 filename,
                 success: true,
                 cleanedImageBase64: cleanData.cleanedImageBase64,
                 stats: cleanData.stats,
+                totalBoxes: chatBoxes,
+                total_boxes: chatBoxes,
               };
             } else {
               return {
                 pageIndex,
+                page_index: pageIndex,
                 filename,
                 success: false,
+                totalBoxes: 0,
+                total_boxes: 0,
                 error: `HTTP ${cleanResp.status}`,
               };
             }
@@ -147,6 +154,7 @@ module.exports = async (req, res) => {
             formData.append("chat_only", String(Boolean(chatOnly)));
             formData.append("det_threshold", String(detThreshold));
             formData.append("target_lang", targetLang);
+            formData.append("ocr_only", "true");
             if (activeKey) {
               formData.append("api_key", activeKey);
             }
@@ -160,19 +168,25 @@ module.exports = async (req, res) => {
             if (ocrResp.ok) {
               const ocrData = await ocrResp.json();
               const boxes = ocrData.data || [];
+              const boxCount = ocrData.total_boxes || boxes.length;
               return {
                 pageIndex,
+                page_index: pageIndex,
                 filename,
                 success: true,
-                totalBoxes: ocrData.total_boxes || boxes.length,
+                totalBoxes: boxCount,
+                total_boxes: boxCount,
                 data: boxes,
               };
             } else {
               const errTxt = await ocrResp.text();
               return {
                 pageIndex,
+                page_index: pageIndex,
                 filename,
                 success: false,
+                totalBoxes: 0,
+                total_boxes: 0,
                 error: `HTTP ${ocrResp.status}: ${errTxt}`,
                 data: [],
               };
@@ -181,8 +195,11 @@ module.exports = async (req, res) => {
         } catch (pageErr) {
           return {
             pageIndex,
+            page_index: pageIndex,
             filename,
             success: false,
+            totalBoxes: 0,
+            total_boxes: 0,
             error: pageErr.message,
             data: [],
           };
@@ -192,6 +209,26 @@ module.exports = async (req, res) => {
 
     // Chạy song song qua Worker Pool (tối đa `concurrency` trang đồng thời)
     const results = await runConcurrentPool(tasks, concurrency);
+
+    // Nếu ở chế độ Clean, đóng gói các ảnh đã tẩy sạch thành file ZIP nhị phân
+    let cleanedZipBase64 = null;
+    if (action === "clean") {
+      try {
+        const outZip = new AdmZip();
+        results.forEach((resItem) => {
+          if (resItem && resItem.cleanedImageBase64) {
+            const b64 = resItem.cleanedImageBase64.includes(";base64,")
+              ? resItem.cleanedImageBase64.split(";base64,").pop()
+              : resItem.cleanedImageBase64;
+            const imgBuf = Buffer.from(b64, "base64");
+            outZip.addFile(resItem.filename, imgBuf);
+          }
+        });
+        cleanedZipBase64 = outZip.toBuffer().toString("base64");
+      } catch (zipPackErr) {
+        console.error("Lỗi đóng gói file zip ảnh sạch:", zipPackErr);
+      }
+    }
 
     // Gom kịch bản thoại text theo đúng thứ tự 1 -> N
     const scriptLines = [
@@ -209,7 +246,7 @@ module.exports = async (req, res) => {
       const fName = resItem.filename;
       const boxes = resItem.data || [];
 
-      scriptLines.push(`=== TRANG ${pIdx} [${fName}] (${boxes.length} câu) ===`);
+      scriptLines.push(`=== TRANG ${pIdx} [${fName}] (${resItem.totalBoxes || boxes.length} câu) ===`);
       if (!resItem.success) {
         scriptLines.push(`  [Lỗi xử lý trang: ${resItem.error}]`);
       } else if (boxes.length === 0) {
@@ -237,6 +274,7 @@ module.exports = async (req, res) => {
       processedPages: results.length,
       elapsedSeconds,
       results,
+      cleanedZipBase64,
       scriptText: fullScriptText,
     });
   } catch (err) {
