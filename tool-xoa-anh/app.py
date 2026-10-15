@@ -619,6 +619,7 @@ async def api_translate_page(
     api_key: Optional[str] = Form(None, description="DeepSeek / OpenAI API Key (tùy chọn, mặc định đọc từ ENV DEEPSEEK_API_KEY)"),
     target_lang: str = Form("vi", description="Ngôn ngữ đích (mặc định: 'vi' hoặc 'Vietnamese')"),
     det_threshold: Optional[float] = Form(0.20, description="Ngưỡng phát hiện khung thoại (0.1 - 0.5)"),
+    ocr_only: bool = Form(False, description="Chỉ OCR và bóc tách bóng thoại, không gọi LLM"),
 ):
     start_t = time.perf_counter()
     try:
@@ -644,13 +645,16 @@ async def api_translate_page(
             chat_only=bool(chat_only),
         )
 
-        # Bước 3: Gửi toàn bộ trang truyện sang DeepSeek LLM dịch ngữ cảnh
-        translator = MangaTranslator(api_key=api_key)
-        final_items = await translator.translate_page(
-            items=ocr_items,
-            target_lang=target_lang,
-            api_key=api_key,
-        )
+        # Bước 3: Dịch ngữ cảnh nếu không phải ocr_only và có api_key
+        if ocr_only or not api_key:
+            final_items = ocr_items
+        else:
+            translator = MangaTranslator(api_key=api_key)
+            final_items = await translator.translate_page(
+                items=ocr_items,
+                target_lang=target_lang,
+                api_key=api_key,
+            )
 
         elapsed_ms = round((time.perf_counter() - start_t) * 1000.0, 1)
 

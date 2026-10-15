@@ -44,12 +44,7 @@ module.exports = async (req, res) => {
     formData.append("chat_only", String(Boolean(chatOnly)));
     formData.append("det_threshold", String(detThreshold));
     formData.append("target_lang", targetLang);
-
-    // Xử lý API key: ưu tiên key người dùng nhập, nếu không có lấy từ biến môi trường Cloud
-    const activeKey = (apiKey || DEFAULT_DEEPSEEK_KEY).trim();
-    if (activeKey) {
-      formData.append("api_key", activeKey);
-    }
+    formData.append("ocr_only", "true"); // Frontend handles translation directly
 
     const response = await fetch(`${BACKEND_URL}/api/v1/translate-page`, {
       method: "POST",

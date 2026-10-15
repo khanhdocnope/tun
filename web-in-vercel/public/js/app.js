@@ -9,6 +9,8 @@
 const state = {
   backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
   apiKey: localStorage.getItem("manga_api_key") || "",
+  llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://discovery-api.intern-ai.org.cn/v1",
+  llmModel: localStorage.getItem("manga_llm_model") || "deepseek-v4-flash-0731",
   
   // Cleaner Tab State
   cleanerFile: null,
@@ -31,6 +33,10 @@ const state = {
 // Clean backend URL
 function getCleanBackendUrl() {
   return state.backendUrl.trim().replace(/\/+$/, "");
+}
+
+function getCleanLlmUrl() {
+  return (state.llmBaseUrl || "https://discovery-api.intern-ai.org.cn/v1").trim().replace(/\/+$/, "");
 }
 
 // -----------------------------------------------------------------------------
@@ -407,24 +413,20 @@ function initTranslator() {
     if (!state.transFile) return;
 
     runBtn.disabled = true;
-    runBtn.innerHTML = `<span>⏳ Đang nhận diện bubble, OCR & Dịch LLM...</span>`;
+    runBtn.innerHTML = `<span>🔍 Đang bóc tách bóng thoại & OCR...</span>`;
     const badge = document.getElementById("trans-stats-badge");
-    badge.textContent = "AI Đang Dịch...";
+    badge.textContent = "AI Đang OCR...";
+
+    const targetLang = document.getElementById("trans-target-lang").value.trim() || "vi";
 
     const formData = new FormData();
     formData.append("file", state.transFile);
     formData.append("reading_order", document.getElementById("trans-reading-order").value);
     formData.append("ocr_engine", document.getElementById("trans-ocr-engine").value);
     formData.append("source_lang", document.getElementById("trans-source-lang").value);
-    formData.append("target_lang", document.getElementById("trans-target-lang").value.trim() || "vi");
+    formData.append("target_lang", targetLang);
     formData.append("chat_only", document.getElementById("trans-chat-only-toggle").checked ? "true" : "false");
-
-    const activeApiKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
-    if (activeApiKey) {
-      formData.append("api_key", activeApiKey);
-    } else {
-      showToast("ℹ️ Đang chạy chế độ nhận diện chữ. Nếu muốn AI dịch sang tiếng Việt, hãy nhấn ⚙️ và dán API Key vào nhé!", "info");
-    }
+    formData.append("ocr_only", "true"); // OCR only on backend!
 
     const startT = performance.now();
     try {
@@ -436,8 +438,8 @@ function initTranslator() {
           readingOrder: document.getElementById("trans-reading-order").value,
           ocrEngine: document.getElementById("trans-ocr-engine").value,
           chatOnly: document.getElementById("trans-chat-only-toggle").checked,
-          targetLang: document.getElementById("trans-target-lang").value.trim() || "vi",
-          apiKey: activeApiKey,
+          targetLang: targetLang,
+          ocrOnly: true,
         };
         res = await fetch("/api/ocr", {
           method: "POST",
@@ -463,25 +465,37 @@ function initTranslator() {
 
       const data = await res.json();
       state.transResultData = data.data || [];
-      const elapsed = Math.round(performance.now() - startT);
-      badge.textContent = `✅ ${data.total_boxes} bóng thoại | ${elapsed}ms`;
+      const ocrElapsed = Math.round(performance.now() - startT);
+      badge.textContent = `🔍 Đã nhận diện ${data.total_boxes} bóng thoại (${ocrElapsed}ms)`;
 
+      // Render ngay lập tức kết quả OCR lên canvas và bảng
       renderBubbleOverlay(state.transResultData);
       renderTranslationTable(state.transResultData);
+      updateScriptDownloadLink();
 
-      // Setup Script Download
-      const scriptContent = state.transResultData
-        .map((it) => `[#${it.id}] Gốc: ${it.original_text} -> Dịch: ${it.translated_text}`)
-        .join("\n\n");
-      const blob = new Blob([scriptContent], { type: "text/plain;charset=utf-8" });
-      const dlBtn = document.getElementById("btn-download-script-txt");
-      dlBtn.href = URL.createObjectURL(blob);
-      dlBtn.download = `kịch_bản_dịch_${Date.now()}.txt`;
-      dlBtn.style.display = "flex";
+      const activeKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
+      if (!activeKey) {
+        showToast(`✅ Đã nhận diện ${data.total_boxes} câu thoại! (Bấm ⚙️ Cài Đặt để nhập API Key dịch sang Tiếng Việt)`, "info");
+        return;
+      }
 
-      showToast(`Đã dịch thành công ${data.total_boxes} câu thoại!`, "success");
+      // Bước 2: Dịch ngữ cảnh trực tiếp ở phía Frontend bằng Client-Side LLM
+      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh trực tiếp từ Frontend...</span>`;
+      badge.textContent = "🤖 AI đang dịch ngữ cảnh...";
+
+      await translateSpeechBubblesFrontend(state.transResultData, targetLang);
+
+      const totalElapsed = Math.round(performance.now() - startT);
+      badge.textContent = `✅ ${data.total_boxes} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
+
+      // Cập nhật lại giao diện với bản dịch tiếng Việt hoàn chỉnh
+      renderBubbleOverlay(state.transResultData);
+      renderTranslationTable(state.transResultData);
+      updateScriptDownloadLink();
+
+      showToast(`Đã dịch thành công ${data.total_boxes} câu thoại sang Tiếng Việt!`, "success");
     } catch (err) {
-      showToast(`Lỗi khi dịch trang: ${err.message}`, "error");
+      showToast(`Lỗi khi xử lý: ${err.message}`, "error");
       badge.textContent = "Lỗi Xử Lý";
     } finally {
       runBtn.disabled = false;
@@ -501,6 +515,187 @@ function initTranslator() {
     navigator.clipboard.writeText(md);
     showToast("Đã sao chép kịch bản Markdown vào Clipboard!", "success");
   });
+}
+
+// -----------------------------------------------------------------------------
+// FRONTEND CLIENT-SIDE TRANSLATION ENGINE (Prompt.txt Compliant)
+// -----------------------------------------------------------------------------
+function buildMangaSystemPrompt(targetLang = "vi") {
+  const targetName = targetLang === "vi" ? "Vietnamese" : targetLang;
+  return `You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating to ${targetName}.
+
+## TRANSLATION GUIDELINES & RULES
+
+### 1. Contextual Cohesion & Natural Flow
+- Multi-bubble Sentences: When a single sentence is split across consecutive bubbles, comprehend the complete thought first, then distribute the translation naturally across those exact corresponding lines without losing grammatical coherence.
+- OCR Error Auto-Correction: Comics frequently suffer from OCR noise (broken punctuation, confused characters like l/I/|, or artifact characters). Automatically infer and repair OCR typos using visual and narrative context.
+
+### 2. Tone, Honorifics & Addressing
+- Adapt pronouns and forms of address (honorifics, intimacy levels, formality - xưng hô: anh, em, cậu, tớ, tôi, mày, tao, chú, bác...) to accurately reflect character relationships, ages, and social dynamics in ${targetName}.
+- Keep dialogue natural, punchy, modern, and true to the comic genre (shonen, shojo, seinen, webtoon, etc.).
+
+### 3. Sound Effects (SFX)
+- If a line is a standalone sound effect / onomatopoeia (e.g., BANG, THUD, DOKI-DOKI, MEOW):
+  - Provide a concise, punchy equivalent in ${targetName} that preserves the acoustic impact.
+  - Do NOT translate sound effects literally as full descriptive sentences.
+
+### 4. Capitalization & Typography Conventions
+- De-capitalize ALL-CAPS: Source text in comics is often rendered in ALL-CAPS solely due to comic font styling, NOT shouting. Always convert to natural sentence case (capitalize only the first letter and proper nouns) following standard ${targetName} orthography.
+- Wave Dash ("〜" / "～"): Represents a drawn-out, sing-song, or playful trailing tone. Do NOT replace it with an ellipsis ("..."). Preserve the wave dash or naturally elongate the final sound/vowel in ${targetName}.
+
+### 5. Strict 1-to-1 Line Contract
+- Output MUST contain an exact translation corresponding to each item ID.
+- For truly blank or unreadable noise, leave an empty string. NEVER output placeholder text such as (blank), (empty), (no text), N/A, or (để trống).
+
+## OUTPUT FORMAT
+Return ONLY a valid JSON array of objects with "id" (number) and "translated" (string).
+Example:
+[
+  {"id": 1, "translated": "Về sớm thế nhỉ."},
+  {"id": 2, "translated": "..."}
+]
+Do not wrap in any extra text or conversational filler.`;
+}
+
+async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
+  if (!items || items.length === 0) return items;
+
+  const activeKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
+  if (!activeKey) return items;
+
+  const systemPrompt = buildMangaSystemPrompt(targetLang);
+  const userPayload = items.map((it) => ({ id: it.id, text: it.original_text }));
+  const userMessage =
+    `Hãy dịch danh sách ${items.length} câu thoại truyện tranh sau sang ${targetLang === "vi" ? "Tiếng Việt" : targetLang}:\n` +
+    JSON.stringify(userPayload, null, 2);
+
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userMessage },
+  ];
+
+  let responseData = null;
+
+  // 1. Thử gọi trực tiếp từ trình duyệt đến OpenAI-Compatible Endpoint (Client-side)
+  try {
+    const directRes = await fetch(`${getCleanLlmUrl()}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${activeKey}`,
+      },
+      body: JSON.stringify({
+        model: state.llmModel || "deepseek-v4-flash-0731",
+        messages,
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (directRes.ok) {
+      responseData = await directRes.json();
+    } else {
+      const errTxt = await directRes.text();
+      console.warn("Direct LLM failed with status:", directRes.status, errTxt);
+    }
+  } catch (directErr) {
+    console.warn("Direct LLM fetch error (likely CORS or network), falling back to server proxy:", directErr);
+  }
+
+  // 2. Fallback sang Vercel Serverless proxy nếu gọi trực tiếp thất bại
+  if (!responseData) {
+    try {
+      const proxyRes = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages,
+          model: state.llmModel,
+          baseUrl: state.llmBaseUrl,
+          apiKey: activeKey,
+          temperature: 0.3,
+        }),
+        signal: AbortSignal.timeout(65000),
+      });
+      if (proxyRes.ok) {
+        responseData = await proxyRes.json();
+      } else {
+        const pErr = await proxyRes.json().catch(() => ({}));
+        throw new Error(pErr.error || `Proxy HTTP ${proxyRes.status}`);
+      }
+    } catch (proxyErr) {
+      throw new Error(`Không thể kết nối AI Dịch: ${proxyErr.message}`);
+    }
+  }
+
+  // 3. Trích xuất và phân tích kết quả dịch
+  let rawContent = responseData?.choices?.[0]?.message?.content || "";
+
+  // Loại bỏ reasoning <think>...</think> của DeepSeek reasoning models
+  rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Loại bỏ markdown code block nếu có
+  const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  let parsedArray = null;
+  if (jsonMatch) {
+    try {
+      parsedArray = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.warn("Lỗi parse JSON regex match:", e);
+    }
+  }
+
+  if (!parsedArray) {
+    try {
+      const cleanJson = rawContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+      parsedArray = JSON.parse(cleanJson);
+    } catch (e) {
+      console.warn("Lỗi parse toàn bộ JSON:", e);
+    }
+  }
+
+  // Áp dụng kết quả vào items
+  if (Array.isArray(parsedArray)) {
+    const map = new Map();
+    parsedArray.forEach((p) => {
+      if (p && p.id !== undefined) {
+        map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
+      }
+    });
+
+    items.forEach((it) => {
+      if (map.has(it.id)) {
+        it.translated_text = map.get(it.id);
+      }
+    });
+  } else {
+    // Fallback theo từng dòng nếu LLM trả về dạng text thông thường
+    const lines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      items.forEach((it, idx) => {
+        if (lines[idx]) {
+          const cleanedLine = lines[idx].replace(/^\[#?\d+\]\s*/, "").replace(/^Line\s*\d+:\s*/i, "");
+          it.translated_text = cleanedLine;
+        }
+      });
+    }
+  }
+
+  return items;
+}
+
+function updateScriptDownloadLink() {
+  if (!state.transResultData || !state.transResultData.length) return;
+  const scriptContent = state.transResultData
+    .map((it) => `[#${it.id}] Gốc: ${it.original_text} -> Dịch: ${it.translated_text}`)
+    .join("\n\n");
+  const blob = new Blob([scriptContent], { type: "text/plain;charset=utf-8" });
+  const dlBtn = document.getElementById("btn-download-script-txt");
+  if (dlBtn) {
+    dlBtn.href = URL.createObjectURL(blob);
+    dlBtn.download = `kịch_bản_dịch_${Date.now()}.txt`;
+    dlBtn.style.display = "flex";
+  }
 }
 
 // Render Numbered Bubble Badges over Image
@@ -554,13 +749,25 @@ function renderTranslationTable(items) {
     .map(
       (it) => `
     <tr id="row-bubble-${it.id}" data-id="${it.id}">
-      <td><span class="trans-id-pill">#${it.id}</span></td>
-      <td class="text-orig">${escapeHtml(it.original_text)}</td>
-      <td class="text-trans">${escapeHtml(it.translated_text)}</td>
+      <td style="vertical-align:top;"><span class="trans-id-pill">#${it.id}</span></td>
+      <td class="text-orig" style="vertical-align:top;">${escapeHtml(it.original_text)}</td>
+      <td class="text-trans">
+        <textarea class="form-input trans-edit-input" data-id="${it.id}" rows="2" style="width:100%; resize:vertical; font-size:0.9rem; padding:0.4rem 0.6rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;" placeholder="Chưa có bản dịch...">${escapeHtml(it.translated_text || "")}</textarea>
+      </td>
     </tr>
   `
     )
     .join("");
+
+  // Allow live editing of translated text in table
+  tbody.querySelectorAll(".trans-edit-input").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const id = Number(e.target.dataset.id);
+      const it = items.find((x) => x.id === id);
+      if (it) it.translated_text = e.target.value;
+      updateScriptDownloadLink();
+    });
+  });
 
   // Table row hover highlights bubble
   tbody.querySelectorAll("tr").forEach((row) => {
@@ -842,9 +1049,14 @@ function initSettings() {
   const testBtn = document.getElementById("btn-test-connection");
 
   const urlInput = document.getElementById("setting-backend-url");
+  const llmUrlInput = document.getElementById("setting-llm-base-url");
+  const modelInput = document.getElementById("setting-llm-model");
   const keyInput = document.getElementById("setting-api-key");
+  const testLlmBtn = document.getElementById("btn-test-llm");
 
   urlInput.value = state.backendUrl;
+  if (llmUrlInput) llmUrlInput.value = state.llmBaseUrl;
+  if (modelInput) modelInput.value = state.llmModel;
   keyInput.value = state.apiKey;
 
   openBtn.addEventListener("click", () => modal.classList.add("open"));
@@ -855,9 +1067,13 @@ function initSettings() {
 
   saveBtn.addEventListener("click", () => {
     state.backendUrl = urlInput.value.trim() || "https://dobietdc-backe-manga-remove.hf.space";
+    state.llmBaseUrl = (llmUrlInput?.value.trim()) || "https://discovery-api.intern-ai.org.cn/v1";
+    state.llmModel = (modelInput?.value.trim()) || "deepseek-v4-flash-0731";
     state.apiKey = keyInput.value.trim();
 
     localStorage.setItem("manga_backend_url", state.backendUrl);
+    localStorage.setItem("manga_llm_base_url", state.llmBaseUrl);
+    localStorage.setItem("manga_llm_model", state.llmModel);
     localStorage.setItem("manga_api_key", state.apiKey);
 
     showToast("Đã lưu cấu hình thành công!", "success");
@@ -866,21 +1082,83 @@ function initSettings() {
   });
 
   testBtn.addEventListener("click", async () => {
-    testBtn.textContent = "Đang ping...";
+    testBtn.textContent = "Đang ping Backend...";
     const testUrl = urlInput.value.trim().replace(/\/+$/, "");
     try {
-      const res = await fetch(`${testUrl}/health`, { signal: AbortSignal.timeout(4000) });
+      const res = await fetch(`${testUrl}/health`, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         showToast("Kết nối Backend thành công (Online)!", "success");
       } else {
         showToast(`Backend trả về mã lỗi HTTP ${res.status}`, "error");
       }
     } catch (e) {
-      showToast(`Không thể kết nối tới: ${testUrl}`, "error");
+      showToast(`Không thể kết nối tới Backend: ${testUrl}`, "error");
     } finally {
-      testBtn.textContent = "Kiểm Tra Kết Nối";
+      testBtn.textContent = "🔌 Kiểm Tra Kết Nối Backend";
     }
   });
+
+  if (testLlmBtn) {
+    testLlmBtn.addEventListener("click", async () => {
+      const activeKey = keyInput.value.trim() || state.apiKey;
+      if (!activeKey) {
+        showToast("Vui lòng nhập API Key trước khi kiểm tra!", "error");
+        return;
+      }
+      testLlmBtn.textContent = "Đang ping AI Dịch...";
+      const activeUrl = (llmUrlInput?.value.trim() || state.llmBaseUrl).replace(/\/+$/, "");
+      const activeModel = modelInput?.value.trim() || state.llmModel;
+
+      try {
+        let ok = false;
+        // 1. Thử gọi trực tiếp
+        try {
+          const directRes = await fetch(`${activeUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${activeKey}`,
+            },
+            body: JSON.stringify({
+              model: activeModel,
+              messages: [{ role: "user", content: "Ping" }],
+              max_tokens: 10,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (directRes.ok) ok = true;
+        } catch (e) {
+          // fallback proxy
+        }
+
+        // 2. Thử qua Vercel proxy
+        if (!ok) {
+          const proxyRes = await fetch("/api/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: [{ role: "user", content: "Ping" }],
+              model: activeModel,
+              baseUrl: activeUrl,
+              apiKey: activeKey,
+            }),
+            signal: AbortSignal.timeout(20000),
+          });
+          if (proxyRes.ok) ok = true;
+        }
+
+        if (ok) {
+          showToast(`Kết nối AI Dịch (${activeModel}) thành công!`, "success");
+        } else {
+          showToast("AI Dịch phản hồi không thành công. Kiểm tra lại Key / URL.", "error");
+        }
+      } catch (err) {
+        showToast(`Không thể kết nối AI Dịch: ${err.message}`, "error");
+      } finally {
+        testLlmBtn.textContent = "🤖 Kiểm Tra Kết Nối AI Dịch (Ping LLM)";
+      }
+    });
+  }
 
   // Server status pill click also opens settings
   document.getElementById("server-status-pill").addEventListener("click", () => {
