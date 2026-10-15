@@ -684,6 +684,7 @@ class TranslateDirectRequest(BaseModel):
     base_url: Optional[str] = "https://discovery-api.intern-ai.org.cn/v1"
     api_key: Optional[str] = None
     temperature: Optional[float] = 0.3
+    thinking: Optional[Dict[str, Any]] = {"type": "disabled"}
     max_tokens: Optional[int] = 4096
 
 
@@ -710,6 +711,7 @@ async def api_translate_direct(req: TranslateDirectRequest):
         "model": req.model or "deepseek-v4-flash-0731",
         "messages": req.messages,
         "temperature": float(req.temperature or 0.3),
+        "thinking": req.thinking if req.thinking is not None else {"type": "disabled"},
         "max_tokens": int(req.max_tokens or 4096),
     }
 

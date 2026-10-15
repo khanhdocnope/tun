@@ -25,6 +25,7 @@ module.exports = async (req, res) => {
       baseUrl = DEFAULT_BASE_URL,
       apiKey = "",
       temperature = 0.3,
+      thinking = { type: "disabled" },
       max_tokens = 4096,
     } = req.body || {};
 
@@ -50,6 +51,7 @@ module.exports = async (req, res) => {
         model: model || DEFAULT_MODEL,
         messages,
         temperature,
+        thinking: thinking || { type: "disabled" },
         max_tokens: max_tokens || 4096,
       }),
       signal: AbortSignal.timeout(60000),
