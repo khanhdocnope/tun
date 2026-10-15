@@ -85,7 +85,7 @@ def save_pil_to_jpg_bytes(pil_img: Image.Image, quality: int = 95) -> bytes:
         save_img = bg
     else:
         save_img = pil_img.convert("RGB")
-    save_img.save(buf, format="JPEG", quality=quality, subsampling=0, optimize=True)
+    save_img.save(buf, format="JPEG", quality=quality, subsampling=0)
     return buf.getvalue()
 
 
@@ -105,7 +105,10 @@ def b64_to_pil(b64_str: str) -> Image.Image:
 
 def pil_to_b64(pil_img: Image.Image, fmt="PNG") -> str:
     buf = io.BytesIO()
-    pil_img.save(buf, format=fmt)
+    if fmt.upper() == "PNG":
+        pil_img.save(buf, format=fmt, compress_level=1)  # nhanh hơn nhiều so với mức 6 mặc định, cùng định dạng PNG
+    else:
+        pil_img.save(buf, format=fmt)
     return f"data:image/{fmt.lower()};base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
@@ -375,8 +378,8 @@ def process_manga_box_selection(
     ts = int(time.time() * 1000)
     jpg_path = str(pages_dir / f"box_cleaned_{ts}.jpg")
     png_path = str(pages_dir / f"box_cleaned_{ts}.png")
-    cleaned_pil.save(jpg_path, format="JPEG", quality=98, subsampling=0, optimize=True)
-    cleaned_pil.save(png_path, format="PNG")
+    cleaned_pil.save(jpg_path, format="JPEG", quality=98, subsampling=0)
+    cleaned_pil.save(png_path, format="PNG", compress_level=1)
 
     stats["total_boxes"] = len(boxes)
     stats["clean_mode"] = "AI bóc tách chữ trong box (giữ viền)" if clean_mode == "ai_text" else "Xóa trọn vẹn toàn bộ lòng box"
@@ -425,10 +428,10 @@ def process_manga_auto(
     jpg_path = str(pages_dir / f"cleaned_manga_{ts}.jpg")
     png_path = str(pages_dir / f"cleaned_manga_{ts}.png")
     if cleaned_pil.mode in ("RGBA", "LA", "P"):
-        cleaned_pil.convert("RGB").save(jpg_path, format="JPEG", quality=98, subsampling=0, optimize=True)
+        cleaned_pil.convert("RGB").save(jpg_path, format="JPEG", quality=98, subsampling=0)
     else:
-        cleaned_pil.save(jpg_path, format="JPEG", quality=98, subsampling=0, optimize=True)
-    cleaned_pil.save(png_path, format="PNG")
+        cleaned_pil.save(jpg_path, format="JPEG", quality=98, subsampling=0)
+    cleaned_pil.save(png_path, format="PNG", compress_level=1)
 
     return cleaned_pil, color_mask_pil, time_badge, stats, jpg_path, png_path
 
@@ -572,8 +575,8 @@ async def api_clean_page(req: CleanPagePayload):
         )
         return {
             "success": True,
-            "cleanedImageBase64": pil_to_b64(cleaned_pil),
-            "colorMaskBase64": pil_to_b64(color_mask_pil),
+            "cleanedImageBase64": await run_in_threadpool(pil_to_b64, cleaned_pil),
+            "colorMaskBase64": await run_in_threadpool(pil_to_b64, color_mask_pil),
             "stats": stats,
         }
     except Exception as exc:
@@ -1063,9 +1066,9 @@ def create_ui() -> gr.Blocks:
                             ts = int(time.time() * 1000)
                             brush_jpg = str(pages_dir / f"brush_cleaned_{ts}.jpg")
                             if cleaned_pil.mode in ("RGBA", "LA", "P"):
-                                cleaned_pil.convert("RGB").save(brush_jpg, format="JPEG", quality=98, subsampling=0, optimize=True)
+                                cleaned_pil.convert("RGB").save(brush_jpg, format="JPEG", quality=98, subsampling=0)
                             else:
-                                cleaned_pil.save(brush_jpg, format="JPEG", quality=98, subsampling=0, optimize=True)
+                                cleaned_pil.save(brush_jpg, format="JPEG", quality=98, subsampling=0)
                             return cleaned_pil, brush_jpg
 
                         btn_brush_clean.click(

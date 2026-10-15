@@ -1,19 +1,22 @@
 """
-Module Nhận diện & OCR (core/ocr_engine.py)
-- Sử dụng Comic-Text-Detector (ONNX Runtime / OpenCV DNN) tìm Bounding Boxes văn bản trên toàn trang.
-- Sắp xếp thứ tự đọc thông minh:
-  * mode="manga": Phải -> Trái, Trên -> Dưới (RTL)
-  * mode="webtoon": Trên -> Dưới (TTB)
-- Cơ chế nạp Lazy A/B OCR:
-  * Option A (ja_manga): manga-ocr (chuyên tiếng Nhật, chữ dọc/ngang)
-  * Option B (multilingual): PaddleOCR (chạy CPU, hỗ trợ Hàn, Trung, Anh, v.v.)
+Module Nhận diện & OCR (core/ocr_engine.py) - bản TỐI ƯU TỐC ĐỘ
+
+Thay đổi chính so với bản cũ:
+  1. chat_only=True: dùng thẳng box "text_bubble" của RT-DETR (bubble_detector) làm vùng OCR,
+     KHÔNG chạy thêm Comic-Text-Detector (CTD) + lọc giao nhau => bỏ hẳn 1 lần suy luận nặng/trang.
+  2. CTD chỉ còn là đường dự phòng / dùng khi chat_only=False; hậu xử lý (threshold, dilate,
+     findContours) chạy ở độ phân giải model (<=1024px) thay vì độ phân giải ảnh gốc.
+  3. manga-ocr chạy THEO LÔ (batch) thay vì từng crop một.
+  4. PaddleOCR tắt bộ phân loại góc (cls) mỗi crop - bong bóng manga hầu như không bị xoay.
+  5. Nạp model lazy + có hàm warmup_ocr() để request đầu tiên không phải chờ nạp model.
+API công khai không đổi: process_page_ocr(...), sort_reading_order(...).
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -28,21 +31,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODELS_DIR = BASE_DIR / "models"
 WEIGHTS_DIR = BASE_DIR / "weights"
 
+CPU_THREADS = max(1, min(os.cpu_count() or 4, 8))
+OCR_BATCH_SIZE = int(os.getenv("OCR_BATCH_SIZE", "8"))
+
 COMIC_ONNX_PATH = MODELS_DIR / "comictextdetector.pt.onnx"
 if not COMIC_ONNX_PATH.is_file():
-    alt = WEIGHTS_DIR / "comictextdetector.pt.onnx"
-    if alt.is_file():
-        COMIC_ONNX_PATH = alt
-    else:
-        alt2 = WEIGHTS_DIR / "comic-text-detector.onnx"
-        if alt2.is_file():
-            COMIC_ONNX_PATH = alt2
+    for _alt in (WEIGHTS_DIR / "comictextdetector.pt.onnx", WEIGHTS_DIR / "comic-text-detector.onnx"):
+        if _alt.is_file():
+            COMIC_ONNX_PATH = _alt
+            break
+
+try:  # đồng bộ với mask_logic
+    from mask_logic import CLS_TEXT_BUBBLE
+except Exception:  # noqa: BLE001
+    CLS_TEXT_BUBBLE = 1
+
+try:
+    import torch
+
+    torch.set_num_threads(CPU_THREADS)
+except Exception:  # noqa: BLE001
+    torch = None  # type: ignore
+
 
 # --------------------------------------------------------------------------------------
-# 1. Comic-Text-Detector: Text Box Detection (ONNX Runtime / OpenCV DNN)
+# 1. Comic-Text-Detector (đường dự phòng / chat_only=False)
 # --------------------------------------------------------------------------------------
 class ComicTextDetector:
-    """Detector tìm bounding boxes văn bản truyện tranh bằng Comic-Text-Detector ONNX."""
+    """Tìm bounding boxes văn bản bằng Comic-Text-Detector ONNX."""
 
     def __init__(self, model_path: Optional[Path] = None):
         self.model_path = Path(model_path) if model_path else COMIC_ONNX_PATH
@@ -53,42 +69,36 @@ class ComicTextDetector:
 
     def _init_engine(self):
         if not self.model_path.is_file():
-            logger.warning("ComicTextDetector ONNX không tìm thấy tại: %s. Sẽ tải khi cần.", self.model_path)
             try:
                 from download_models import ensure_models
-                ensure_models()
-            except Exception as e:
-                logger.error("Không thể tự động tải model: %s", e)
 
+                ensure_models()
+            except Exception as e:  # noqa: BLE001
+                logger.error("Không thể tự động tải model: %s", e)
         if not self.model_path.is_file():
-            logger.error("Model file vẫn không tồn tại: %s", self.model_path)
+            logger.error("Model file không tồn tại: %s", self.model_path)
             return
 
-        # 1. Thử ONNX Runtime trước (CPU Execution Provider)
         try:
             import onnxruntime as ort
-            sess_opts = ort.SessionOptions()
-            sess_opts.intra_op_num_threads = 4
-            sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            self.session = ort.InferenceSession(
-                str(self.model_path),
-                sess_options=sess_opts,
-                providers=["CPUExecutionProvider"],
-            )
-            self.ready = True
-            logger.info("ComicTextDetector đã sẵn sàng (ONNX Runtime CPU).")
-            return
-        except Exception as exc:
-            logger.warning("ONNX Runtime không khả dụng (%s), chuyển sang OpenCV DNN fallback.", exc)
 
-        # 2. Fallback OpenCV DNN
+            so = ort.SessionOptions()
+            so.intra_op_num_threads = CPU_THREADS
+            so.inter_op_num_threads = 1
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            self.session = ort.InferenceSession(str(self.model_path), sess_options=so, providers=["CPUExecutionProvider"])
+            self.ready = True
+            logger.info("ComicTextDetector sẵn sàng (ONNX Runtime CPU, %d threads).", CPU_THREADS)
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ONNX Runtime không khả dụng (%s), dùng OpenCV DNN.", exc)
+
         try:
             self.net = cv2.dnn.readNetFromONNX(str(self.model_path))
             self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
             self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
             self.ready = True
-            logger.info("ComicTextDetector đã sẵn sàng (OpenCV DNN CPU).")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("Khởi tạo ComicTextDetector thất bại: %s", exc)
 
     def detect_boxes(
@@ -98,221 +108,248 @@ class ComicTextDetector:
         input_size: int = 1024,
         min_size: int = 12,
     ) -> List[Tuple[int, int, int, int]]:
-        """
-        Tìm các text bounding boxes trên trang truyện.
-        Trả về danh sách box dạng [ymin, xmin, ymax, xmax].
-        """
+        """Trả về box dạng (ymin, xmin, ymax, xmax) theo tọa độ ảnh gốc."""
         h, w = image_bgr.shape[:2]
         if not self.ready:
             logger.warning("Detector chưa sẵn sàng, trả về rỗng.")
             return []
 
         scale = min(input_size / h, input_size / w)
-        nw, nh = int(round(w * scale)), int(round(h * scale))
-        resized = cv2.resize(image_bgr, (nw, nh), interpolation=cv2.INTER_LINEAR)
+        nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
+        resized = cv2.resize(image_bgr, (nw, nh), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_LINEAR)
         padded = cv2.copyMakeBorder(resized, 0, input_size - nh, 0, input_size - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
 
-        blob = (padded.astype(np.float32) / 255.0).transpose(2, 0, 1)[np.newaxis, ...]
-
-        det_prob = None
-        seg_prob = None
-
+        det_prob = seg_prob = None
         if self.session is not None:
-            input_name = self.session.get_inputs()[0].name
-            outputs = self.session.run(None, {input_name: blob})
-            for out in outputs:
-                if out.ndim == 4 and out.shape[1] == 1:
-                    seg_prob = out[0, 0]
-                elif out.ndim == 4 and out.shape[1] == 2:
-                    det_prob = out[0, 0]
-        elif self.net is not None:
+            blob = (padded.astype(np.float32) / 255.0).transpose(2, 0, 1)[np.newaxis, ...]
+            outputs = self.session.run(None, {self.session.get_inputs()[0].name: blob})
+        else:
             self.net.setInput(cv2.dnn.blobFromImage(padded, 1.0 / 255.0, (input_size, input_size), swapRB=False, crop=False))
             outputs = self.net.forward(self.net.getUnconnectedOutLayersNames())
-            for out in outputs:
-                if out.ndim == 4 and out.shape[1] == 1:
-                    seg_prob = out[0, 0]
-                elif out.ndim == 4 and out.shape[1] == 2:
-                    det_prob = out[0, 0]
+        for out in outputs:
+            if out.ndim == 4 and out.shape[1] == 1:
+                seg_prob = out[0, 0]
+            elif out.ndim == 4 and out.shape[1] == 2:
+                det_prob = out[0, 0]
 
         if det_prob is not None and seg_prob is not None:
             comb = np.maximum(det_prob, seg_prob)
-        elif det_prob is not None:
-            comb = det_prob
-        elif seg_prob is not None:
-            comb = seg_prob
         else:
+            comb = det_prob if det_prob is not None else seg_prob
+        if comb is None:
             return []
 
-        # Resize lại kích thước gốc (bỏ phần padding)
-        prob_valid = comb[:nh, :nw]
-        prob_orig = cv2.resize(prob_valid, (w, h), interpolation=cv2.INTER_LINEAR)
-
-        # Ngưỡng nhị phân
-        binary = (prob_orig > det_threshold).astype(np.uint8) * 255
-
-        # Dilation nhẹ để kết nối các nét ký tự trong cùng một bóng thoại/dòng thoại
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        binary = cv2.dilate(binary, kernel, iterations=2)
-
+        # --- Hậu xử lý ở độ phân giải model (nhanh hơn rất nhiều với ảnh webtoon dài) ---
+        binary = (comb[:nh, :nw] > det_threshold).astype(np.uint8) * 255
+        # Bản cũ: kernel 5x5 x2 lần ở độ phân giải gốc ~ bán kính 4px gốc => quy đổi theo scale
+        r = max(1, int(round(4 * scale)))
+        binary = cv2.dilate(binary, cv2.getStructuringElement(cv2.MORPH_RECT, (2 * r + 1, 2 * r + 1)))
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        raw_boxes = []
+        inv = 1.0 / scale
+        raw: List[Tuple[int, int, int, int]] = []
         for cnt in contours:
             x, y, bw, bh = cv2.boundingRect(cnt)
-            if bw >= min_size and bh >= min_size:
-                xmin = max(0, x)
-                ymin = max(0, y)
-                xmax = min(w, x + bw)
-                ymax = min(h, y + bh)
-                # Format yêu cầu: [ymin, xmin, ymax, xmax]
-                raw_boxes.append((ymin, xmin, ymax, xmax))
-
-        # Hợp nhất các box con bị chia tách quá gần nhau
-        merged = self._merge_close_boxes(raw_boxes, dist_threshold=14)
-        return merged
+            xmin, ymin = max(0, int(x * inv)), max(0, int(y * inv))
+            xmax, ymax = min(w, int(round((x + bw) * inv))), min(h, int(round((y + bh) * inv)))
+            if (xmax - xmin) >= min_size and (ymax - ymin) >= min_size:
+                raw.append((ymin, xmin, ymax, xmax))
+        return self._merge_close_boxes(raw, dist_threshold=14)
 
     @staticmethod
     def _merge_close_boxes(boxes: List[Tuple[int, int, int, int]], dist_threshold: int = 14) -> List[Tuple[int, int, int, int]]:
         if not boxes:
             return []
-        
-        merged = []
+        merged: List[Tuple[int, int, int, int]] = []
         used = [False] * len(boxes)
-
         for i in range(len(boxes)):
             if used[i]:
                 continue
             y1, x1, y2, x2 = boxes[i]
             used[i] = True
-
             changed = True
             while changed:
                 changed = False
                 for j in range(len(boxes)):
-                    if not used[j]:
-                        jy1, jx1, jy2, jx2 = boxes[j]
-                        # Kiểm tra khoảng cách
-                        if not (x2 + dist_threshold < jx1 or jx2 + dist_threshold < x1 or
-                                y2 + dist_threshold < jy1 or jy2 + dist_threshold < y1):
-                            # Hợp nhất
-                            x1 = min(x1, jx1)
-                            y1 = min(y1, jy1)
-                            x2 = max(x2, jx2)
-                            y2 = max(y2, jy2)
-                            used[j] = True
-                            changed = True
-
+                    if used[j]:
+                        continue
+                    jy1, jx1, jy2, jx2 = boxes[j]
+                    if not (x2 + dist_threshold < jx1 or jx2 + dist_threshold < x1 or
+                            y2 + dist_threshold < jy1 or jy2 + dist_threshold < y1):
+                        x1, y1, x2, y2 = min(x1, jx1), min(y1, jy1), max(x2, jx2), max(y2, jy2)
+                        used[j] = True
+                        changed = True
             merged.append((y1, x1, y2, x2))
         return merged
 
 
+_DETECTOR: Optional[ComicTextDetector] = None
+_DETECTOR_LOCK = threading.Lock()
+
+
+def _get_detector() -> ComicTextDetector:
+    """Lazy singleton: chỉ nạp CTD khi thật sự cần (không nạp lúc import)."""
+    global _DETECTOR
+    if _DETECTOR is None:
+        with _DETECTOR_LOCK:
+            if _DETECTOR is None:
+                _DETECTOR = ComicTextDetector()
+    return _DETECTOR
+
+
 # --------------------------------------------------------------------------------------
-# 2. Reading Order Sorter: Manga (RTL) vs Webtoon (TTB)
+# 2. Thứ tự đọc
 # --------------------------------------------------------------------------------------
 def sort_reading_order(
     boxes: List[Dict[str, Any]],
     mode: Literal["manga", "webtoon"] = "manga",
     y_band_tolerance: int = 40,
 ) -> List[Dict[str, Any]]:
-    """
-    Sắp xếp danh sách box theo thứ tự đọc:
-    - mode="manga": Manga truyền thống đọc từ Phải sang Trái, Trên xuống Dưới.
-    - mode="webtoon": Webtoon dọc đọc từ Trên xuống Dưới.
-    boxes: List các dict, mỗi dict chứa key "bbox": [ymin, xmin, ymax, xmax]
-    """
+    """manga: dải ngang trên->dưới, trong dải phải->trái | webtoon: trên->dưới rồi trái->phải."""
     if not boxes:
         return []
-
     if mode == "webtoon":
-        # Webtoon: sắp xếp ưu tiên theo ymin tăng dần, sau đó đến xmin
         return sorted(boxes, key=lambda b: (b["bbox"][0], b["bbox"][1]))
 
-    # Manga (RTL): Nhóm theo dải panel (Band) từ trên xuống dưới, trong cùng band xếp từ phải qua trái
-    # Tính tâm y và tâm x của mỗi box
-    augmented = []
-    for idx, b in enumerate(boxes):
+    aug = []
+    for b in boxes:
         ymin, xmin, ymax, xmax = b["bbox"]
-        cy = (ymin + ymax) / 2.0
-        cx = (xmin + xmax) / 2.0
-        augmented.append({"data": b, "cy": cy, "cx": cx, "ymin": ymin, "xmin": xmin})
+        aug.append({"data": b, "cy": (ymin + ymax) / 2.0, "cx": (xmin + xmax) / 2.0})
+    aug.sort(key=lambda it: it["cy"])
 
-    # Sắp xếp sơ bộ theo cy
-    augmented.sort(key=lambda item: item["cy"])
-
-    # Phân cụm thành các dải ngang (horizontal bands)
     bands: List[List[Dict[str, Any]]] = []
-    current_band: List[Dict[str, Any]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_sum = 0.0
+    for it in aug:
+        if cur and abs(it["cy"] - cur_sum / len(cur)) > y_band_tolerance:
+            bands.append(cur)
+            cur, cur_sum = [], 0.0
+        cur.append(it)
+        cur_sum += it["cy"]
+    if cur:
+        bands.append(cur)
 
-    for item in augmented:
-        if not current_band:
-            current_band.append(item)
-        else:
-            band_avg_y = sum(x["cy"] for x in current_band) / len(current_band)
-            if abs(item["cy"] - band_avg_y) <= y_band_tolerance:
-                current_band.append(item)
-            else:
-                bands.append(current_band)
-                current_band = [item]
-    if current_band:
-        bands.append(current_band)
-
-    # Trong mỗi dải, sắp xếp từ PHẢI sang TRÁI (cx giảm dần)
-    sorted_boxes = []
+    out: List[Dict[str, Any]] = []
     for band in bands:
-        band.sort(key=lambda item: item["cx"], reverse=True)
-        for item in band:
-            sorted_boxes.append(item["data"])
-
-    return sorted_boxes
+        band.sort(key=lambda it: it["cx"], reverse=True)
+        out.extend(it["data"] for it in band)
+    return out
 
 
 # --------------------------------------------------------------------------------------
-# 3. Lazy A/B OCR Engines (manga-ocr & PaddleOCR)
+# 3. OCR engines (lazy)
 # --------------------------------------------------------------------------------------
 _MANGA_OCR_INSTANCE = None
 _PADDLE_OCR_INSTANCES: Dict[str, Any] = {}
+_LOAD_LOCK = threading.Lock()
 
 
 def get_manga_ocr():
-    """Nạp lazy manga-ocr (chuyên xử lý tiếng Nhật trên CPU)."""
     global _MANGA_OCR_INSTANCE
     if _MANGA_OCR_INSTANCE is None:
-        logger.info("📦 Đang nạp manga-ocr vào CPU RAM...")
-        try:
-            from manga_ocr import MangaOcr
-            # Cần force_cpu=True để tránh chạm vào low-level CUDA init trên ZeroGPU
-            try:
-                _MANGA_OCR_INSTANCE = MangaOcr(force_cpu=True)
-            except TypeError:
-                _MANGA_OCR_INSTANCE = MangaOcr()
-            logger.info("✅ manga-ocr đã nạp thành công trên CPU.")
-        except Exception as exc:
-            logger.error("Không thể nạp manga-ocr: %s", exc)
-            raise RuntimeError(f"Lỗi nạp manga-ocr: {exc}")
+        with _LOAD_LOCK:
+            if _MANGA_OCR_INSTANCE is None:
+                logger.info("📦 Đang nạp manga-ocr (CPU)...")
+                try:
+                    from manga_ocr import MangaOcr
+
+                    try:
+                        inst = MangaOcr(force_cpu=True)
+                    except TypeError:
+                        inst = MangaOcr()
+                    inst.model.eval()
+                    _MANGA_OCR_INSTANCE = inst
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("Không thể nạp manga-ocr: %s", exc)
+                    raise RuntimeError(f"Lỗi nạp manga-ocr: {exc}")
     return _MANGA_OCR_INSTANCE
 
 
 def get_paddle_ocr(lang: str = "ch"):
-    """Nạp lazy PaddleOCR (hỗ trợ tiếng Hàn, Trung, Anh, v.v.)."""
-    global _PADDLE_OCR_INSTANCES
     lang = lang.lower().strip()
     if lang not in _PADDLE_OCR_INSTANCES:
-        logger.info("📦 Đang nạp PaddleOCR (lang=%s) vào CPU RAM...", lang)
-        try:
-            from paddleocr import PaddleOCR
-            # Tối ưu chạy trên CPU
-            _PADDLE_OCR_INSTANCES[lang] = PaddleOCR(
-                use_angle_cls=True,
-                lang=lang,
-                use_gpu=False,
-                show_log=False,
-                enable_mkldnn=True,
-            )
-            logger.info("✅ PaddleOCR (lang=%s) đã nạp thành công.", lang)
-        except Exception as exc:
-            logger.error("Không thể nạp PaddleOCR (lang=%s): %s", lang, exc)
-            raise RuntimeError(f"Lỗi nạp PaddleOCR ({lang}): {exc}")
+        with _LOAD_LOCK:
+            if lang not in _PADDLE_OCR_INSTANCES:
+                logger.info("📦 Đang nạp PaddleOCR (lang=%s)...", lang)
+                try:
+                    from paddleocr import PaddleOCR
+
+                    _PADDLE_OCR_INSTANCES[lang] = PaddleOCR(
+                        use_angle_cls=False,   # bỏ classifier góc: tiết kiệm 1 lần suy luận/crop
+                        lang=lang,
+                        use_gpu=False,
+                        show_log=False,
+                        enable_mkldnn=True,
+                        cpu_threads=CPU_THREADS,
+                        rec_batch_num=OCR_BATCH_SIZE,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("Không thể nạp PaddleOCR (lang=%s): %s", lang, exc)
+                    raise RuntimeError(f"Lỗi nạp PaddleOCR ({lang}): {exc}")
     return _PADDLE_OCR_INSTANCES[lang]
+
+
+def warmup_ocr(engine_type: str = "ja_manga", source_lang: str = "ch") -> None:
+    """Gọi 1 lần khi khởi động app (vd. threading.Thread(target=warmup_ocr).start())."""
+    try:
+        if engine_type == "ja_manga":
+            _ocr_manga_batch([Image.new("RGB", (64, 64), "white")])
+        else:
+            get_paddle_ocr(source_lang)
+        _get_detector()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("warmup_ocr lỗi (bỏ qua): %s", exc)
+
+
+def _ocr_manga_batch(crops: List[Image.Image], batch_size: int = OCR_BATCH_SIZE) -> List[str]:
+    """manga-ocr theo lô. Nhóm crop có kích thước gần nhau để giảm padding khi sinh chuỗi."""
+    mocr = get_manga_ocr()
+    results = [""] * len(crops)
+    if not crops:
+        return results
+
+    try:
+        from manga_ocr.ocr import post_process
+    except Exception:  # noqa: BLE001
+        def post_process(t: str) -> str:  # type: ignore
+            return "".join(t.split())
+
+    order = sorted(range(len(crops)), key=lambda i: crops[i].width * crops[i].height)
+    device = mocr.model.device
+    with torch.inference_mode():
+        for s in range(0, len(order), batch_size):
+            idxs = order[s:s + batch_size]
+            try:
+                imgs = [crops[i].convert("L").convert("RGB") for i in idxs]
+                pix = mocr.processor(imgs, return_tensors="pt").pixel_values.to(device)
+                ids = mocr.model.generate(pix, max_length=300, num_beams=1, do_sample=False)
+                texts = mocr.tokenizer.batch_decode(ids, skip_special_tokens=True)
+                for i, t in zip(idxs, texts):
+                    results[i] = post_process(t).strip()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Batch manga-ocr lỗi (%s), chạy từng crop.", exc)
+                for i in idxs:
+                    try:
+                        results[i] = (mocr(crops[i]) or "").strip()
+                    except Exception:  # noqa: BLE001
+                        results[i] = ""
+    return results
+
+
+def _ocr_paddle_batch(crops: List[Image.Image], lang: str) -> List[str]:
+    pocr = get_paddle_ocr(lang)
+    out: List[str] = []
+    for c in crops:
+        try:
+            res = pocr.ocr(np.array(c.convert("RGB")), cls=False)
+            if not res or not res[0]:
+                out.append("")
+                continue
+            out.append(" ".join(l[1][0] for l in res[0] if l and len(l) > 1 and l[1]).strip())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("PaddleOCR crop error: %s", exc)
+            out.append("")
+    return out
 
 
 def run_ocr_on_crop(
@@ -320,35 +357,37 @@ def run_ocr_on_crop(
     engine_type: Literal["ja_manga", "multilingual"] = "ja_manga",
     source_lang: str = "ch",
 ) -> str:
-    """Chạy OCR trên một vùng ảnh crop."""
+    """Giữ lại cho tương thích ngược (OCR 1 crop)."""
     if crop_pil.width < 4 or crop_pil.height < 4:
         return ""
+    fn = _ocr_manga_batch if engine_type == "ja_manga" else (lambda c: _ocr_paddle_batch(c, source_lang))
+    return fn([crop_pil])[0]
 
-    if engine_type == "ja_manga":
-        mocr = get_manga_ocr()
-        import torch
-        with torch.inference_mode():
-            text = mocr(crop_pil)
-        return text.strip() if text else ""
 
-    # Multilingual: PaddleOCR
-    pocr = get_paddle_ocr(lang=source_lang)
-    crop_np = np.array(crop_pil.convert("RGB"))
+# --------------------------------------------------------------------------------------
+# 4. Pipeline: Detect -> Sort -> OCR
+# --------------------------------------------------------------------------------------
+def _bubble_text_boxes(img_rgb: np.ndarray, min_size: int = 12) -> Optional[List[Tuple[int, int, int, int]]]:
+    """Box chữ trong bong bóng thoại từ RT-DETR. None = detector chưa sẵn sàng/lỗi."""
     try:
-        result = pocr.ocr(crop_np, cls=True)
-        if not result or not result[0]:
-            return ""
-        lines = [line[1][0] for line in result[0] if line and len(line) > 1 and line[1]]
-        return " ".join(lines).strip()
-    except Exception as exc:
-        logger.warning("PaddleOCR crop error: %s", exc)
-        return ""
+        from manga_cleaner import cleaner_pipeline
 
-
-# --------------------------------------------------------------------------------------
-# 4. Pipeline tích hợp hoàn chỉnh (Detect -> Sort -> OCR)
-# --------------------------------------------------------------------------------------
-_DETECTOR = ComicTextDetector()
+        if not cleaner_pipeline.ready:
+            return None
+        h, w = img_rgb.shape[:2]
+        regions = cleaner_pipeline._detect_regions(img_rgb, thr=0.15, force_cpu=True)
+        boxes = []
+        for d in regions:
+            if d.cls != CLS_TEXT_BUBBLE:
+                continue
+            x1, y1, x2, y2 = d.box
+            x1, y1, x2, y2 = max(0, int(x1)), max(0, int(y1)), min(w, int(round(x2))), min(h, int(round(y2)))
+            if (x2 - x1) >= min_size and (y2 - y1) >= min_size:
+                boxes.append((y1, x1, y2, x2))
+        return boxes
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Bubble detector lỗi, dùng CTD dự phòng: %s", exc)
+        return None
 
 
 def process_page_ocr(
@@ -359,84 +398,49 @@ def process_page_ocr(
     det_threshold: float = 0.20,
     chat_only: bool = True,
 ) -> Tuple[int, List[Dict[str, Any]]]:
-    """
-    Quy trình nhận diện và OCR toàn bộ trang truyện:
-    1. BBox Detection (ComicTextDetector)
-    2. Lọc chỉ lấy chữ trong bong bóng chat (chat_only=True), loại bỏ SFX vẽ tay
-    3. Sắp xếp thứ tự đọc (Manga RTL hoặc Webtoon TTB)
-    4. Cắt từng box và chạy OCR (manga-ocr hoặc PaddleOCR)
-    Trả về: (total_boxes, list_of_objects)
-    """
+    """Trả về (total_boxes, [{id, bbox:[ymin,xmin,ymax,xmax], original_text, translated_text}])."""
     if isinstance(image, np.ndarray):
         img_bgr = image if image.ndim == 3 and image.shape[2] == 3 else cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
-        img_pil = Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        img_pil = Image.fromarray(img_rgb)
     else:
         img_pil = image.convert("RGB")
-        img_bgr = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+        img_rgb = np.array(img_pil)
+        img_bgr = None  # chỉ tạo khi cần cho CTD
 
-    # 1. Phát hiện BBoxes
-    raw_boxes = _DETECTOR.detect_boxes(img_bgr, det_threshold=det_threshold)
+    # 1. Tìm box: chat_only -> RT-DETR text_bubble (nhanh, bỏ qua CTD); ngược lại / dự phòng -> CTD
+    raw_boxes: Optional[List[Tuple[int, int, int, int]]] = None
+    if chat_only:
+        raw_boxes = _bubble_text_boxes(img_rgb)
+    if not raw_boxes:
+        det = _get_detector()
+        if img_bgr is None:
+            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+        raw_boxes = det.detect_boxes(img_bgr, det_threshold=det_threshold)
     if not raw_boxes:
         return 0, []
 
-    # 2. Lọc chỉ lấy chữ trong Bong Bóng Thoại (Chat Bubble Only) nếu bật tùy chọn
-    if chat_only:
-        try:
-            from manga_cleaner import cleaner_pipeline
-            if cleaner_pipeline.ready:
-                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-                regions = cleaner_pipeline._detect_regions(img_rgb, thr=0.15, force_cpu=True)
-                chat_boxes = [d.box for d in regions if d.cls == 1]  # CLS_TEXT_BUBBLE
-                if chat_boxes:
-                    filtered_boxes = []
-                    for b in raw_boxes:
-                        ymin, xmin, ymax, xmax = b
-                        b_area = max(1, (xmax - xmin) * (ymax - ymin))
-                        inside_bubble = False
-                        for (cx1, cy1, cx2, cy2) in chat_boxes:
-                            ix1 = max(xmin, cx1)
-                            iy1 = max(ymin, cy1)
-                            ix2 = min(xmax, cx2)
-                            iy2 = min(ymax, cy2)
-                            iw = max(0, ix2 - ix1)
-                            ih = max(0, iy2 - iy1)
-                            if (iw * ih) / b_area >= 0.20:
-                                inside_bubble = True
-                                break
-                        if inside_bubble:
-                            filtered_boxes.append(b)
-                    if filtered_boxes:
-                        raw_boxes = filtered_boxes
-        except Exception as exc:
-            logger.warning("Không thể lọc bong bóng chat (dùng toàn bộ box): %s", exc)
+    # 2. Thứ tự đọc
+    items = sort_reading_order([{"bbox": list(b)} for b in raw_boxes], mode=reading_order)
 
-    # Định dạng thành list dicts để chuẩn bị sort
-    box_items = [{"bbox": list(b)} for b in raw_boxes]
-
-    # 3. Sắp xếp thứ tự đọc
-    sorted_items = sort_reading_order(box_items, mode=reading_order)
-
-    # 3. Chạy OCR từng box theo đúng thứ tự
-    results = []
+    # 3. Cắt crop rồi OCR theo lô
     w, h = img_pil.size
+    pad = 2
+    crops: List[Image.Image] = []
+    for it in items:
+        ymin, xmin, ymax, xmax = it["bbox"]
+        crops.append(img_pil.crop((max(0, xmin - pad), max(0, ymin - pad), min(w, xmax + pad), min(h, ymax + pad))))
 
-    for idx, item in enumerate(sorted_items, start=1):
-        ymin, xmin, ymax, xmax = item["bbox"]
-        # Đảm bảo biên hợp lệ và thêm margin nhỏ 2px
-        pad = 2
-        cy1 = max(0, ymin - pad)
-        cx1 = max(0, xmin - pad)
-        cy2 = min(h, ymax + pad)
-        cx2 = min(w, xmax + pad)
+    valid = [i for i, c in enumerate(crops) if c.width >= 4 and c.height >= 4]
+    texts = [""] * len(crops)
+    if valid:
+        sub = [crops[i] for i in valid]
+        sub_txt = _ocr_manga_batch(sub) if ocr_engine == "ja_manga" else _ocr_paddle_batch(sub, source_lang)
+        for i, t in zip(valid, sub_txt):
+            texts[i] = t
 
-        crop = img_pil.crop((cx1, cy1, cx2, cy2))
-        text = run_ocr_on_crop(crop, engine_type=ocr_engine, source_lang=source_lang)
-
-        results.append({
-            "id": idx,
-            "bbox": [ymin, xmin, ymax, xmax],
-            "original_text": text,
-            "translated_text": "",  # Sẽ được điền ở module translator
-        })
-
+    results = [
+        {"id": n, "bbox": list(it["bbox"]), "original_text": texts[n - 1], "translated_text": ""}
+        for n, it in enumerate(items, start=1)
+    ]
     return len(results), results
