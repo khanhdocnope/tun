@@ -67,8 +67,9 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Thiếu dữ liệu tệp ZIP (zipBase64)." });
     }
 
-    const cleanB64 = zipBase64.replace(/^data:application\/\w+;base64,/, "");
-    const zipBuffer = Buffer.from(cleanB64, "base64");
+    // Tách phần base64 an toàn bất kể MIME type nào (application/zip, application/x-zip-compressed, v.v.)
+    const cleanB64 = zipBase64.includes(";base64,") ? zipBase64.split(";base64,").pop() : zipBase64;
+    const zipBuffer = Buffer.from(cleanB64.trim(), "base64");
 
     // Giải nén tệp ZIP hoàn toàn trong bộ nhớ Cloud (RAM Node.js)
     const inZip = new AdmZip(zipBuffer);

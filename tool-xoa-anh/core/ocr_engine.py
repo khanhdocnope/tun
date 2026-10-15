@@ -274,15 +274,20 @@ def get_paddle_ocr(lang: str = "ch"):
                 try:
                     from paddleocr import PaddleOCR
 
-                    _PADDLE_OCR_INSTANCES[lang] = PaddleOCR(
-                        use_angle_cls=False,   # bỏ classifier góc: tiết kiệm 1 lần suy luận/crop
-                        lang=lang,
-                        use_gpu=False,
-                        show_log=False,
-                        enable_mkldnn=True,
-                        cpu_threads=CPU_THREADS,
-                        rec_batch_num=OCR_BATCH_SIZE,
-                    )
+                    # PaddleOCR phiên bản mới (>=2.7 / 3.x) không còn tham số use_gpu / enable_mkldnn
+                    ocr_params = {
+                        "use_angle_cls": False,
+                        "lang": lang,
+                        "show_log": False,
+                    }
+                    try:
+                        _PADDLE_OCR_INSTANCES[lang] = PaddleOCR(
+                            **ocr_params,
+                            cpu_threads=CPU_THREADS,
+                            rec_batch_num=OCR_BATCH_SIZE,
+                        )
+                    except (TypeError, ValueError):
+                        _PADDLE_OCR_INSTANCES[lang] = PaddleOCR(**ocr_params)
                 except Exception as exc:  # noqa: BLE001
                     logger.error("Không thể nạp PaddleOCR (lang=%s): %s", lang, exc)
                     raise RuntimeError(f"Lỗi nạp PaddleOCR ({lang}): {exc}")

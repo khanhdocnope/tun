@@ -36,7 +36,9 @@ function getCleanBackendUrl() {
 }
 
 function getCleanLlmUrl() {
-  return (state.llmBaseUrl || "https://discovery-api.intern-ai.org.cn/v1").trim().replace(/\/+$/, "");
+  let url = (state.llmBaseUrl || "https://discovery-api.intern-ai.org.cn/v1").trim().replace(/\/+$/, "");
+  url = url.replace(/\/chat\/completions\/?$/, "").replace(/\/chat\/?$/, "");
+  return url.replace(/\/+$/, "");
 }
 
 // -----------------------------------------------------------------------------
@@ -575,6 +577,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   ];
 
   let responseData = null;
+  let lastError = "";
 
   // 1. Thử gọi trực tiếp từ trình duyệt đến OpenAI-Compatible Endpoint (Client-side)
   try {
@@ -596,13 +599,15 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
       responseData = await directRes.json();
     } else {
       const errTxt = await directRes.text();
-      console.warn("Direct LLM failed with status:", directRes.status, errTxt);
+      lastError = `Trực tiếp (${directRes.status}): ${errTxt}`;
+      console.warn("Direct LLM failed:", lastError);
     }
   } catch (directErr) {
-    console.warn("Direct LLM fetch error (likely CORS or network), falling back to server proxy:", directErr);
+    lastError = `Lỗi mạng trình duyệt/CORS: ${directErr.message}`;
+    console.warn("Direct LLM fetch error:", directErr);
   }
 
-  // 2. Fallback sang Vercel Serverless proxy nếu gọi trực tiếp thất bại
+  // 2. Fallback sang Vercel Serverless proxy (/api/translate)
   if (!responseData) {
     try {
       const proxyRes = await fetch("/api/translate", {
@@ -621,14 +626,44 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
         responseData = await proxyRes.json();
       } else {
         const pErr = await proxyRes.json().catch(() => ({}));
-        throw new Error(pErr.error || `Proxy HTTP ${proxyRes.status}`);
+        lastError = pErr.error || `Vercel Proxy HTTP ${proxyRes.status}`;
       }
     } catch (proxyErr) {
-      throw new Error(`Không thể kết nối AI Dịch: ${proxyErr.message}`);
+      lastError = `Vercel Proxy lỗi: ${proxyErr.message}`;
     }
   }
 
-  // 3. Trích xuất và phân tích kết quả dịch
+  // 3. Fallback sang Hugging Face Backend Proxy (/api/v1/translate)
+  if (!responseData) {
+    try {
+      const hfRes = await fetch(`${getCleanBackendUrl()}/api/v1/translate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages,
+          model: state.llmModel,
+          base_url: state.llmBaseUrl,
+          api_key: activeKey,
+          temperature: 0.3,
+        }),
+        signal: AbortSignal.timeout(70000),
+      });
+      if (hfRes.ok) {
+        responseData = await hfRes.json();
+      } else {
+        const hfErr = await hfRes.json().catch(() => ({}));
+        lastError = hfErr.detail || `HF Backend Proxy HTTP ${hfRes.status}`;
+      }
+    } catch (hfErr) {
+      lastError = `HF Backend Proxy lỗi: ${hfErr.message}`;
+    }
+  }
+
+  if (!responseData) {
+    throw new Error(lastError || "Không thể kết nối AI Dịch qua tất cả các cổng kết nối.");
+  }
+
+  // 4. Trích xuất và phân tích kết quả dịch
   let rawContent = responseData?.choices?.[0]?.message?.content || "";
 
   // Loại bỏ reasoning <think>...</think> của DeepSeek reasoning models
@@ -1106,7 +1141,8 @@ function initSettings() {
         return;
       }
       testLlmBtn.textContent = "Đang ping AI Dịch...";
-      const activeUrl = (llmUrlInput?.value.trim() || state.llmBaseUrl).replace(/\/+$/, "");
+      let activeUrl = (llmUrlInput?.value.trim() || state.llmBaseUrl).replace(/\/+$/, "");
+      activeUrl = activeUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/chat\/?$/, "");
       const activeModel = modelInput?.value.trim() || state.llmModel;
 
       try {
@@ -1133,18 +1169,42 @@ function initSettings() {
 
         // 2. Thử qua Vercel proxy
         if (!ok) {
-          const proxyRes = await fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              messages: [{ role: "user", content: "Ping" }],
-              model: activeModel,
-              baseUrl: activeUrl,
-              apiKey: activeKey,
-            }),
-            signal: AbortSignal.timeout(20000),
-          });
-          if (proxyRes.ok) ok = true;
+          try {
+            const proxyRes = await fetch("/api/translate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [{ role: "user", content: "Ping" }],
+                model: activeModel,
+                baseUrl: activeUrl,
+                apiKey: activeKey,
+              }),
+              signal: AbortSignal.timeout(20000),
+            });
+            if (proxyRes.ok) ok = true;
+          } catch (e) {
+            // fallback HF proxy
+          }
+        }
+
+        // 3. Thử qua HF Backend proxy
+        if (!ok) {
+          try {
+            const hfRes = await fetch(`${getCleanBackendUrl()}/api/v1/translate`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [{ role: "user", content: "Ping" }],
+                model: activeModel,
+                base_url: activeUrl,
+                api_key: activeKey,
+              }),
+              signal: AbortSignal.timeout(20000),
+            });
+            if (hfRes.ok) ok = true;
+          } catch (e) {
+            // failed
+          }
         }
 
         if (ok) {

@@ -677,6 +677,50 @@ async def api_translate_page(
         }
     except Exception as exc:
         logger.error("Lỗi khi xử lý translate-page: %s", exc)
+class TranslateDirectRequest(BaseModel):
+    messages: List[Dict[str, Any]]
+    model: Optional[str] = "deepseek-v4-flash-0731"
+    base_url: Optional[str] = "https://discovery-api.intern-ai.org.cn/v1"
+    api_key: Optional[str] = None
+    temperature: Optional[float] = 0.3
+
+
+@api_router.post(
+    "/api/v1/translate",
+    tags=["Translation & OCR"],
+    summary="Proxy endpoint gọi AI Dịch (DeepSeek / OpenAI)",
+)
+async def api_translate_direct(req: TranslateDirectRequest):
+    active_key = (req.api_key or os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY") or "").strip()
+    if not active_key:
+        raise HTTPException(status_code=400, detail="Chưa cấu hình API Key.")
+
+    clean_base = (req.base_url or "https://discovery-api.intern-ai.org.cn/v1").rstrip("/")
+    if clean_base.endswith("/chat/completions"):
+        clean_base = clean_base[:-len("/chat/completions")].rstrip("/")
+    url = f"{clean_base}/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {active_key}",
+    }
+    payload = {
+        "model": req.model or "deepseek-v4-flash-0731",
+        "messages": req.messages,
+        "temperature": float(req.temperature or 0.3),
+    }
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=65.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=f"LLM API lỗi ({resp.status_code}): {resp.text}")
+            return resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="AI Dịch phản hồi quá thời gian quy định (Timeout > 65s).")
+    except Exception as exc:
+        logger.error("Lỗi khi proxy gọi LLM: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 
