@@ -146,7 +146,7 @@ module.exports = async (req, res) => {
             formData.append("chat_only", String(Boolean(chatOnly)));
             formData.append("det_threshold", String(detThreshold));
             formData.append("target_lang", targetLang);
-            if (enableLLM && activeKey) {
+            if (activeKey) {
               formData.append("api_key", activeKey);
             }
 

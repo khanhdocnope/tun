@@ -1671,8 +1671,11 @@ function initTranslator() {
     formData.append("target_lang", document.getElementById("trans-target-lang").value.trim() || "vi");
     formData.append("chat_only", document.getElementById("trans-chat-only-toggle").checked ? "true" : "false");
 
-    if (state.apiKey) {
-      formData.append("api_key", state.apiKey);
+    const activeApiKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
+    if (activeApiKey) {
+      formData.append("api_key", activeApiKey);
+    } else {
+      showToast("ℹ️ Đang chạy chế độ nhận diện chữ. Nếu muốn AI dịch sang tiếng Việt, hãy nhấn ⚙️ và dán API Key vào nhé!", "info");
     }
 
     const startT = performance.now();
@@ -1686,7 +1689,7 @@ function initTranslator() {
           ocrEngine: document.getElementById("trans-ocr-engine").value,
           chatOnly: document.getElementById("trans-chat-only-toggle").checked,
           targetLang: document.getElementById("trans-target-lang").value.trim() || "vi",
-          apiKey: state.apiKey,
+          apiKey: activeApiKey,
         };
         res = await fetch("/api/ocr", {
           method: "POST",
@@ -1721,7 +1724,9 @@ function initTranslator() {
       // Setup Script Download
       const scriptContent = state.transResultData
         .map((it) => `[#${it.id}] Gốc: ${it.original_text} -> Dịch: ${it.translated_text}`)
-        .join("\n\n");
+        .join("
+
+");
       const blob = new Blob([scriptContent], { type: "text/plain;charset=utf-8" });
       const dlBtn = document.getElementById("btn-download-script-txt");
       dlBtn.href = URL.createObjectURL(blob);
@@ -1745,8 +1750,12 @@ function initTranslator() {
       return;
     }
     const md = state.transResultData
-      .map((it) => `**[#${it.id}]**\n* Gốc: \`${it.original_text}\`\n* Dịch: **${it.translated_text}**`)
-      .join("\n\n");
+      .map((it) => `**[#${it.id}]**
+* Gốc: \`${it.original_text}\`
+* Dịch: **${it.translated_text}**`)
+      .join("
+
+");
     navigator.clipboard.writeText(md);
     showToast("Đã sao chép kịch bản Markdown vào Clipboard!", "success");
   });
@@ -2019,10 +2028,16 @@ function initBatch() {
           const fullTxt = (data.pages || [])
             .map(
               (p) =>
-                `=== ${p.filename} (Trang ${p.page_index}) ===\n` +
-                (p.data || []).map((d) => `[#${d.id}] Gốc: ${d.original_text} -> Dịch: ${d.translated_text}`).join("\n")
+                `=== ${p.filename} (Trang ${p.page_index}) ===
+` +
+                (p.data || []).map((d) => `[#${d.id}] Gốc: ${d.original_text} -> Dịch: ${d.translated_text}`).join("
+")
             )
-            .join("\n\n--------------------------------------------\n\n");
+            .join("
+
+--------------------------------------------
+
+");
 
           const blob = new Blob([fullTxt], { type: "text/plain;charset=utf-8" });
 

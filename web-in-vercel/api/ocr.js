@@ -47,14 +47,14 @@ module.exports = async (req, res) => {
 
     // Xử lý API key: ưu tiên key người dùng nhập, nếu không có lấy từ biến môi trường Cloud
     const activeKey = (apiKey || DEFAULT_DEEPSEEK_KEY).trim();
-    if (enableLLM && activeKey) {
+    if (activeKey) {
       formData.append("api_key", activeKey);
     }
 
     const response = await fetch(`${BACKEND_URL}/api/v1/translate-page`, {
       method: "POST",
       body: formData,
-      signal: AbortSignal.timeout(35000),
+      signal: AbortSignal.timeout(55000),
     });
 
     if (!response.ok) {

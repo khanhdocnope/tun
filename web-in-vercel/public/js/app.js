@@ -419,8 +419,11 @@ function initTranslator() {
     formData.append("target_lang", document.getElementById("trans-target-lang").value.trim() || "vi");
     formData.append("chat_only", document.getElementById("trans-chat-only-toggle").checked ? "true" : "false");
 
-    if (state.apiKey) {
-      formData.append("api_key", state.apiKey);
+    const activeApiKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
+    if (activeApiKey) {
+      formData.append("api_key", activeApiKey);
+    } else {
+      showToast("ℹ️ Đang chạy chế độ nhận diện chữ. Nếu muốn AI dịch sang tiếng Việt, hãy nhấn ⚙️ và dán API Key vào nhé!", "info");
     }
 
     const startT = performance.now();
@@ -434,7 +437,7 @@ function initTranslator() {
           ocrEngine: document.getElementById("trans-ocr-engine").value,
           chatOnly: document.getElementById("trans-chat-only-toggle").checked,
           targetLang: document.getElementById("trans-target-lang").value.trim() || "vi",
-          apiKey: state.apiKey,
+          apiKey: activeApiKey,
         };
         res = await fetch("/api/ocr", {
           method: "POST",

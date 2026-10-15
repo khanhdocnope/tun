@@ -118,7 +118,7 @@ class MangaTranslator:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: float = 12.0,
+        timeout: float = 45.0,
     ):
         self.api_key = (api_key or DEFAULT_API_KEY).strip()
         self.base_url = (base_url or DEFAULT_BASE_URL).strip().rstrip("/")
