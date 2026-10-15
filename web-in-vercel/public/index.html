@@ -984,11 +984,30 @@ input:checked + .slider-toggle:before {
             <button id="trans-clear-btn" class="btn-clear" title="Xóa ảnh">✕</button>
           </div>
 
+          <!-- AI Vision Mode Switcher (VisionBox inspired) -->
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>⚙️ Chế độ dịch AI</span>
+              <span class="badge-tag badge-purple">⚡ Gemini 3 Flash Vision</span>
+            </label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
+              <button type="button" id="trans-btn-mode-quick" class="btn-secondary active" style="padding:0.6rem 0.5rem; font-size:0.82rem; border-color:var(--primary); font-weight:600; text-align:center;">
+                ⚡ Quick (1-Click)
+              </button>
+              <button type="button" id="trans-btn-mode-pro" class="btn-secondary" style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:600; text-align:center;">
+                🛠️ Pro (OCR → Sửa)
+              </button>
+            </div>
+            <p id="trans-mode-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem; line-height:1.4;">
+              ⚡ <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).
+            </p>
+          </div>
+
           <!-- Speech Bubble Only Filter (User Highlighted Request) -->
           <div class="toggle-card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
             <div class="toggle-info">
               <h5 style="color: var(--emerald);">🎯 Chỉ nhận diện chữ trong Bong Bóng Thoại</h5>
-              <p>Tái sử dụng AI bóc tách: bỏ qua toàn bộ chữ hiệu ứng (SFX) vẽ tay</p>
+              <p>Tự động bỏ qua SFX vẽ tay ngoài nền artwork (Bubble Boundary Rule)</p>
             </div>
             <label class="switch">
               <input type="checkbox" id="trans-chat-only-toggle" checked>
@@ -1005,44 +1024,69 @@ input:checked + .slider-toggle:before {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Công cụ nhận diện OCR</label>
-            <select id="trans-ocr-engine" class="form-select">
-              <option value="ja_manga" selected>🇯🇵 manga-ocr (Chuyên tiếng Nhật, chữ dọc & ngang)</option>
-              <option value="multilingual">🌏 PaddleOCR (Hàn, Trung, Anh, v.v.)</option>
-            </select>
-          </div>
-
-          <div class="form-group" id="trans-source-lang-group" style="display:none;">
-            <label class="form-label">Ngôn ngữ gốc (khi dùng PaddleOCR)</label>
-            <select id="trans-source-lang" class="form-select">
-              <option value="ch" selected>Tiếng Trung (ch)</option>
-              <option value="korean">Tiếng Hàn (korean)</option>
-              <option value="en">Tiếng Anh (en)</option>
-              <option value="japan">Tiếng Nhật tiêu chuẩn (japan)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch Ngữ Cảnh</label>
-            <select id="trans-llm-model" class="form-select">
-              <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
-              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
             <label class="form-label" for="trans-target-lang">Ngôn ngữ dịch đích</label>
             <input type="text" id="trans-target-lang" class="form-input" value="Tiếng Việt">
           </div>
 
-          <button id="btn-run-translate" class="btn-primary" disabled>
-            <span>🚀 AI Nhận Diện & Dịch Toàn Trang</span>
-          </button>
+          <!-- Quick Mode Actions -->
+          <div id="trans-quick-controls">
+            <button id="btn-run-quick-trans" class="btn-primary" disabled style="background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%); font-weight:700; width:100%;">
+              <span>⚡ Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>
+            </button>
+          </div>
+
+          <!-- Pro Mode Actions (Step-by-step: OCR -> Edit -> Translate) -->
+          <div id="trans-pro-controls" style="display:none; flex-direction:column; gap:0.6rem;">
+            <button id="btn-run-vision-ocr" class="btn-primary" disabled style="background: #3b82f6; font-weight:700; width:100%;">
+              <span>🔍 Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>
+            </button>
+            <button id="btn-run-vision-translate" class="btn-primary" disabled style="background: #10b981; font-weight:700; width:100%;">
+              <span>🌐 Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>
+            </button>
+          </div>
+
+          <!-- Legacy / Advanced Detector Dropdown (Collapsible) -->
+          <details style="margin-top:1rem; border-top:1px dashed var(--border-subtle); padding-top:0.75rem;">
+            <summary style="font-size:0.8rem; color:var(--text-dim); cursor:pointer; user-select:none;">
+              ⚙️ Tùy chọn nâng cao (Engine Bounding Box truyền thống)
+            </summary>
+            <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.75rem;">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Công cụ nhận diện OCR</label>
+                <select id="trans-ocr-engine" class="form-select">
+                  <option value="ja_manga" selected>🇯🇵 manga-ocr (Chuyên tiếng Nhật, chữ dọc & ngang)</option>
+                  <option value="multilingual">🌏 PaddleOCR (Hàn, Trung, Anh, v.v.)</option>
+                </select>
+              </div>
+
+              <div class="form-group" id="trans-source-lang-group" style="display:none; margin-bottom:0;">
+                <label class="form-label">Ngôn ngữ gốc (khi dùng PaddleOCR)</label>
+                <select id="trans-source-lang" class="form-select">
+                  <option value="ch" selected>Tiếng Trung (ch)</option>
+                  <option value="korean">Tiếng Hàn (korean)</option>
+                  <option value="en">Tiếng Anh (en)</option>
+                  <option value="japan">Tiếng Nhật tiêu chuẩn (japan)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch</label>
+                <select id="trans-llm-model" class="form-select">
+                  <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
+                  <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
+                  <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
+                  <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
+                  <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+                  <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+                  <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+                </select>
+              </div>
+
+              <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; font-size:0.85rem;">
+                <span>🤖 Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>
+              </button>
+            </div>
+          </details>
         </div>
 
         <!-- Result Column -->
@@ -1064,8 +1108,8 @@ input:checked + .slider-toggle:before {
               <thead>
                 <tr>
                   <th style="width: 70px;">Thứ tự</th>
-                  <th style="width: 35%;">Chữ gốc (OCR)</th>
-                  <th>Bản dịch ngữ cảnh (DeepSeek)</th>
+                  <th style="width: 38%;">Chữ gốc (OCR)</th>
+                  <th>Bản dịch ngữ cảnh tiếng Việt</th>
                 </tr>
               </thead>
               <tbody id="trans-table-body">
@@ -1076,6 +1120,23 @@ input:checked + .slider-toggle:before {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Refine Loop Toolbox (VisionBox feature) -->
+          <div id="trans-refine-box" style="display:none; margin-top:1rem; padding:0.85rem 1rem; border-radius:var(--radius-md); background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+              <span style="font-size:0.85rem; font-weight:600; color:var(--text-main);">🪄 Tinh Chỉnh & Soát Lỗi (Refine Loop)</span>
+              <span style="font-size:0.72rem; color:var(--cyan); background:rgba(6,182,212,0.1); padding:0.15rem 0.5rem; border-radius:4px;">Gemini 3 Flash</span>
+            </div>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <input type="text" id="trans-refine-input" class="form-input" placeholder="Chỉ đạo riêng: vd 'đổi xưng hô mày/tao', 'dịch sát nghĩa hơn'..." style="flex:1; min-width:200px; font-size:0.82rem; padding:0.4rem 0.75rem;">
+              <button id="btn-refine-translate" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
+                ✨ Sửa Bản Dịch
+              </button>
+              <button id="btn-refine-ocr" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
+                🔍 Soát Lỗi OCR
+              </button>
+            </div>
           </div>
 
           <div style="display:flex; gap:1rem; margin-top:1.25rem;">
@@ -1775,13 +1836,62 @@ function initTranslator() {
   const previewImg = document.getElementById("trans-preview-img");
   const clearBtn = document.getElementById("trans-clear-btn");
   const runBtn = document.getElementById("btn-run-translate");
+  const badge = document.getElementById("trans-stats-badge");
+
+  // Vision Mode elements
+  const btnModeQuick = document.getElementById("trans-btn-mode-quick");
+  const btnModePro = document.getElementById("trans-btn-mode-pro");
+  const modeHint = document.getElementById("trans-mode-hint");
+  const quickControls = document.getElementById("trans-quick-controls");
+  const proControls = document.getElementById("trans-pro-controls");
+
+  const btnRunQuick = document.getElementById("btn-run-quick-trans");
+  const btnRunVisionOcr = document.getElementById("btn-run-vision-ocr");
+  const btnRunVisionTranslate = document.getElementById("btn-run-vision-translate");
+
+  const refineBox = document.getElementById("trans-refine-box");
+  const refineInput = document.getElementById("trans-refine-input");
+  const btnRefineTranslate = document.getElementById("btn-refine-translate");
+  const btnRefineOcr = document.getElementById("btn-refine-ocr");
+
+  let currentMode = "quick"; // 'quick' | 'pro'
+
+  if (btnModeQuick && btnModePro) {
+    btnModeQuick.addEventListener("click", () => {
+      currentMode = "quick";
+      btnModeQuick.classList.add("active");
+      btnModeQuick.style.borderColor = "var(--primary)";
+      btnModePro.classList.remove("active");
+      btnModePro.style.borderColor = "var(--border-subtle)";
+      if (quickControls) quickControls.style.display = "block";
+      if (proControls) proControls.style.display = "none";
+      if (modeHint) {
+        modeHint.innerHTML = "⚡ <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).";
+      }
+    });
+
+    btnModePro.addEventListener("click", () => {
+      currentMode = "pro";
+      btnModePro.classList.add("active");
+      btnModePro.style.borderColor = "var(--primary)";
+      btnModeQuick.classList.remove("active");
+      btnModeQuick.style.borderColor = "var(--border-subtle)";
+      if (proControls) proControls.style.display = "flex";
+      if (quickControls) quickControls.style.display = "none";
+      if (modeHint) {
+        modeHint.innerHTML = "🛠️ <b>Pro Mode</b>: Quét OCR bóc tách từng bóng thoại (Temp 0.1) → Sửa chữ gốc → Dịch ngữ cảnh kèm ảnh (Temp 0.6).";
+      }
+    });
+  }
 
   const ocrEngineSelect = document.getElementById("trans-ocr-engine");
   const sourceLangGroup = document.getElementById("trans-source-lang-group");
 
-  ocrEngineSelect.addEventListener("change", () => {
-    sourceLangGroup.style.display = ocrEngineSelect.value === "multilingual" ? "block" : "none";
-  });
+  if (ocrEngineSelect && sourceLangGroup) {
+    ocrEngineSelect.addEventListener("change", () => {
+      sourceLangGroup.style.display = ocrEngineSelect.value === "multilingual" ? "block" : "none";
+    });
+  }
 
   const transLlmSelect = document.getElementById("trans-llm-model");
   if (transLlmSelect) {
@@ -1817,7 +1927,14 @@ function initTranslator() {
     fileInput.value = "";
     previewWrap.style.display = "none";
     dropzone.style.display = "block";
-    runBtn.disabled = true;
+    if (runBtn) runBtn.disabled = true;
+    if (btnRunQuick) btnRunQuick.disabled = true;
+    if (btnRunVisionOcr) btnRunVisionOcr.disabled = true;
+    if (btnRunVisionTranslate) btnRunVisionTranslate.disabled = true;
+    if (refineBox) refineBox.style.display = "none";
+    if (badge) badge.textContent = "Chưa Xử Lý";
+    state.transResultData = [];
+    renderTranslationTable([]);
   });
 
   async function handleTransFile(file) {
@@ -1830,7 +1947,12 @@ function initTranslator() {
     previewImg.src = b64;
     previewWrap.style.display = "block";
     dropzone.style.display = "none";
-    runBtn.disabled = false;
+
+    if (runBtn) runBtn.disabled = false;
+    if (btnRunQuick) btnRunQuick.disabled = false;
+    if (btnRunVisionOcr) btnRunVisionOcr.disabled = false;
+    if (btnRunVisionTranslate) btnRunVisionTranslate.disabled = true; // Enabled after OCR
+    if (refineBox) refineBox.style.display = "none";
 
     // Load annotated image preview
     const annotImg = document.getElementById("trans-annotated-img");
@@ -1843,114 +1965,383 @@ function initTranslator() {
     };
   }
 
-  // Run Translation
-  runBtn.addEventListener("click", async () => {
-    if (!state.transFile) return;
+  // Vision API Caller Helper
+  async function callVisionApi(task, extraPayload = {}) {
+    const payload = {
+      task,
+      imageBase64: previewImg.src,
+      readingOrder: document.getElementById("trans-reading-order")?.value || "manga",
+      skipSfx: document.getElementById("trans-chat-only-toggle")?.checked ?? true,
+      targetLang: document.getElementById("trans-target-lang")?.value.trim() || "Tiếng Việt",
+      model: state.llmModel || "gemini-3-flash-preview",
+      apiKey: state.apiKey,
+      ...extraPayload,
+    };
 
-    runBtn.disabled = true;
-    runBtn.innerHTML = `<span>🔍 Đang bóc tách bóng thoại & OCR...</span>`;
-    const badge = document.getElementById("trans-stats-badge");
-    badge.textContent = "AI Đang OCR...";
-
-    const targetLang = document.getElementById("trans-target-lang").value.trim() || "vi";
-
-    const formData = new FormData();
-    formData.append("file", state.transFile);
-    formData.append("reading_order", document.getElementById("trans-reading-order").value);
-    formData.append("ocr_engine", document.getElementById("trans-ocr-engine").value);
-    formData.append("source_lang", document.getElementById("trans-source-lang").value);
-    formData.append("target_lang", targetLang);
-    formData.append("chat_only", document.getElementById("trans-chat-only-toggle").checked ? "true" : "false");
-    formData.append("ocr_only", "true"); // OCR only on backend!
-
-    const startT = performance.now();
+    let res;
     try {
-      let res;
-      try {
-        // 1. Thử gọi Node.js Cloud OCR
-        const ocrPayload = {
-          imageBase64: previewImg.src,
-          readingOrder: document.getElementById("trans-reading-order").value,
-          ocrEngine: document.getElementById("trans-ocr-engine").value,
-          chatOnly: document.getElementById("trans-chat-only-toggle").checked,
-          targetLang: targetLang,
-          ocrOnly: true,
-        };
-        res = await fetch("/api/ocr", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(ocrPayload),
-        });
-      } catch (err) {
-        // Fallback
+      res = await fetch("/api/vision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(60000),
+      });
+    } catch (netErr) {
+      if (state.apiKey) {
+        return await callGeminiVisionDirect(payload);
       }
-
-      if (!res || !res.ok) {
-        // 2. Fallback gọi trực tiếp backend
-        res = await fetch(`${getCleanBackendUrl()}/api/v1/translate-page`, {
-          method: "POST",
-          body: formData,
-        });
-      }
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail || errJson.error || `Lỗi máy chủ HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      state.transResultData = data.data || [];
-      const ocrElapsed = Math.round(performance.now() - startT);
-      const totalCount = data.total_boxes || data.totalBoxes || state.transResultData.length || 0;
-      badge.textContent = `🔍 Đã nhận diện ${totalCount} bóng thoại (${ocrElapsed}ms)`;
-
-      // Render ngay lập tức kết quả OCR lên canvas và bảng
-      renderBubbleOverlay(state.transResultData);
-      renderTranslationTable(state.transResultData);
-      updateScriptDownloadLink();
-
-      const chosenModel = document.getElementById("trans-llm-model")?.value || state.llmModel;
-      state.llmModel = chosenModel;
-
-      // Bước 2: Dịch ngữ cảnh bằng AI LLM (dùng API Key người dùng hoặc Cloud fallback)
-      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
-      badge.textContent = `🤖 Đang dịch (${chosenModel})...`;
-
-      await translateSpeechBubblesFrontend(state.transResultData, targetLang);
-
-      const totalElapsed = Math.round(performance.now() - startT);
-      badge.textContent = `✅ ${totalCount} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
-
-      // Cập nhật lại giao diện với bản dịch tiếng Việt hoàn chỉnh
-      renderBubbleOverlay(state.transResultData);
-      renderTranslationTable(state.transResultData);
-      updateScriptDownloadLink();
-
-      showToast(`Đã dịch thành công ${totalCount} câu thoại sang Tiếng Việt!`, "success");
-    } catch (err) {
-      showToast(`Lỗi khi xử lý: ${err.message}`, "error");
-      badge.textContent = "Lỗi Xử Lý";
-    } finally {
-      runBtn.disabled = false;
-      runBtn.innerHTML = `<span>🚀 AI Nhận Diện & Dịch Toàn Trang</span>`;
+      throw netErr;
     }
-  });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.error || `HTTP ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  async function callGeminiVisionDirect(payload) {
+    const apiKey = state.apiKey;
+    const model = state.llmModel || "gemini-3-flash-preview";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const cleanBase64 = (payload.imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+
+    let prompt = "";
+    if (payload.task === "quick_translate") {
+      prompt = `Translate all speech bubbles in this manga into ${payload.targetLang}. Reading order: ${payload.readingOrder}. Output numbered lines: [1] ..., [2] ...`;
+    } else if (payload.task === "ocr") {
+      prompt = `Extract all speech bubble text from this manga. Reading order: ${payload.readingOrder}. Output numbered lines: [1] ..., [2] ...`;
+    } else if (payload.task === "translate_with_image") {
+      prompt = `Translate these speech bubbles into ${payload.targetLang} using image context:\n${payload.ocrText}\nOutput numbered lines: [1] ..., [2] ...`;
+    } else {
+      prompt = `${payload.userInstruction || "Improve translation"}:\n${payload.prevTranslation}`;
+    }
+
+    const parts = [{ text: prompt }];
+    if (cleanBase64 && payload.task !== "refine_translate") {
+      parts.push({ inline_data: { mime_type: "image/jpeg", data: cleanBase64 } });
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts }] }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.map((p) => p.text || "").join("") || "";
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.replace(/^\s*[\[(]?\d+[\])\.:：]\s*/, "").trim())
+      .filter(Boolean);
+    return { success: true, lines, elapsed_s: 1.5 };
+  }
+
+  // 1. QUICK MODE: 1-Click Translation via Gemini Vision
+  if (btnRunQuick) {
+    btnRunQuick.addEventListener("click", async () => {
+      if (!state.transFile) return;
+
+      btnRunQuick.disabled = true;
+      btnRunQuick.innerHTML = `<span>⏳ Đang đọc ảnh & dịch bằng Gemini Vision...</span>`;
+      badge.textContent = "⚡ Gemini Vision đang dịch...";
+
+      const startT = performance.now();
+      try {
+        const data = await callVisionApi("quick_translate");
+        const lines = data.lines || [];
+        if (!lines.length) {
+          throw new Error("Không phát hiện được nội dung thoại trên trang này.");
+        }
+
+        state.transResultData = lines.map((line, idx) => ({
+          id: idx + 1,
+          box: [0, 0, 0, 0],
+          original_text: `[Bóng thoại #${idx + 1}]`,
+          translated_text: line,
+        }));
+
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+
+        const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
+        badge.textContent = `✅ ${lines.length} câu | ${elapsed}s (Gemini Vision)`;
+        if (refineBox) refineBox.style.display = "block";
+
+        showToast(`⚡ Gemini Vision đã dịch ${lines.length} câu trong ${elapsed}s!`, "success");
+      } catch (err) {
+        showToast(`Lỗi Gemini Vision: ${err.message}`, "error");
+        badge.textContent = "Lỗi Xử Lý";
+      } finally {
+        btnRunQuick.disabled = false;
+        btnRunQuick.innerHTML = `<span>⚡ Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>`;
+      }
+    });
+  }
+
+  // 2. PRO MODE STEP 1: Vision OCR & Bubble Segmentation (Temp 0.1)
+  if (btnRunVisionOcr) {
+    btnRunVisionOcr.addEventListener("click", async () => {
+      if (!state.transFile) return;
+
+      btnRunVisionOcr.disabled = true;
+      btnRunVisionOcr.innerHTML = `<span>⏳ Đang quét OCR bằng Gemini Vision...</span>`;
+      badge.textContent = "🔍 Gemini Vision đang OCR...";
+
+      const startT = performance.now();
+      try {
+        const data = await callVisionApi("ocr");
+        const lines = data.lines || [];
+        if (!lines.length) {
+          throw new Error("Không tìm thấy chữ trong bóng thoại.");
+        }
+
+        state.transResultData = lines.map((line, idx) => ({
+          id: idx + 1,
+          box: [0, 0, 0, 0],
+          original_text: line,
+          translated_text: "",
+        }));
+
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+
+        if (btnRunVisionTranslate) btnRunVisionTranslate.disabled = false;
+        if (refineBox) refineBox.style.display = "block";
+
+        const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
+        badge.textContent = `🔍 Đã OCR ${lines.length} câu (${elapsed}s)`;
+
+        showToast(`Đã nhận diện ${lines.length} bóng thoại! Bạn có thể kiểm tra và sửa chữ gốc ở cột giữa.`, "info");
+      } catch (err) {
+        showToast(`Lỗi OCR: ${err.message}`, "error");
+        badge.textContent = "Lỗi OCR";
+      } finally {
+        btnRunVisionOcr.disabled = false;
+        btnRunVisionOcr.innerHTML = `<span>🔍 Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>`;
+      }
+    });
+  }
+
+  // 2. PRO MODE STEP 2: Translation with Original Image Context (Temp 0.6)
+  if (btnRunVisionTranslate) {
+    btnRunVisionTranslate.addEventListener("click", async () => {
+      if (!state.transResultData.length) {
+        showToast("Vui lòng chạy Bước 1 (Quét OCR) trước!", "warning");
+        return;
+      }
+
+      btnRunVisionTranslate.disabled = true;
+      btnRunVisionTranslate.innerHTML = `<span>⏳ Đang dịch ngữ cảnh kèm ảnh gốc...</span>`;
+      badge.textContent = "🤖 Đang dịch ngữ cảnh...";
+
+      const startT = performance.now();
+      try {
+        const ocrText = state.transResultData.map((it) => it.original_text).join("\n");
+        const data = await callVisionApi("translate_with_image", { ocrText });
+        const lines = data.lines || [];
+
+        state.transResultData.forEach((it, idx) => {
+          if (lines[idx] !== undefined) {
+            it.translated_text = lines[idx];
+          }
+        });
+
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+
+        const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
+        badge.textContent = `✅ Đã dịch ${state.transResultData.length} câu (${elapsed}s)`;
+
+        showToast(`Đã hoàn tất dịch ${state.transResultData.length} câu kèm ngữ cảnh ảnh!`, "success");
+      } catch (err) {
+        showToast(`Lỗi dịch: ${err.message}`, "error");
+        badge.textContent = "Lỗi Dịch";
+      } finally {
+        btnRunVisionTranslate.disabled = false;
+        btnRunVisionTranslate.innerHTML = `<span>🌐 Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>`;
+      }
+    });
+  }
+
+  // 3. REFINE LOOP: Refine Translation & Refine OCR
+  if (btnRefineTranslate) {
+    btnRefineTranslate.addEventListener("click", async () => {
+      if (!state.transResultData.length) return;
+      const userInstruction = refineInput?.value.trim() || "";
+      const ocrText = state.transResultData.map((it) => it.original_text).join("\n");
+      const prevTranslation = state.transResultData.map((it) => it.translated_text || "").join("\n");
+
+      btnRefineTranslate.disabled = true;
+      btnRefineTranslate.textContent = "⏳ Đang sửa...";
+
+      try {
+        const data = await callVisionApi("refine_translate", {
+          ocrText,
+          prevTranslation,
+          userInstruction,
+        });
+        const lines = data.lines || [];
+        state.transResultData.forEach((it, idx) => {
+          if (lines[idx] !== undefined) {
+            it.translated_text = lines[idx];
+          }
+        });
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+        showToast("✨ Đã tinh chỉnh bản dịch thành công!", "success");
+      } catch (err) {
+        showToast(`Lỗi tinh chỉnh: ${err.message}`, "error");
+      } finally {
+        btnRefineTranslate.disabled = false;
+        btnRefineTranslate.textContent = "✨ Sửa Bản Dịch";
+      }
+    });
+  }
+
+  if (btnRefineOcr) {
+    btnRefineOcr.addEventListener("click", async () => {
+      if (!state.transResultData.length) return;
+      const ocrText = state.transResultData.map((it) => it.original_text).join("\n");
+
+      btnRefineOcr.disabled = true;
+      btnRefineOcr.textContent = "⏳ Đang soát...";
+
+      try {
+        const data = await callVisionApi("refine_ocr", { ocrText });
+        const lines = data.lines || [];
+        state.transResultData = lines.map((line, idx) => ({
+          id: idx + 1,
+          box: [0, 0, 0, 0],
+          original_text: line,
+          translated_text: state.transResultData[idx]?.translated_text || "",
+        }));
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+        showToast("🔍 Đã soát lỗi và cập nhật cấu trúc bong bóng thoại!", "success");
+      } catch (err) {
+        showToast(`Lỗi soát OCR: ${err.message}`, "error");
+      } finally {
+        btnRefineOcr.disabled = false;
+        btnRefineOcr.textContent = "🔍 Soát Lỗi OCR";
+      }
+    });
+  }
+
+  // 4. LEGACY / DETECTOR PIPELINE (Python Backend)
+  if (runBtn) {
+    runBtn.addEventListener("click", async () => {
+      if (!state.transFile) return;
+
+      runBtn.disabled = true;
+      runBtn.innerHTML = `<span>🔍 Đang bóc tách bóng thoại & OCR...</span>`;
+      badge.textContent = "AI Đang OCR...";
+
+      const targetLang = document.getElementById("trans-target-lang")?.value.trim() || "vi";
+
+      const formData = new FormData();
+      formData.append("file", state.transFile);
+      formData.append("reading_order", document.getElementById("trans-reading-order")?.value || "manga");
+      formData.append("ocr_engine", document.getElementById("trans-ocr-engine")?.value || "ja_manga");
+      formData.append("source_lang", document.getElementById("trans-source-lang")?.value || "ch");
+      formData.append("target_lang", targetLang);
+      formData.append("chat_only", document.getElementById("trans-chat-only-toggle")?.checked ? "true" : "false");
+      formData.append("ocr_only", "true");
+
+      const startT = performance.now();
+      try {
+        let res;
+        try {
+          const ocrPayload = {
+            imageBase64: previewImg.src,
+            readingOrder: document.getElementById("trans-reading-order")?.value || "manga",
+            ocrEngine: document.getElementById("trans-ocr-engine")?.value || "ja_manga",
+            chatOnly: document.getElementById("trans-chat-only-toggle")?.checked ?? true,
+            targetLang: targetLang,
+            ocrOnly: true,
+          };
+          res = await fetch("/api/ocr", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(ocrPayload),
+          });
+        } catch (err) {
+          // Fallback
+        }
+
+        if (!res || !res.ok) {
+          res = await fetch(`${getCleanBackendUrl()}/api/v1/translate-page`, {
+            method: "POST",
+            body: formData,
+          });
+        }
+
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.detail || errJson.error || `Lỗi máy chủ HTTP ${res.status}`);
+        }
+
+        const data = await res.json();
+        state.transResultData = data.data || [];
+        const ocrElapsed = Math.round(performance.now() - startT);
+        const totalCount = data.total_boxes || data.totalBoxes || state.transResultData.length || 0;
+        badge.textContent = `🔍 Đã nhận diện ${totalCount} bóng thoại (${ocrElapsed}ms)`;
+
+        renderBubbleOverlay(state.transResultData);
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+
+        const chosenModel = document.getElementById("trans-llm-model")?.value || state.llmModel;
+        state.llmModel = chosenModel;
+
+        runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
+        badge.textContent = `🤖 Đang dịch (${chosenModel})...`;
+
+        await translateSpeechBubblesFrontend(state.transResultData, targetLang);
+
+        const totalElapsed = Math.round(performance.now() - startT);
+        badge.textContent = `✅ ${totalCount} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
+
+        renderBubbleOverlay(state.transResultData);
+        renderTranslationTable(state.transResultData);
+        updateScriptDownloadLink();
+        if (refineBox) refineBox.style.display = "block";
+
+        showToast(`Đã dịch thành công ${totalCount} câu thoại sang Tiếng Việt!`, "success");
+      } catch (err) {
+        showToast(`Lỗi khi xử lý: ${err.message}`, "error");
+        badge.textContent = "Lỗi Xử Lý";
+      } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = `<span>🤖 Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>`;
+      }
+    });
+  }
 
   // Copy Script Button (Format: === filename ===)
-  document.getElementById("btn-copy-script").addEventListener("click", () => {
-    if (!state.transResultData.length) {
-      showToast("Chưa có kịch bản để sao chép!", "info");
-      return;
-    }
-    const fileName = state.transFile?.name || "script.webp";
-    const lines = [`=== ${fileName} ===`];
-    state.transResultData.forEach((it) => {
-      const text = (it.translated_text || it.original_text || "").trim();
-      if (text) lines.push(text);
+  const copyScriptBtn = document.getElementById("btn-copy-script");
+  if (copyScriptBtn) {
+    copyScriptBtn.addEventListener("click", () => {
+      if (!state.transResultData.length) {
+        showToast("Chưa có kịch bản để sao chép!", "info");
+        return;
+      }
+      const fileName = state.transFile?.name || "script.webp";
+      const lines = [`=== ${fileName} ===`];
+      state.transResultData.forEach((it) => {
+        const text = (it.translated_text || it.original_text || "").trim();
+        if (text) lines.push(text);
+      });
+      navigator.clipboard.writeText(lines.join("\n"));
+      showToast("Đã sao chép kịch bản vào Clipboard!", "success");
     });
-    navigator.clipboard.writeText(lines.join("\n"));
-    showToast("Đã sao chép kịch bản vào Clipboard!", "success");
-  });
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -2238,7 +2629,9 @@ function renderTranslationTable(items) {
       (it) => `
     <tr id="row-bubble-${it.id}" data-id="${it.id}">
       <td style="vertical-align:top;"><span class="trans-id-pill">#${it.id}</span></td>
-      <td class="text-orig" style="vertical-align:top;">${escapeHtml(it.original_text)}</td>
+      <td class="text-orig" style="vertical-align:top;">
+        <textarea class="form-input trans-edit-orig" data-id="${it.id}" rows="2" style="width:100%; resize:vertical; font-size:0.88rem; padding:0.4rem 0.6rem; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-radius:6px; color:var(--text-muted);" placeholder="Chữ gốc (OCR)...">${escapeHtml(it.original_text || "")}</textarea>
+      </td>
       <td class="text-trans">
         <textarea class="form-input trans-edit-input" data-id="${it.id}" rows="2" style="width:100%; resize:vertical; font-size:0.9rem; padding:0.4rem 0.6rem; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;" placeholder="Chưa có bản dịch...">${escapeHtml(it.translated_text || "")}</textarea>
       </td>
@@ -2246,6 +2639,15 @@ function renderTranslationTable(items) {
   `
     )
     .join("");
+
+  // Allow live editing of original text in table (Pro Mode)
+  tbody.querySelectorAll(".trans-edit-orig").forEach((inp) => {
+    inp.addEventListener("input", (e) => {
+      const id = Number(e.target.dataset.id);
+      const it = items.find((x) => x.id === id);
+      if (it) it.original_text = e.target.value;
+    });
+  });
 
   // Allow live editing of translated text in table
   tbody.querySelectorAll(".trans-edit-input").forEach((inp) => {

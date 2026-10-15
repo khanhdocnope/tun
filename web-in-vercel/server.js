@@ -17,12 +17,14 @@ const cleanHandler = require("./api/clean");
 const ocrHandler = require("./api/ocr");
 const batchZipHandler = require("./api/batch-zip");
 const translateHandler = require("./api/translate");
+const visionHandler = require("./api/vision");
 
 app.all("/api/health", (req, res) => healthHandler(req, res));
 app.all("/api/clean", (req, res) => cleanHandler(req, res));
 app.all("/api/ocr", (req, res) => ocrHandler(req, res));
 app.all("/api/batch-zip", (req, res) => batchZipHandler(req, res));
 app.all("/api/translate", (req, res) => translateHandler(req, res));
+app.all("/api/vision", (req, res) => visionHandler(req, res));
 
 // Serve static frontend files
 app.use(express.static(__dirname));
