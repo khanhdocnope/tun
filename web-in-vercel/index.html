@@ -506,6 +506,152 @@ input:checked + .slider-toggle:before {
 }
 
 /* --------------------------------------------------------------------------
+   SECONDARY & ACTION BUTTONS (DARK THEME COMPLIANT)
+   -------------------------------------------------------------------------- */
+.btn-secondary {
+  width: auto;
+  background: rgba(30, 41, 59, 0.7);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: var(--transition-normal);
+  backdrop-filter: blur(8px);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.9);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
+}
+
+.btn-secondary.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.25));
+  color: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 0 16px var(--primary-glow);
+  font-weight: 700;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  background: rgba(30, 41, 59, 0.4);
+}
+
+/* Segmented Mode Switcher */
+.mode-segmented-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 0.35rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.mode-segmented-btn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.65rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.mode-segmented-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-segmented-btn.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(6, 182, 212, 0.3));
+  color: #fff;
+  border: 1px solid rgba(139, 92, 246, 0.7);
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
+  font-weight: 700;
+}
+
+/* Modern Accordion Details & Summary */
+details.modern-details {
+  border: 1px solid var(--border-subtle);
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  transition: var(--transition-normal);
+}
+
+details.modern-details:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+details.modern-details[open] {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+details.modern-details summary {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  outline: none;
+}
+
+details.modern-details summary::-webkit-details-marker {
+  display: none;
+}
+
+details.modern-details summary::after {
+  content: "▾";
+  font-size: 1rem;
+  color: var(--text-dim);
+  transition: transform 0.25s ease;
+}
+
+details.modern-details[open] summary::after {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+/* Refine Card */
+.refine-card {
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.35);
+}
+
+/* --------------------------------------------------------------------------
    BEFORE / AFTER SPLIT COMPARISON SLIDER
    -------------------------------------------------------------------------- */
 .comparison-container {
@@ -985,20 +1131,20 @@ input:checked + .slider-toggle:before {
           </div>
 
           <!-- AI Vision Mode Switcher (VisionBox inspired) -->
-          <div class="form-group" style="margin-bottom: 1rem;">
+          <div class="form-group" style="margin-bottom: 1.25rem;">
             <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
               <span>⚙️ Chế độ dịch AI</span>
               <span class="badge-tag badge-purple">⚡ Gemini 3 Flash Vision</span>
             </label>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem;">
-              <button type="button" id="trans-btn-mode-quick" class="btn-secondary active" style="padding:0.6rem 0.5rem; font-size:0.82rem; border-color:var(--primary); font-weight:600; text-align:center;">
+            <div class="mode-segmented-tabs">
+              <button type="button" id="trans-btn-mode-quick" class="mode-segmented-btn active">
                 ⚡ Quick (1-Click)
               </button>
-              <button type="button" id="trans-btn-mode-pro" class="btn-secondary" style="padding:0.6rem 0.5rem; font-size:0.82rem; font-weight:600; text-align:center;">
+              <button type="button" id="trans-btn-mode-pro" class="mode-segmented-btn">
                 🛠️ Pro (OCR → Sửa)
               </button>
             </div>
-            <p id="trans-mode-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem; line-height:1.4;">
+            <p id="trans-mode-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem; line-height:1.4;">
               ⚡ <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).
             </p>
           </div>
@@ -1037,20 +1183,20 @@ input:checked + .slider-toggle:before {
 
           <!-- Pro Mode Actions (Step-by-step: OCR -> Edit -> Translate) -->
           <div id="trans-pro-controls" style="display:none; flex-direction:column; gap:0.6rem;">
-            <button id="btn-run-vision-ocr" class="btn-primary" disabled style="background: #3b82f6; font-weight:700; width:100%;">
+            <button id="btn-run-vision-ocr" class="btn-primary" disabled style="background: linear-gradient(135deg, #2563eb, #3b82f6); font-weight:700; width:100%;">
               <span>🔍 Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>
             </button>
-            <button id="btn-run-vision-translate" class="btn-primary" disabled style="background: #10b981; font-weight:700; width:100%;">
+            <button id="btn-run-vision-translate" class="btn-primary" disabled style="background: linear-gradient(135deg, #059669, #10b981); font-weight:700; width:100%;">
               <span>🌐 Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>
             </button>
           </div>
 
           <!-- Legacy / Advanced Detector Dropdown (Collapsible) -->
-          <details style="margin-top:1rem; border-top:1px dashed var(--border-subtle); padding-top:0.75rem;">
-            <summary style="font-size:0.8rem; color:var(--text-dim); cursor:pointer; user-select:none;">
-              ⚙️ Tùy chọn nâng cao (Engine Bounding Box truyền thống)
+          <details class="modern-details" style="margin-top:1.25rem;">
+            <summary>
+              <span>⚙️ Tùy chọn nâng cao (Engine Bounding Box)</span>
             </summary>
-            <div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.75rem;">
+            <div style="margin-top:0.85rem; display:flex; flex-direction:column; gap:0.75rem;">
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">Công cụ nhận diện OCR</label>
                 <select id="trans-ocr-engine" class="form-select">
@@ -1082,7 +1228,7 @@ input:checked + .slider-toggle:before {
                 </select>
               </div>
 
-              <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; font-size:0.85rem;">
+              <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; justify-content:center; padding:0.75rem 1rem;">
                 <span>🤖 Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>
               </button>
             </div>
@@ -1860,9 +2006,7 @@ function initTranslator() {
     btnModeQuick.addEventListener("click", () => {
       currentMode = "quick";
       btnModeQuick.classList.add("active");
-      btnModeQuick.style.borderColor = "var(--primary)";
       btnModePro.classList.remove("active");
-      btnModePro.style.borderColor = "var(--border-subtle)";
       if (quickControls) quickControls.style.display = "block";
       if (proControls) proControls.style.display = "none";
       if (modeHint) {
@@ -1873,9 +2017,7 @@ function initTranslator() {
     btnModePro.addEventListener("click", () => {
       currentMode = "pro";
       btnModePro.classList.add("active");
-      btnModePro.style.borderColor = "var(--primary)";
       btnModeQuick.classList.remove("active");
-      btnModeQuick.style.borderColor = "var(--border-subtle)";
       if (proControls) proControls.style.display = "flex";
       if (quickControls) quickControls.style.display = "none";
       if (modeHint) {

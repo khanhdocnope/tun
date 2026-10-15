@@ -379,9 +379,7 @@ function initTranslator() {
     btnModeQuick.addEventListener("click", () => {
       currentMode = "quick";
       btnModeQuick.classList.add("active");
-      btnModeQuick.style.borderColor = "var(--primary)";
       btnModePro.classList.remove("active");
-      btnModePro.style.borderColor = "var(--border-subtle)";
       if (quickControls) quickControls.style.display = "block";
       if (proControls) proControls.style.display = "none";
       if (modeHint) {
@@ -392,9 +390,7 @@ function initTranslator() {
     btnModePro.addEventListener("click", () => {
       currentMode = "pro";
       btnModePro.classList.add("active");
-      btnModePro.style.borderColor = "var(--primary)";
       btnModeQuick.classList.remove("active");
-      btnModeQuick.style.borderColor = "var(--border-subtle)";
       if (proControls) proControls.style.display = "flex";
       if (quickControls) quickControls.style.display = "none";
       if (modeHint) {
