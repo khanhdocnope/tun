@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
 from dotenv import load_dotenv
@@ -25,7 +26,31 @@ DEFAULT_MODEL = os.getenv("DEEPSEEK_MODEL") or os.getenv("MODEL") or "deepseek-v
 DEFAULT_API_KEY = os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or ""
 
 
+PROMPT_TXT_PATH = Path(__file__).resolve().parent.parent / "prompt.txt"
+if not PROMPT_TXT_PATH.is_file():
+    alt_p = Path(__file__).resolve().parent.parent.parent / "prompt.txt"
+    if alt_p.is_file():
+        PROMPT_TXT_PATH = alt_p
+
+
 def build_system_prompt(target_lang: str = "Vietnamese") -> str:
+    # 1. Đọc trực tiếp từ prompt.txt nếu tồn tại
+    if PROMPT_TXT_PATH.is_file():
+        try:
+            with open(PROMPT_TXT_PATH, "r", encoding="utf-8") as f:
+                raw_rules = f.read()
+            formatted = raw_rules.replace("${targetName}", target_lang).replace("${sourceName}", "Manga/Comic")
+            return (
+                f"{formatted}\n\n"
+                "## CRITICAL OUTPUT JSON CONTRACT:\n"
+                "- Output MUST be a valid JSON array of objects mapping 1-to-1 with input IDs: "
+                '[{"id": 1, "translated": "..."}, ...]\n'
+                "- Return ONLY the JSON array. Absolutely NO intro, NO markdown commentary, NO notes."
+            )
+        except Exception as err:
+            logger.warning("Không thể đọc prompt.txt: %s, dùng prompt mặc định.", err)
+
+    # 2. Fallback prompt chuẩn hóa sẵn
     return (
         f"You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating into {target_lang}.\n"
         f"Your task is to translate an entire page of comic speech bubbles provided as a structured JSON list.\n\n"
