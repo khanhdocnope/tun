@@ -11,7 +11,811 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="css/style.css">
+  <style>
+/* ==========================================================================
+   ⚡ MANGA STUDIO AI - ULTRA PREMIUM STYLING (DARK / CYBERPUNK MANGA)
+   ========================================================================== */
+
+:root {
+  --primary: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --primary-glow: rgba(139, 92, 246, 0.4);
+  --cyan: #06b6d4;
+  --cyan-glow: rgba(6, 182, 212, 0.35);
+  --emerald: #10b981;
+  --emerald-glow: rgba(16, 185, 129, 0.3);
+  --rose: #f43f5e;
+  --amber: #f59e0b;
+  
+  --bg-darker: #06090f;
+  --bg-base: #0b101b;
+  --bg-card: rgba(17, 24, 39, 0.75);
+  --bg-card-hover: rgba(30, 41, 59, 0.85);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(139, 92, 246, 0.6);
+  
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-darker);
+  color: var(--text-main);
+  min-height: 100vh;
+  line-height: 1.5;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-darker);
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* --------------------------------------------------------------------------
+   HEADER & NAVBAR
+   -------------------------------------------------------------------------- */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(20px);
+  background: rgba(11, 16, 27, 0.85);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0.85rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--primary), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+.brand-text h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(to right, #fff, #cbd5e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.brand-text span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  color: var(--emerald);
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.status-pill:hover {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: var(--emerald);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+  animation: pulse 2s infinite;
+}
+.status-pill.offline {
+  background: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--rose);
+}
+.status-pill.offline .status-dot {
+  background: var(--rose);
+  box-shadow: 0 0 8px var(--rose);
+  animation: none;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.btn-icon {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-size: 1.1rem;
+}
+.btn-icon:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+
+/* --------------------------------------------------------------------------
+   CONTAINER & TABS
+   -------------------------------------------------------------------------- */
+.main-wrapper {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 4rem;
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(17, 24, 39, 0.6);
+  backdrop-filter: blur(12px);
+  padding: 0.4rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.04);
+}
+.tab-btn.active {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(6, 182, 212, 0.3));
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.25);
+}
+
+.tab-pane {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+.tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --------------------------------------------------------------------------
+   GRID LAYOUTS (2-COLUMNS)
+   -------------------------------------------------------------------------- */
+.studio-grid {
+  display: grid;
+  grid-template-columns: 460px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+@media (max-width: 1024px) {
+  .studio-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.panel-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.badge-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.badge-purple { background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.3); }
+.badge-cyan { background: rgba(6, 182, 212, 0.15); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.3); }
+.badge-green { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3); }
+
+/* --------------------------------------------------------------------------
+   DROPZONE & UPLOAD
+   -------------------------------------------------------------------------- */
+.dropzone {
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  padding: 2.2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  background: var(--bg-glass);
+  margin-bottom: 1.25rem;
+}
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--primary);
+  background: rgba(139, 92, 246, 0.06);
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+.drop-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+  filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
+}
+.drop-text h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.drop-text p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.file-preview {
+  display: none;
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--border-subtle);
+  max-height: 280px;
+}
+.file-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: block;
+}
+.file-preview .btn-clear {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   FORM CONTROLS & TOGGLES
+   -------------------------------------------------------------------------- */
+.form-group {
+  margin-bottom: 1.15rem;
+}
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+.form-select, .form-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: var(--transition-fast);
+}
+.form-select:focus, .form-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.form-range {
+  flex: 1;
+  accent-color: var(--primary);
+  height: 6px;
+  cursor: pointer;
+}
+.range-val {
+  min-width: 44px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--cyan);
+}
+
+.toggle-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-subtle);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1.25rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.toggle-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.toggle-info h5 {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.toggle-info p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider-toggle {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #334155;
+  transition: var(--transition-fast);
+  border-radius: var(--radius-full);
+}
+.slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: var(--transition-fast);
+  border-radius: 50%;
+}
+input:checked + .slider-toggle {
+  background-color: var(--primary);
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+input:checked + .slider-toggle:before {
+  transform: translateX(20px);
+}
+
+/* --------------------------------------------------------------------------
+   PRIMARY ACTION BUTTON
+   -------------------------------------------------------------------------- */
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--primary), #6366f1);
+  color: #fff;
+  border: none;
+  padding: 0.95rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: var(--transition-normal);
+  box-shadow: 0 4px 20px var(--primary-glow);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(139, 92, 246, 0.6);
+  background: linear-gradient(135deg, #9061fa, #4f46e5);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --------------------------------------------------------------------------
+   BEFORE / AFTER SPLIT COMPARISON SLIDER
+   -------------------------------------------------------------------------- */
+.comparison-container {
+  position: relative;
+  width: 100%;
+  height: 620px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: #000;
+  user-select: none;
+}
+.comparison-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.comparison-before {
+  z-index: 1;
+}
+.comparison-after-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  overflow: hidden;
+  clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%);
+}
+.comparison-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 4px;
+  background: #fff;
+  z-index: 10;
+  cursor: ew-resize;
+  transform: translateX(-50%);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+}
+.handle-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  color: #0b101b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
+  border: 2px solid var(--primary);
+}
+
+.view-modes {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.btn-view-mode {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.btn-view-mode.active, .btn-view-mode:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   INTERACTIVE ANNOTATED IMAGE & BUBBLE OVERLAY
+   -------------------------------------------------------------------------- */
+.bubble-map-container {
+  position: relative;
+  width: 100%;
+  max-height: 580px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: #000;
+  text-align: center;
+}
+.bubble-map-container img {
+  max-width: 100%;
+  display: block;
+  margin: 0 auto;
+}
+.bubble-badge-overlay {
+  position: absolute;
+  border: 2px solid #f97316;
+  border-radius: 4px;
+  cursor: pointer;
+  background: rgba(249, 115, 22, 0.15);
+  transition: var(--transition-fast);
+}
+.bubble-badge-overlay:hover, .bubble-badge-overlay.highlight {
+  border-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 12px #06b6d4;
+}
+.bubble-number-tag {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  background: #f97316;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* --------------------------------------------------------------------------
+   TRANSLATION DATA TABLE
+   -------------------------------------------------------------------------- */
+.table-wrap {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.trans-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+.trans-table th {
+  background: rgba(15, 23, 42, 0.95);
+  padding: 0.75rem 1rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.trans-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: top;
+}
+.trans-table tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.trans-table tr.highlight {
+  background: rgba(6, 182, 212, 0.12) !important;
+  border-left: 3px solid var(--cyan);
+}
+.trans-id-pill {
+  display: inline-block;
+  background: #f97316;
+  color: #fff;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+.text-orig {
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+}
+.text-trans {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   BATCH ZIP VIEW & PROGRESS
+   -------------------------------------------------------------------------- */
+.progress-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-top: 1rem;
+  display: none;
+}
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.progress-bar-bg {
+  width: 100%;
+  height: 10px;
+  background: #1e293b;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.progress-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--cyan));
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+.batch-log {
+  margin-top: 1rem;
+  background: #06090f;
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+/* --------------------------------------------------------------------------
+   MODAL STYLES
+   -------------------------------------------------------------------------- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open {
+  display: flex;
+}
+.modal-box {
+  background: #111827;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: modalScale 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalScale {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   TOAST NOTIFICATIONS
+   -------------------------------------------------------------------------- */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.toast {
+  background: #1e293b;
+  border: 1px solid var(--border-subtle);
+  color: #fff;
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  animation: slideToast 0.3s ease;
+}
+.toast.success { border-color: var(--emerald); }
+.toast.error { border-color: var(--rose); }
+@keyframes slideToast {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+</style>
 </head>
 <body>
 
@@ -445,6 +1249,908 @@
   <!-- Toast Notification Container -->
   <div id="toast-container"></div>
 
-  <script src="js/app.js"></script>
+  <script>
+/**
+ * ⚡ MangaStudio AI - Frontend Application Logic (Vercel Edition)
+ * Autonomous Manga Cleaner & Speech Bubble Context Translator
+ */
+
+// -----------------------------------------------------------------------------
+// State & Storage
+// -----------------------------------------------------------------------------
+const state = {
+  backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
+  apiKey: localStorage.getItem("manga_api_key") || "",
+  
+  // Cleaner Tab State
+  cleanerFile: null,
+  cleanerOriginalB64: null,
+  cleanerCleanedB64: null,
+  cleanerMaskB64: null,
+  isSplitDragging: false,
+  sliderPct: 50,
+  
+  // Translator Tab State
+  transFile: null,
+  transImgData: null,
+  transResultData: [],
+  transDimensions: { naturalW: 0, naturalH: 0 },
+  
+  // Batch Tab State
+  batchFile: null,
+};
+
+// Clean backend URL
+function getCleanBackendUrl() {
+  return state.backendUrl.trim().replace(/\/+$/, "");
+}
+
+// -----------------------------------------------------------------------------
+// Toast Notifications
+// -----------------------------------------------------------------------------
+function showToast(message, type = "info") {
+  const container = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  const icon = type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️";
+  toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transform = "translateX(100%)";
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// -----------------------------------------------------------------------------
+// Backend Health Check & Ping
+// -----------------------------------------------------------------------------
+async function checkBackendHealth() {
+  const pill = document.getElementById("server-status-pill");
+  const text = document.getElementById("server-status-text");
+  const start = performance.now();
+
+  // 1. Thử gọi Vercel Cloud Node.js API trước
+  try {
+    const res = await fetch("/api/health", {
+      method: "GET",
+      signal: AbortSignal.timeout(4000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const latency = Math.round(performance.now() - start);
+      pill.className = "status-pill";
+      text.textContent = `Cloud Node.js (${latency}ms)`;
+      return;
+    }
+  } catch (e) {
+    // Không chạy Node.js hoặc 404 -> Fallback kiểm tra trực tiếp
+  }
+
+  // 2. Fallback trực tiếp Backend URL
+  try {
+    const res = await fetch(`${getCleanBackendUrl()}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
+    });
+    const latency = Math.round(performance.now() - start);
+
+    if (res.ok) {
+      const data = await res.json();
+      pill.className = "status-pill";
+      text.textContent = `Online: ${data.device || "GPU"} (${latency}ms)`;
+    } else {
+      pill.className = "status-pill offline";
+      text.textContent = `Lỗi HTTP ${res.status}`;
+    }
+  } catch (err) {
+    pill.className = "status-pill offline";
+    text.textContent = "Backend Offline (Bấm ⚙️ đổi URL)";
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tab Switching
+// -----------------------------------------------------------------------------
+function initTabs() {
+  const tabBtns = document.querySelectorAll(".tab-btn");
+  const tabPanes = document.querySelectorAll(".tab-pane");
+
+  tabBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabBtns.forEach((b) => b.classList.remove("active"));
+      tabPanes.forEach((p) => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      const target = document.getElementById(btn.dataset.tab);
+      if (target) target.classList.add("active");
+    });
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Helper: File to Base64
+// -----------------------------------------------------------------------------
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// -----------------------------------------------------------------------------
+// TAB 1: AI MANGA CLEANER LOGIC
+// -----------------------------------------------------------------------------
+function initCleaner() {
+  const dropzone = document.getElementById("cleaner-dropzone");
+  const fileInput = document.getElementById("cleaner-file-input");
+  const previewWrap = document.getElementById("cleaner-preview-wrap");
+  const previewImg = document.getElementById("cleaner-preview-img");
+  const clearBtn = document.getElementById("cleaner-clear-btn");
+  const runBtn = document.getElementById("btn-run-clean");
+
+  // Dilation & Threshold range display
+  const dilationInput = document.getElementById("cleaner-dilation");
+  const valDilation = document.getElementById("val-dilation");
+  dilationInput.addEventListener("input", () => {
+    valDilation.textContent = `${dilationInput.value}px`;
+  });
+
+  const thresholdInput = document.getElementById("cleaner-threshold");
+  const valThreshold = document.getElementById("val-threshold");
+  thresholdInput.addEventListener("input", () => {
+    valThreshold.textContent = Number(thresholdInput.value).toFixed(2);
+  });
+
+  // Dropzone drag-and-drop
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) {
+      handleCleanerFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) {
+      handleCleanerFile(fileInput.files[0]);
+    }
+  });
+
+  clearBtn.addEventListener("click", () => {
+    state.cleanerFile = null;
+    state.cleanerOriginalB64 = null;
+    state.cleanerCleanedB64 = null;
+    state.cleanerMaskB64 = null;
+    fileInput.value = "";
+    previewWrap.style.display = "none";
+    dropzone.style.display = "block";
+    runBtn.disabled = true;
+  });
+
+  async function handleCleanerFile(file) {
+    if (!file.type.startsWith("image/")) {
+      showToast("Vui lòng chọn một tệp hình ảnh (.jpg, .png, .webp)!", "error");
+      return;
+    }
+    state.cleanerFile = file;
+    state.cleanerOriginalB64 = await fileToBase64(file);
+    previewImg.src = state.cleanerOriginalB64;
+    previewWrap.style.display = "block";
+    dropzone.style.display = "none";
+    runBtn.disabled = false;
+  }
+
+  // Run Cleaning API
+  runBtn.addEventListener("click", async () => {
+    if (!state.cleanerOriginalB64) return;
+
+    runBtn.disabled = true;
+    runBtn.innerHTML = `<span>⏳ Đang xử lý bóc tách & inpainting...</span>`;
+    const badge = document.getElementById("cleaner-stats-badge");
+    badge.textContent = "AI Đang Chạy...";
+
+    const payload = {
+      imageBase64: state.cleanerOriginalB64,
+      cleanSFX: document.getElementById("cleaner-sfx-toggle").checked,
+      dilationPx: parseInt(dilationInput.value, 10),
+      detThreshold: parseFloat(thresholdInput.value),
+      inpaintModel: document.getElementById("cleaner-model-select").value,
+    };
+
+    const startT = performance.now();
+    try {
+      let res;
+      try {
+        // 1. Thử gọi qua Node.js Cloud Function trước
+        res = await fetch("/api/clean", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        // Fallback
+      }
+
+      if (!res || !res.ok) {
+        // 2. Fallback gọi trực tiếp backend HF Space
+        res = await fetch(`${getCleanBackendUrl()}/clean_page`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || `Server trả về mã lỗi ${res.status}`);
+      }
+
+      const data = await res.json();
+      state.cleanerCleanedB64 = data.cleanedImageBase64;
+      state.cleanerMaskB64 = data.colorMaskBase64;
+
+      const elapsed = Math.round(performance.now() - startT);
+      badge.textContent = `⚡ ${data.stats?.total_time_ms || elapsed}ms | ${payload.inpaintModel}`;
+
+      // Update comparison views
+      document.getElementById("comp-before").src = state.cleanerOriginalB64;
+      document.getElementById("comp-after").src = state.cleanerCleanedB64;
+      setSplitPosition(50);
+
+      // Download buttons
+      const btnJpg = document.getElementById("btn-download-jpg");
+      const btnPng = document.getElementById("btn-download-png");
+      btnJpg.href = state.cleanerCleanedB64;
+      btnJpg.download = `cleaned_${Date.now()}.jpg`;
+      btnJpg.style.display = "flex";
+
+      btnPng.href = state.cleanerCleanedB64;
+      btnPng.download = `cleaned_${Date.now()}.png`;
+      btnPng.style.display = "flex";
+
+      showToast("Đã bóc tách và khôi phục nét tranh thành công!", "success");
+    } catch (err) {
+      showToast(`Lỗi khi xử lý xóa ảnh: ${err.message}`, "error");
+      badge.textContent = "Thất Bại";
+    } finally {
+      runBtn.disabled = false;
+      runBtn.innerHTML = `<span>🚀 AI Bóc Tách & Làm Sạch Nét Vẽ</span>`;
+    }
+  });
+
+  initComparisonSlider();
+}
+
+// Before / After Draggable Slider
+function initComparisonSlider() {
+  const container = document.getElementById("cleaner-result-container");
+  const handle = document.getElementById("comp-handle");
+  const afterWrap = document.getElementById("comp-after-wrap");
+
+  function onMove(e) {
+    if (!state.isSplitDragging) return;
+    const rect = container.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    let pos = ((clientX - rect.left) / rect.width) * 100;
+    pos = Math.max(0, Math.min(100, pos));
+    setSplitPosition(pos);
+  }
+
+  window.setSplitPosition = (pct) => {
+    state.sliderPct = pct;
+    handle.style.left = `${pct}%`;
+    afterWrap.style.clipPath = `polygon(0 0, ${pct}% 0, ${pct}% 100%, 0 100%)`;
+  };
+
+  handle.addEventListener("mousedown", () => (state.isSplitDragging = true));
+  window.addEventListener("mouseup", () => (state.isSplitDragging = false));
+  window.addEventListener("mousemove", onMove);
+
+  handle.addEventListener("touchstart", () => (state.isSplitDragging = true));
+  window.addEventListener("touchend", () => (state.isSplitDragging = false));
+  window.addEventListener("touchmove", onMove);
+
+  // View modes buttons
+  document.getElementById("btn-mode-split").addEventListener("click", function () {
+    document.querySelectorAll(".btn-view-mode").forEach((b) => b.classList.remove("active"));
+    this.classList.add("active");
+    handle.style.display = "block";
+    setSplitPosition(50);
+    document.getElementById("comp-after").src = state.cleanerCleanedB64 || "";
+  });
+
+  document.getElementById("btn-mode-cleaned").addEventListener("click", function () {
+    document.querySelectorAll(".btn-view-mode").forEach((b) => b.classList.remove("active"));
+    this.classList.add("active");
+    handle.style.display = "none";
+    setSplitPosition(100);
+    document.getElementById("comp-after").src = state.cleanerCleanedB64 || "";
+  });
+
+  document.getElementById("btn-mode-mask").addEventListener("click", function () {
+    if (!state.cleanerMaskB64) {
+      showToast("Chưa có Color Mask!", "info");
+      return;
+    }
+    document.querySelectorAll(".btn-view-mode").forEach((b) => b.classList.remove("active"));
+    this.classList.add("active");
+    handle.style.display = "none";
+    setSplitPosition(100);
+    document.getElementById("comp-after").src = state.cleanerMaskB64;
+  });
+}
+
+// -----------------------------------------------------------------------------
+// TAB 2: AI TRANSLATOR & BUBBLE OCR LOGIC
+// -----------------------------------------------------------------------------
+function initTranslator() {
+  const dropzone = document.getElementById("trans-dropzone");
+  const fileInput = document.getElementById("trans-file-input");
+  const previewWrap = document.getElementById("trans-preview-wrap");
+  const previewImg = document.getElementById("trans-preview-img");
+  const clearBtn = document.getElementById("trans-clear-btn");
+  const runBtn = document.getElementById("btn-run-translate");
+
+  const ocrEngineSelect = document.getElementById("trans-ocr-engine");
+  const sourceLangGroup = document.getElementById("trans-source-lang-group");
+
+  ocrEngineSelect.addEventListener("change", () => {
+    sourceLangGroup.style.display = ocrEngineSelect.value === "multilingual" ? "block" : "none";
+  });
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) handleTransFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) handleTransFile(fileInput.files[0]);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    state.transFile = null;
+    fileInput.value = "";
+    previewWrap.style.display = "none";
+    dropzone.style.display = "block";
+    runBtn.disabled = true;
+  });
+
+  async function handleTransFile(file) {
+    if (!file.type.startsWith("image/")) {
+      showToast("Vui lòng chọn tệp ảnh!", "error");
+      return;
+    }
+    state.transFile = file;
+    const b64 = await fileToBase64(file);
+    previewImg.src = b64;
+    previewWrap.style.display = "block";
+    dropzone.style.display = "none";
+    runBtn.disabled = false;
+
+    // Load annotated image preview
+    const annotImg = document.getElementById("trans-annotated-img");
+    annotImg.src = b64;
+    annotImg.onload = () => {
+      state.transDimensions = {
+        naturalW: annotImg.naturalWidth,
+        naturalH: annotImg.naturalHeight,
+      };
+    };
+  }
+
+  // Run Translation
+  runBtn.addEventListener("click", async () => {
+    if (!state.transFile) return;
+
+    runBtn.disabled = true;
+    runBtn.innerHTML = `<span>⏳ Đang nhận diện bubble, OCR & Dịch LLM...</span>`;
+    const badge = document.getElementById("trans-stats-badge");
+    badge.textContent = "AI Đang Dịch...";
+
+    const formData = new FormData();
+    formData.append("file", state.transFile);
+    formData.append("reading_order", document.getElementById("trans-reading-order").value);
+    formData.append("ocr_engine", document.getElementById("trans-ocr-engine").value);
+    formData.append("source_lang", document.getElementById("trans-source-lang").value);
+    formData.append("target_lang", document.getElementById("trans-target-lang").value.trim() || "vi");
+    formData.append("chat_only", document.getElementById("trans-chat-only-toggle").checked ? "true" : "false");
+
+    if (state.apiKey) {
+      formData.append("api_key", state.apiKey);
+    }
+
+    const startT = performance.now();
+    try {
+      let res;
+      try {
+        // 1. Thử gọi Node.js Cloud OCR
+        const ocrPayload = {
+          imageBase64: previewImg.src,
+          readingOrder: document.getElementById("trans-reading-order").value,
+          ocrEngine: document.getElementById("trans-ocr-engine").value,
+          chatOnly: document.getElementById("trans-chat-only-toggle").checked,
+          targetLang: document.getElementById("trans-target-lang").value.trim() || "vi",
+          apiKey: state.apiKey,
+        };
+        res = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(ocrPayload),
+        });
+      } catch (err) {
+        // Fallback
+      }
+
+      if (!res || !res.ok) {
+        // 2. Fallback gọi trực tiếp backend
+        res = await fetch(`${getCleanBackendUrl()}/api/v1/translate-page`, {
+          method: "POST",
+          body: formData,
+        });
+      }
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.detail || errJson.error || `Lỗi máy chủ HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      state.transResultData = data.data || [];
+      const elapsed = Math.round(performance.now() - startT);
+      badge.textContent = `✅ ${data.total_boxes} bóng thoại | ${elapsed}ms`;
+
+      renderBubbleOverlay(state.transResultData);
+      renderTranslationTable(state.transResultData);
+
+      // Setup Script Download
+      const scriptContent = state.transResultData
+        .map((it) => `[#${it.id}] Gốc: ${it.original_text} -> Dịch: ${it.translated_text}`)
+        .join("\n\n");
+      const blob = new Blob([scriptContent], { type: "text/plain;charset=utf-8" });
+      const dlBtn = document.getElementById("btn-download-script-txt");
+      dlBtn.href = URL.createObjectURL(blob);
+      dlBtn.download = `kịch_bản_dịch_${Date.now()}.txt`;
+      dlBtn.style.display = "flex";
+
+      showToast(`Đã dịch thành công ${data.total_boxes} câu thoại!`, "success");
+    } catch (err) {
+      showToast(`Lỗi khi dịch trang: ${err.message}`, "error");
+      badge.textContent = "Lỗi Xử Lý";
+    } finally {
+      runBtn.disabled = false;
+      runBtn.innerHTML = `<span>🚀 AI Nhận Diện & Dịch Toàn Trang</span>`;
+    }
+  });
+
+  // Copy Markdown Script Button
+  document.getElementById("btn-copy-script").addEventListener("click", () => {
+    if (!state.transResultData.length) {
+      showToast("Chưa có kịch bản để sao chép!", "info");
+      return;
+    }
+    const md = state.transResultData
+      .map((it) => `**[#${it.id}]**\n* Gốc: \`${it.original_text}\`\n* Dịch: **${it.translated_text}**`)
+      .join("\n\n");
+    navigator.clipboard.writeText(md);
+    showToast("Đã sao chép kịch bản Markdown vào Clipboard!", "success");
+  });
+}
+
+// Render Numbered Bubble Badges over Image
+function renderBubbleOverlay(items) {
+  const wrap = document.getElementById("bubble-canvas-wrap");
+  const annotImg = document.getElementById("trans-annotated-img");
+
+  // Remove existing overlays
+  wrap.querySelectorAll(".bubble-badge-overlay").forEach((el) => el.remove());
+
+  const nw = annotImg.naturalWidth;
+  const nh = annotImg.naturalHeight;
+  if (!nw || !nh) return;
+
+  items.forEach((it) => {
+    const [ymin, xmin, ymax, xmax] = it.box;
+    const topPct = (ymin / nh) * 100;
+    const leftPct = (xmin / nw) * 100;
+    const widthPct = ((xmax - xmin) / nw) * 100;
+    const heightPct = ((ymax - ymin) / nh) * 100;
+
+    const boxEl = document.createElement("div");
+    boxEl.className = "bubble-badge-overlay";
+    boxEl.style.top = `${topPct}%`;
+    boxEl.style.left = `${leftPct}%`;
+    boxEl.style.width = `${widthPct}%`;
+    boxEl.style.height = `${heightPct}%`;
+    boxEl.dataset.id = it.id;
+
+    const tag = document.createElement("div");
+    tag.className = "bubble-number-tag";
+    tag.textContent = `#${it.id}`;
+    boxEl.appendChild(tag);
+
+    boxEl.addEventListener("mouseenter", () => highlightTableRow(it.id));
+    boxEl.addEventListener("mouseleave", () => unhighlightTableRow(it.id));
+    boxEl.addEventListener("click", () => scrollToTableRow(it.id));
+
+    wrap.appendChild(boxEl);
+  });
+}
+
+function renderTranslationTable(items) {
+  const tbody = document.getElementById("trans-table-body");
+  if (!items || !items.length) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-dim); padding:2rem;">Không tìm thấy bong bóng thoại nào trên trang này.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items
+    .map(
+      (it) => `
+    <tr id="row-bubble-${it.id}" data-id="${it.id}">
+      <td><span class="trans-id-pill">#${it.id}</span></td>
+      <td class="text-orig">${escapeHtml(it.original_text)}</td>
+      <td class="text-trans">${escapeHtml(it.translated_text)}</td>
+    </tr>
+  `
+    )
+    .join("");
+
+  // Table row hover highlights bubble
+  tbody.querySelectorAll("tr").forEach((row) => {
+    const id = row.dataset.id;
+    row.addEventListener("mouseenter", () => {
+      const box = document.querySelector(`.bubble-badge-overlay[data-id="${id}"]`);
+      if (box) box.classList.add("highlight");
+    });
+    row.addEventListener("mouseleave", () => {
+      const box = document.querySelector(`.bubble-badge-overlay[data-id="${id}"]`);
+      if (box) box.classList.remove("highlight");
+    });
+  });
+}
+
+function highlightTableRow(id) {
+  const row = document.getElementById(`row-bubble-${id}`);
+  if (row) row.classList.add("highlight");
+}
+function unhighlightTableRow(id) {
+  const row = document.getElementById(`row-bubble-${id}`);
+  if (row) row.classList.remove("highlight");
+}
+function scrollToTableRow(id) {
+  const row = document.getElementById(`row-bubble-${id}`);
+  if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// -----------------------------------------------------------------------------
+// TAB 3: BATCH ZIP PROCESSING
+// -----------------------------------------------------------------------------
+function initBatch() {
+  const dropzone = document.getElementById("batch-dropzone");
+  const fileInput = document.getElementById("batch-file-input");
+  const runBtn = document.getElementById("btn-run-batch");
+  const modeSelect = document.getElementById("batch-mode-select");
+
+  const cleanOpts = document.getElementById("batch-clean-options");
+  const transOpts = document.getElementById("batch-translate-options");
+
+  modeSelect.addEventListener("change", () => {
+    if (modeSelect.value === "clean") {
+      cleanOpts.style.display = "block";
+      transOpts.style.display = "none";
+    } else {
+      cleanOpts.style.display = "none";
+      transOpts.style.display = "block";
+    }
+  });
+
+  dropzone.addEventListener("click", () => fileInput.click());
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length > 0) handleBatchFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length > 0) handleBatchFile(fileInput.files[0]);
+  });
+
+  function handleBatchFile(file) {
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      showToast("Vui lòng chọn tệp định dạng .zip!", "error");
+      return;
+    }
+    state.batchFile = file;
+    dropzone.querySelector("h4").textContent = `Đã chọn: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    runBtn.disabled = false;
+  }
+
+  // Run Batch
+  runBtn.addEventListener("click", async () => {
+    if (!state.batchFile) return;
+
+    const mode = modeSelect.value;
+    runBtn.disabled = true;
+    runBtn.innerHTML = `<span>⏳ Đang xử lý toàn bộ tệp ZIP...</span>`;
+
+    const progressCard = document.getElementById("batch-progress-card");
+    const progressBar = document.getElementById("batch-progress-bar");
+    const progressStatus = document.getElementById("batch-progress-status");
+    const progressPct = document.getElementById("batch-progress-pct");
+    const logBox = document.getElementById("batch-log-box");
+
+    progressCard.style.display = "block";
+    progressBar.style.width = "25%";
+    progressPct.textContent = "25%";
+    progressStatus.textContent = "Đang tải tệp lên server và giải nén...";
+    logBox.innerHTML = `[${new Date().toLocaleTimeString()}] Bắt đầu tải lên: ${state.batchFile.name}...<br>`;
+
+    const formData = new FormData();
+    formData.append("file", state.batchFile);
+
+    try {
+      let isCloudHandled = false;
+
+      // 1. Ưu tiên xử lý trên Vercel Cloud Node.js (tiết kiệm 100% RAM client)
+      try {
+        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang tải lên Cloud Serverless Node.js...<br>`;
+        progressBar.style.width = "40%";
+        progressPct.textContent = "40%";
+        const zipBase64 = await fileToBase64(state.batchFile);
+
+        const cloudRes = await fetch("/api/batch-zip", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            zipBase64,
+            action: mode,
+            readingOrder: document.getElementById("batch-trans-order").value,
+            ocrEngine: document.getElementById("batch-trans-engine").value,
+            chatOnly: document.getElementById("batch-trans-chat-only").checked,
+            apiKey: state.apiKey,
+            inpaintModel: document.getElementById("batch-clean-model").value,
+            cleanSFX: document.getElementById("batch-clean-sfx-toggle").checked,
+          }),
+        });
+
+        if (cloudRes.ok) {
+          const cloudData = await cloudRes.json();
+          isCloudHandled = true;
+          progressBar.style.width = "100%";
+          progressPct.textContent = "100%";
+          progressStatus.textContent = `✅ Đã xử lý xong ${cloudData.totalPages} trang trên Cloud!`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Hoàn thành xử lý ${cloudData.totalPages} trang trong ${cloudData.elapsedSeconds}s!<br>`;
+
+          const blob = new Blob([cloudData.scriptText || "Hoàn thành"], { type: "text/plain;charset=utf-8" });
+          showBatchResult({
+            title: `Đã xử lý xong ${cloudData.totalPages} trang truyện trên Cloud`,
+            desc: `Thời gian thực thi: ${cloudData.elapsedSeconds}s | Chế độ: ${mode.toUpperCase()}`,
+            downloadBlob: blob,
+            filename: `kich_ban_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`,
+            pages: cloudData.results || [],
+          });
+          showToast("Đã xử lý xong tệp ZIP trên Cloud!", "success");
+          return;
+        }
+      } catch (cloudErr) {
+        logBox.innerHTML += `[Chú ý] Chuyển tiếp sang xử lý trực tiếp: ${cloudErr.message}<br>`;
+      }
+
+      // 2. Fallback gọi trực tiếp backend nếu không có Cloud API
+      if (!isCloudHandled) {
+        if (mode === "clean") {
+          formData.append("inpaint_model", document.getElementById("batch-clean-model").value);
+          formData.append("clean_sfx", document.getElementById("batch-clean-sfx-toggle").checked ? "true" : "false");
+          formData.append("dilation_px", "4");
+
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang chạy Anime/Big-LaMa inpainting toàn bộ các trang...<br>`;
+          progressBar.style.width = "65%";
+          progressPct.textContent = "65%";
+
+          const res = await fetch(`${getCleanBackendUrl()}/api/clean_zip`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error(`Lỗi server HTTP ${res.status}`);
+          const blob = await res.blob();
+
+          progressBar.style.width = "100%";
+          progressPct.textContent = "100%";
+          progressStatus.textContent = "✅ Hoàn tất xử lý tệp ZIP!";
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Hoàn thành tạo file ZIP ảnh đã xóa!<br>`;
+
+          showBatchResult({
+            title: "Đã làm sạch toàn bộ trang trong tệp ZIP",
+            desc: "Tất cả bóng thoại đã được khôi phục nét vẽ nguyên bản.",
+            downloadBlob: blob,
+            filename: `cleaned_${state.batchFile.name}`,
+          });
+        } else {
+          formData.append("reading_order", document.getElementById("batch-trans-order").value);
+          formData.append("ocr_engine", document.getElementById("batch-trans-engine").value);
+          formData.append("chat_only", document.getElementById("batch-trans-chat-only").checked ? "true" : "false");
+          formData.append("target_lang", "vi");
+          if (state.apiKey) formData.append("api_key", state.apiKey);
+
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang bóc tách bóng thoại & OCR...<br>`;
+          progressBar.style.width = "75%";
+          progressPct.textContent = "75%";
+
+          const res = await fetch(`${getCleanBackendUrl()}/api/v1/translate-zip`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error(`Lỗi server HTTP ${res.status}`);
+          const data = await res.json();
+
+          progressBar.style.width = "100%";
+          progressPct.textContent = "100%";
+          progressStatus.textContent = `✅ Đã dịch xong ${data.total_pages} trang!`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đã dịch ${data.total_dialogue_boxes || 0} câu trong ${data.execution_time_seconds}s!<br>`;
+
+          const fullTxt = (data.pages || [])
+            .map(
+              (p) =>
+                `=== ${p.filename} (Trang ${p.page_index}) ===\n` +
+                (p.data || []).map((d) => `[#${d.id}] Gốc: ${d.original_text} -> Dịch: ${d.translated_text}`).join("\n")
+            )
+            .join("\n\n--------------------------------------------\n\n");
+
+          const blob = new Blob([fullTxt], { type: "text/plain;charset=utf-8" });
+
+          showBatchResult({
+            title: `Đã dịch xong ${data.total_pages} trang truyện (${data.total_dialogue_boxes} câu thoại)`,
+            desc: `Thời gian thực thi: ${data.execution_time_seconds}s | Lọc bong bóng chat: Bật`,
+            downloadBlob: blob,
+            filename: `translated_script_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`,
+            pages: data.pages || [],
+          });
+        }
+        showToast("Đã xử lý xong tệp ZIP!", "success");
+      }
+    } catch (err) {
+      showToast(`Lỗi xử lý hàng loạt: ${err.message}`, "error");
+      progressStatus.textContent = "❌ Thất bại";
+      logBox.innerHTML += `[LỖI] ${err.message}<br>`;
+    } finally {
+      runBtn.disabled = false;
+      runBtn.innerHTML = `<span>🚀 Bắt Đầu Xử Lý Hàng Loạt Tệp ZIP</span>`;
+    }
+  });
+
+  function showBatchResult({ title, desc, downloadBlob, filename, pages }) {
+    document.getElementById("batch-empty-view").style.display = "none";
+    const resView = document.getElementById("batch-result-view");
+    resView.style.display = "block";
+
+    document.getElementById("batch-result-title").textContent = title;
+    document.getElementById("batch-result-desc").textContent = desc;
+
+    const dlBtn = document.getElementById("btn-download-batch-zip");
+    dlBtn.href = URL.createObjectURL(downloadBlob);
+    dlBtn.download = filename;
+
+    const tableWrap = document.getElementById("batch-pages-table-wrap");
+    const tbody = document.getElementById("batch-pages-table-body");
+    if (pages && pages.length) {
+      tableWrap.style.display = "block";
+      tbody.innerHTML = pages
+        .map(
+          (p) => `
+        <tr>
+          <td>#${p.page_index}</td>
+          <td><code>${p.filename}</code></td>
+          <td><b>${p.total_boxes}</b></td>
+          <td><span style="color:var(--emerald);">Thành công</span></td>
+        </tr>
+      `
+        )
+        .join("");
+    } else {
+      tableWrap.style.display = "none";
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// SETTINGS MODAL
+// -----------------------------------------------------------------------------
+function initSettings() {
+  const modal = document.getElementById("settings-modal");
+  const openBtn = document.getElementById("btn-open-settings");
+  const closeBtn = document.getElementById("btn-close-settings");
+  const saveBtn = document.getElementById("btn-save-settings");
+  const testBtn = document.getElementById("btn-test-connection");
+
+  const urlInput = document.getElementById("setting-backend-url");
+  const keyInput = document.getElementById("setting-api-key");
+
+  urlInput.value = state.backendUrl;
+  keyInput.value = state.apiKey;
+
+  openBtn.addEventListener("click", () => modal.classList.add("open"));
+  closeBtn.addEventListener("click", () => modal.classList.remove("open"));
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.remove("open");
+  });
+
+  saveBtn.addEventListener("click", () => {
+    state.backendUrl = urlInput.value.trim() || "https://dobietdc-backe-manga-remove.hf.space";
+    state.apiKey = keyInput.value.trim();
+
+    localStorage.setItem("manga_backend_url", state.backendUrl);
+    localStorage.setItem("manga_api_key", state.apiKey);
+
+    showToast("Đã lưu cấu hình thành công!", "success");
+    modal.classList.remove("open");
+    checkBackendHealth();
+  });
+
+  testBtn.addEventListener("click", async () => {
+    testBtn.textContent = "Đang ping...";
+    const testUrl = urlInput.value.trim().replace(/\/+$/, "");
+    try {
+      const res = await fetch(`${testUrl}/health`, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        showToast("Kết nối Backend thành công (Online)!", "success");
+      } else {
+        showToast(`Backend trả về mã lỗi HTTP ${res.status}`, "error");
+      }
+    } catch (e) {
+      showToast(`Không thể kết nối tới: ${testUrl}`, "error");
+    } finally {
+      testBtn.textContent = "Kiểm Tra Kết Nối";
+    }
+  });
+
+  // Server status pill click also opens settings
+  document.getElementById("server-status-pill").addEventListener("click", () => {
+    modal.classList.add("open");
+  });
+}
+
+// -----------------------------------------------------------------------------
+// INIT
+// -----------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  initTabs();
+  initCleaner();
+  initTranslator();
+  initBatch();
+  initSettings();
+
+  checkBackendHealth();
+  setInterval(checkBackendHealth, 30000);
+});
+
+</script>
 </body>
 </html>
