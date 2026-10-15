@@ -717,9 +717,17 @@ async def api_translate_direct(req: TranslateDirectRequest):
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
                 raise HTTPException(status_code=resp.status_code, detail=f"LLM API lỗi ({resp.status_code}): {resp.text}")
-            return resp.json()
+            resp_content = resp.text.strip() if resp.text else ""
+            if not resp_content:
+                raise HTTPException(status_code=502, detail="LLM API trả về phản hồi rỗng (Empty body).")
+            try:
+                return resp.json()
+            except Exception as json_err:
+                raise HTTPException(status_code=502, detail=f"LLM API trả về JSON không hợp lệ: {resp_content[:200]}")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="AI Dịch phản hồi quá thời gian quy định (Timeout > 65s).")
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Lỗi khi proxy gọi LLM: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))

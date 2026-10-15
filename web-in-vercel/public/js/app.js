@@ -1023,8 +1023,7 @@ function initBatch() {
             logBox.scrollTop = logBox.scrollHeight;
 
           } else {
-            // Chế độ DỊCH THUẬT & BÓC TÁCH BÓNG THOẠI
-            // Bước 1: OCR trang qua backend (chỉ mất ~0.5s)
+            // Chế độ DỊCH THUẬT: Bước 1 chỉ OCR bóc tách bóng thoại
             const formData = new FormData();
             formData.append("file", blob, filename);
             formData.append("reading_order", readingOrder);
@@ -1045,11 +1044,6 @@ function initBatch() {
             const ocrData = await ocrRes.json();
             const boxes = ocrData.data || [];
 
-            // Bước 2: Dịch các câu thoại bằng LLM tốc độ cao
-            if (boxes.length > 0) {
-              await translateSpeechBubblesFrontend(boxes, "vi");
-            }
-
             const pageSec = ((performance.now() - tStartPage) / 1000).toFixed(1);
             results[index] = {
               pageIndex: pageIdx,
@@ -1060,11 +1054,12 @@ function initBatch() {
             };
 
             completedCount++;
-            const pct = Math.round((completedCount / totalPages) * 100);
+            // OCR chiếm 60% tiến trình đầu
+            const pct = Math.round((completedCount / totalPages) * 60);
             progressBar.style.width = `${pct}%`;
             progressPct.textContent = `${pct}%`;
-            progressStatus.textContent = `Đang dịch: ${completedCount}/${totalPages} trang (${pct}%)...`;
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ [${completedCount}/${totalPages}] <strong>${filename}</strong>: ${boxes.length} câu thoại (${pageSec}s)<br>`;
+            progressStatus.textContent = `[Giai đoạn 1/2] Đang quét OCR: ${completedCount}/${totalPages} trang (${pct}%)...`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🔍 [${completedCount}/${totalPages}] <strong>${filename}</strong>: Nhận diện ${boxes.length} bóng thoại (${pageSec}s)<br>`;
             logBox.scrollTop = logBox.scrollHeight;
           }
 
@@ -1078,7 +1073,8 @@ function initBatch() {
             error: pageErr.message,
             data: [],
           };
-          const pct = Math.round((completedCount / totalPages) * 100);
+          const basePct = mode === "clean" ? 100 : 60;
+          const pct = Math.round((completedCount / totalPages) * basePct);
           progressBar.style.width = `${pct}%`;
           progressPct.textContent = `${pct}%`;
           logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ [${completedCount}/${totalPages}] <strong>${filename}</strong>: Lỗi (${pageErr.message})<br>`;
@@ -1086,7 +1082,7 @@ function initBatch() {
         }
       }
 
-      // Worker pool xử lý song song 2 luồng
+      // Worker pool xử lý song song 2 luồng (Giai đoạn 1)
       const concurrency = 2;
       let nextIndex = 0;
       async function worker() {
@@ -1101,6 +1097,85 @@ function initBatch() {
         workers.push(worker());
       }
       await Promise.all(workers);
+
+      // GIAI ĐOẠN 2: DỊCH THUẬT TOÀN BỘ CHƯƠNG THEO MẠCH CỐT TRUYỆN
+      if (mode === "translate") {
+        progressBar.style.width = "60%";
+        progressPct.textContent = "60%";
+        progressStatus.textContent = `[Giai đoạn 2/2] Đang gom kịch bản cả chap để dịch AI theo mạch truyện...`;
+        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🌐 Bắt đầu [Giai đoạn 2/2]: Dịch ngữ cảnh toàn bộ chương...<br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+
+        // Gom tất cả bóng thoại của cả chương theo thứ tự trang
+        const allItems = [];
+        let globalId = 1;
+        results.forEach((r) => {
+          if (!r || !r.success) return;
+          (r.data || []).forEach((b) => {
+            const rawText = (b.original_text || "").trim();
+            if (rawText) {
+              b.globalId = globalId++;
+              allItems.push(b);
+            }
+          });
+        });
+
+        if (allItems.length === 0) {
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ Không tìm thấy câu thoại tiếng Nhật nào cần dịch.<br>`;
+        } else {
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📝 Tìm thấy tổng cộng ${allItems.length} câu thoại từ ${totalPages} trang. Bắt đầu dịch AI...<br>`;
+          logBox.scrollTop = logBox.scrollHeight;
+
+          // Chia thành các đợt (chunks) 35 câu để giữ mạch ngữ cảnh mà không bị timeout LLM
+          const chunkSize = 35;
+          const totalChunks = Math.ceil(allItems.length / chunkSize);
+
+          for (let c = 0; c < totalChunks; c++) {
+            const chunk = allItems.slice(c * chunkSize, (c + 1) * chunkSize);
+            const chunkIdx = c + 1;
+            const tStartChunk = performance.now();
+
+            progressStatus.textContent = `[Giai đoạn 2/2] Đang dịch AI kịch bản cả chap (Đợt ${chunkIdx}/${totalChunks})...`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🤖 Đang dịch phần ${chunkIdx}/${totalChunks} (${chunk.length} câu thoại)...<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+
+            const translationItems = chunk.map((b) => ({
+              id: b.globalId,
+              original_text: b.original_text,
+            }));
+
+            let chunkSuccess = false;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              try {
+                await translateSpeechBubblesFrontend(translationItems, "vi");
+                translationItems.forEach((tItem, idx) => {
+                  if (tItem.translated_text) {
+                    chunk[idx].translated_text = tItem.translated_text;
+                  }
+                });
+                const chunkSec = ((performance.now() - tStartChunk) / 1000).toFixed(1);
+                logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ Hoàn tất dịch đợt ${chunkIdx}/${totalChunks} (${chunkSec}s)<br>`;
+                chunkSuccess = true;
+                break;
+              } catch (chunkErr) {
+                if (attempt === 1) {
+                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🔄 Đợt ${chunkIdx} gặp trục trặc mạng (${chunkErr.message}), đang thử lại...<br>`;
+                  logBox.scrollTop = logBox.scrollHeight;
+                  await new Promise((r) => setTimeout(r, 1500));
+                } else {
+                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ Đợt ${chunkIdx} không thể kết nối AI (${chunkErr.message}) - giữ nguyên câu gốc tiếng Nhật.<br>`;
+                }
+              }
+            }
+
+            // Tiến độ tăng dần từ 60% -> 100%
+            const transPct = 60 + Math.round((chunkIdx / totalChunks) * 40);
+            progressBar.style.width = `${transPct}%`;
+            progressPct.textContent = `${transPct}%`;
+            logBox.scrollTop = logBox.scrollHeight;
+          }
+        }
+      }
 
       // Hoàn tất 100%
       const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
