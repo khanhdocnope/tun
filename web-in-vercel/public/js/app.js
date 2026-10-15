@@ -363,6 +363,19 @@ function initTranslator() {
     sourceLangGroup.style.display = ocrEngineSelect.value === "multilingual" ? "block" : "none";
   });
 
+  const transLlmSelect = document.getElementById("trans-llm-model");
+  if (transLlmSelect) {
+    transLlmSelect.value = state.llmModel;
+    transLlmSelect.addEventListener("change", () => {
+      state.llmModel = transLlmSelect.value;
+      localStorage.setItem("manga_llm_model", state.llmModel);
+      const sModel = document.getElementById("setting-llm-model");
+      if (sModel) sModel.value = state.llmModel;
+      const bModel = document.getElementById("batch-llm-model");
+      if (bModel) bModel.value = state.llmModel;
+    });
+  }
+
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -475,15 +488,12 @@ function initTranslator() {
       renderTranslationTable(state.transResultData);
       updateScriptDownloadLink();
 
-      const activeKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
-      if (!activeKey) {
-        showToast(`✅ Đã nhận diện ${data.total_boxes} câu thoại! (Bấm ⚙️ Cài Đặt để nhập API Key dịch sang Tiếng Việt)`, "info");
-        return;
-      }
+      const chosenModel = document.getElementById("trans-llm-model")?.value || state.llmModel;
+      state.llmModel = chosenModel;
 
-      // Bước 2: Dịch ngữ cảnh trực tiếp ở phía Frontend bằng Client-Side LLM
-      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh trực tiếp từ Frontend...</span>`;
-      badge.textContent = "🤖 AI đang dịch ngữ cảnh...";
+      // Bước 2: Dịch ngữ cảnh bằng AI LLM (dùng API Key người dùng hoặc Cloud fallback)
+      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
+      badge.textContent = `🤖 Đang dịch (${chosenModel})...`;
 
       await translateSpeechBubblesFrontend(state.transResultData, targetLang);
 
@@ -858,6 +868,19 @@ function initBatch() {
     }
   });
 
+  const batchLlmSelect = document.getElementById("batch-llm-model");
+  if (batchLlmSelect) {
+    batchLlmSelect.value = state.llmModel;
+    batchLlmSelect.addEventListener("change", () => {
+      state.llmModel = batchLlmSelect.value;
+      localStorage.setItem("manga_llm_model", state.llmModel);
+      const sModel = document.getElementById("setting-llm-model");
+      if (sModel) sModel.value = state.llmModel;
+      const tModel = document.getElementById("trans-llm-model");
+      if (tModel) tModel.value = state.llmModel;
+    });
+  }
+
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -929,6 +952,9 @@ function initBatch() {
             apiKey: state.apiKey,
             inpaintModel: document.getElementById("batch-clean-model").value,
             cleanSFX: document.getElementById("batch-clean-sfx-toggle").checked,
+            targetLang: "vi",
+            llmModel: document.getElementById("batch-llm-model")?.value || state.llmModel,
+            llmBaseUrl: state.llmBaseUrl,
           }),
         });
 
@@ -1132,6 +1158,11 @@ function initSettings() {
     localStorage.setItem("manga_llm_base_url", state.llmBaseUrl);
     localStorage.setItem("manga_llm_model", state.llmModel);
     localStorage.setItem("manga_api_key", state.apiKey);
+
+    const tModel = document.getElementById("trans-llm-model");
+    if (tModel) tModel.value = state.llmModel;
+    const bModel = document.getElementById("batch-llm-model");
+    if (bModel) bModel.value = state.llmModel;
 
     showToast("Đã lưu cấu hình thành công!", "success");
     modal.classList.remove("open");

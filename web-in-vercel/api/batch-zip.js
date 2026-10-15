@@ -2,7 +2,9 @@
 const AdmZip = require("adm-zip");
 
 const BACKEND_URL = (process.env.BACKEND_URL || "https://dobietdc-backe-manga-remove.hf.space").replace(/\/$/, "");
-const DEFAULT_DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || "";
+const DEFAULT_DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.API_KEY || "";
+const DEFAULT_LLM_URL = process.env.OPENAI_BASE_URL || "https://discovery-api.intern-ai.org.cn/v1";
+const DEFAULT_MODEL = process.env.MODEL || "deepseek-v4-flash-0731";
 
 // Cấu hình số luồng chạy song song trên Cloud
 const OCR_CONCURRENCY = 4;    // 4 trang OCR cùng lúc (do OCR chạy CPU siêu nhẹ)
@@ -10,6 +12,120 @@ const CLEAN_CONCURRENCY = 2;  // 2 trang Clean cùng lúc (để tránh nghẽn 
 
 function naturalSort(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+// Hàm dịch danh sách box của 1 trang truyện bằng LLM
+async function translatePageBoxes(boxes, targetLang = "vi", apiKey = "", model = DEFAULT_MODEL, baseUrl = DEFAULT_LLM_URL) {
+  if (!boxes || boxes.length === 0) return boxes;
+
+  const activeKey = (apiKey || DEFAULT_DEEPSEEK_KEY).trim();
+  if (!activeKey) return boxes;
+
+  const targetName = targetLang === "vi" ? "Vietnamese" : targetLang;
+  const systemPrompt = `You are a professional comic/manga/manhwa localization expert with 20+ years of experience translating to ${targetName}.
+
+## TRANSLATION GUIDELINES & RULES
+### 1. Contextual Cohesion & Natural Flow
+- Multi-bubble Sentences: When a single sentence is split across consecutive bubbles, comprehend the complete thought first, then distribute the translation naturally without losing grammatical coherence.
+- OCR Error Auto-Correction: Comics frequently suffer from OCR noise. Automatically infer and repair OCR typos using context.
+
+### 2. Tone, Honorifics & Addressing
+- Adapt pronouns and forms of address (xưng hô: anh, em, cậu, tớ, tôi, mày, tao...) to accurately reflect character relationships, ages, and intimacy in ${targetName}.
+- Keep dialogue natural, punchy, modern, and true to the comic genre.
+
+### 3. Sound Effects (SFX)
+- Standalone SFX/onomatopoeia: Provide a concise, punchy equivalent in ${targetName}. Do NOT translate as descriptive sentences.
+
+### 4. Typography & Conventions
+- De-capitalize ALL-CAPS: Convert comic uppercase font styling to natural sentence case.
+- Wave Dash ("〜" / "～"): Keep or naturally elongate trailing sound.
+
+### 5. Strict 1-to-1 Line Contract
+- Output MUST contain an exact translation corresponding to each item ID.
+- For blank or unreadable noise, leave an empty string. NEVER output placeholder text like (blank), (empty), (no text), N/A, or (để trống).
+
+## OUTPUT FORMAT
+Return ONLY a valid JSON array of objects with "id" (number) and "translated" (string).
+Example:
+[
+  {"id": 1, "translated": "..."},
+  {"id": 2, "translated": "..."}
+]`;
+
+  const cleanBase = (baseUrl || DEFAULT_LLM_URL).trim().replace(/\/+$/, "").replace(/\/chat\/completions\/?$/, "");
+  const endpoint = `${cleanBase}/chat/completions`;
+
+  const userPayload = boxes.map((it) => ({ id: it.id, text: it.original_text }));
+  const userMessage =
+    `Hãy dịch danh sách ${boxes.length} câu thoại truyện tranh sau sang ${targetName}:\n` +
+    JSON.stringify(userPayload, null, 2);
+
+  try {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${activeKey}`,
+      },
+      body: JSON.stringify({
+        model: model || DEFAULT_MODEL,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!resp.ok) {
+      console.warn("Batch translate page error:", resp.status, await resp.text());
+      return boxes;
+    }
+
+    const data = await resp.json();
+    let rawContent = data?.choices?.[0]?.message?.content || "";
+    rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+    let parsedArray = null;
+    const jsonMatch = rawContent.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (jsonMatch) {
+      try {
+        parsedArray = JSON.parse(jsonMatch[0]);
+      } catch (e) {}
+    }
+    if (!parsedArray) {
+      try {
+        const clean = rawContent.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+        parsedArray = JSON.parse(clean);
+      } catch (e) {}
+    }
+
+    if (Array.isArray(parsedArray)) {
+      const map = new Map();
+      parsedArray.forEach((p) => {
+        if (p && p.id !== undefined) {
+          map.set(Number(p.id), String(p.translated || p.translation || p.text || "").trim());
+        }
+      });
+      boxes.forEach((b) => {
+        if (map.has(b.id)) {
+          b.translated_text = map.get(b.id);
+        }
+      });
+    } else {
+      const lines = rawContent.split("\n").map((l) => l.trim()).filter(Boolean);
+      boxes.forEach((b, idx) => {
+        if (lines[idx]) {
+          b.translated_text = lines[idx].replace(/^\[#?\d+\]\s*/, "").replace(/^Line\s*\d+:\s*/i, "");
+        }
+      });
+    }
+  } catch (err) {
+    console.error("translatePageBoxes error:", err.message);
+  }
+
+  return boxes;
 }
 
 // Hàm điều phối worker pool chạy song song tối đa `limit` tác vụ cùng lúc
@@ -61,6 +177,8 @@ module.exports = async (req, res) => {
       detThreshold = 0.20,
       cleanSFX = false,
       inpaintModel = "anime-lama",
+      llmModel = DEFAULT_MODEL,
+      llmBaseUrl = DEFAULT_LLM_URL,
     } = req.body || {};
 
     if (!zipBase64) {
@@ -167,8 +285,14 @@ module.exports = async (req, res) => {
 
             if (ocrResp.ok) {
               const ocrData = await ocrResp.json();
-              const boxes = ocrData.data || [];
+              let boxes = ocrData.data || [];
               const boxCount = ocrData.total_boxes || boxes.length;
+
+              // Tự động dịch sang Tiếng Việt bằng LLM cho từng trang
+              if (boxes.length > 0) {
+                boxes = await translatePageBoxes(boxes, targetLang, activeKey, llmModel, llmBaseUrl);
+              }
+
               return {
                 pageIndex,
                 page_index: pageIndex,

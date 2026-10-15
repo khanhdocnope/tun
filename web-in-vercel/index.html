@@ -1018,6 +1018,18 @@ input:checked + .slider-toggle:before {
           </div>
 
           <div class="form-group">
+            <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch Ngữ Cảnh</label>
+            <select id="trans-llm-model" class="form-select">
+              <option value="deepseek-v4-flash-0731" selected>⚡ DeepSeek-V4-Flash (Nhanh & Tối ưu nhất)</option>
+              <option value="deepseek-v4-pro-0813">🧠 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+              <option value="minimax-m3">✨ MiniMax-M3 (Văn phong mượt mà)</option>
+              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ)</option>
+              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
             <label class="form-label" for="trans-target-lang">Ngôn ngữ dịch đích</label>
             <input type="text" id="trans-target-lang" class="form-input" value="Tiếng Việt">
           </div>
@@ -1147,6 +1159,17 @@ input:checked + .slider-toggle:before {
                 <option value="multilingual">PaddleOCR (Đa ngôn ngữ)</option>
               </select>
             </div>
+            <div class="form-group">
+              <label class="form-label" for="batch-llm-model">🤖 Mô hình AI Dịch Ngữ Cảnh</label>
+              <select id="batch-llm-model" class="form-select">
+                <option value="deepseek-v4-flash-0731" selected>⚡ DeepSeek-V4-Flash (Nhanh & Tối ưu nhất)</option>
+                <option value="deepseek-v4-pro-0813">🧠 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+                <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+                <option value="minimax-m3">✨ MiniMax-M3 (Văn phong mượt mà)</option>
+                <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ)</option>
+                <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+              </select>
+            </div>
           </div>
 
           <button id="btn-run-batch" class="btn-primary" disabled>
@@ -1251,10 +1274,14 @@ input:checked + .slider-toggle:before {
 
         <div class="form-group" style="margin-bottom:0.75rem;">
           <label class="form-label" for="setting-llm-model">Tên Mô Hình AI (Model)</label>
-          <input type="text" id="setting-llm-model" class="form-input" placeholder="deepseek-v4-flash-0731">
-          <small style="color:var(--text-dim); font-size:0.75rem; margin-top:0.3rem; display:block;">
-            Ví dụ: <code>deepseek-v4-flash-0731</code>, <code>deepseek-chat</code>, <code>gpt-4o-mini</code>
-          </small>
+          <select id="setting-llm-model" class="form-select">
+            <option value="deepseek-v4-flash-0731" selected>⚡ DeepSeek-V4-Flash (Nhanh & Tối ưu nhất)</option>
+            <option value="deepseek-v4-pro-0813">🧠 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+            <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+            <option value="minimax-m3">✨ MiniMax-M3 (Văn phong mượt mà)</option>
+            <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ)</option>
+            <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+          </select>
         </div>
 
         <div class="form-group" style="margin-bottom:0.75rem;">
@@ -1647,6 +1674,19 @@ function initTranslator() {
     sourceLangGroup.style.display = ocrEngineSelect.value === "multilingual" ? "block" : "none";
   });
 
+  const transLlmSelect = document.getElementById("trans-llm-model");
+  if (transLlmSelect) {
+    transLlmSelect.value = state.llmModel;
+    transLlmSelect.addEventListener("change", () => {
+      state.llmModel = transLlmSelect.value;
+      localStorage.setItem("manga_llm_model", state.llmModel);
+      const sModel = document.getElementById("setting-llm-model");
+      if (sModel) sModel.value = state.llmModel;
+      const bModel = document.getElementById("batch-llm-model");
+      if (bModel) bModel.value = state.llmModel;
+    });
+  }
+
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -1759,15 +1799,12 @@ function initTranslator() {
       renderTranslationTable(state.transResultData);
       updateScriptDownloadLink();
 
-      const activeKey = (state.apiKey || localStorage.getItem("manga_api_key") || "").trim();
-      if (!activeKey) {
-        showToast(`✅ Đã nhận diện ${data.total_boxes} câu thoại! (Bấm ⚙️ Cài Đặt để nhập API Key dịch sang Tiếng Việt)`, "info");
-        return;
-      }
+      const chosenModel = document.getElementById("trans-llm-model")?.value || state.llmModel;
+      state.llmModel = chosenModel;
 
-      // Bước 2: Dịch ngữ cảnh trực tiếp ở phía Frontend bằng Client-Side LLM
-      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh trực tiếp từ Frontend...</span>`;
-      badge.textContent = "🤖 AI đang dịch ngữ cảnh...";
+      // Bước 2: Dịch ngữ cảnh bằng AI LLM (dùng API Key người dùng hoặc Cloud fallback)
+      runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
+      badge.textContent = `🤖 Đang dịch (${chosenModel})...`;
 
       await translateSpeechBubblesFrontend(state.transResultData, targetLang);
 
@@ -2142,6 +2179,19 @@ function initBatch() {
     }
   });
 
+  const batchLlmSelect = document.getElementById("batch-llm-model");
+  if (batchLlmSelect) {
+    batchLlmSelect.value = state.llmModel;
+    batchLlmSelect.addEventListener("change", () => {
+      state.llmModel = batchLlmSelect.value;
+      localStorage.setItem("manga_llm_model", state.llmModel);
+      const sModel = document.getElementById("setting-llm-model");
+      if (sModel) sModel.value = state.llmModel;
+      const tModel = document.getElementById("trans-llm-model");
+      if (tModel) tModel.value = state.llmModel;
+    });
+  }
+
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -2213,6 +2263,9 @@ function initBatch() {
             apiKey: state.apiKey,
             inpaintModel: document.getElementById("batch-clean-model").value,
             cleanSFX: document.getElementById("batch-clean-sfx-toggle").checked,
+            targetLang: "vi",
+            llmModel: document.getElementById("batch-llm-model")?.value || state.llmModel,
+            llmBaseUrl: state.llmBaseUrl,
           }),
         });
 
@@ -2416,6 +2469,11 @@ function initSettings() {
     localStorage.setItem("manga_llm_base_url", state.llmBaseUrl);
     localStorage.setItem("manga_llm_model", state.llmModel);
     localStorage.setItem("manga_api_key", state.apiKey);
+
+    const tModel = document.getElementById("trans-llm-model");
+    if (tModel) tModel.value = state.llmModel;
+    const bModel = document.getElementById("batch-llm-model");
+    if (bModel) bModel.value = state.llmModel;
 
     showToast("Đã lưu cấu hình thành công!", "success");
     modal.classList.remove("open");
