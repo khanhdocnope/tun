@@ -10,7 +10,11 @@ const state = {
   backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
   apiKey: localStorage.getItem("manga_api_key") || "",
   llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://generativelanguage.googleapis.com/v1beta/openai",
-  llmModel: localStorage.getItem("manga_llm_model") || "gemini-3-flash-preview",
+  llmModel: (() => {
+    const m = localStorage.getItem("manga_llm_model");
+    if (!m || m === "gemini-3-flash-preview" || m === "gemini-1.5-flash") return "gemini-2.5-flash";
+    return m;
+  })(),
   
   // Cleaner Tab State
   cleanerFile: null,
@@ -488,7 +492,7 @@ function initTranslator() {
       readingOrder: document.getElementById("trans-reading-order")?.value || "manga",
       skipSfx: document.getElementById("trans-chat-only-toggle")?.checked ?? true,
       targetLang: document.getElementById("trans-target-lang")?.value.trim() || "Tiếng Việt",
-      model: state.llmModel || "gemini-3-flash-preview",
+      model: state.llmModel || "gemini-2.5-flash",
       apiKey: state.apiKey,
       ...extraPayload,
     };
@@ -518,7 +522,7 @@ function initTranslator() {
 
   async function callGeminiVisionDirect(payload) {
     const apiKey = state.apiKey;
-    const model = state.llmModel || "gemini-3-flash-preview";
+    const model = state.llmModel || "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const cleanBase64 = (payload.imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
 
@@ -903,7 +907,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   let responseData = null;
   let lastError = "";
 
-  const activeModel = (state.llmModel || "gemini-3-flash-preview").trim();
+  const activeModel = (state.llmModel || "gemini-2.5-flash").trim();
   const isGemini = activeModel.toLowerCase().includes("gemini");
 
   // 1. Thử gọi trực tiếp từ trình duyệt đến OpenAI-Compatible Endpoint (Client-side)
@@ -1668,7 +1672,7 @@ function initSettings() {
   saveBtn.addEventListener("click", () => {
     state.backendUrl = urlInput.value.trim() || "https://dobietdc-backe-manga-remove.hf.space";
     state.llmBaseUrl = (llmUrlInput?.value.trim()) || "https://generativelanguage.googleapis.com/v1beta/openai";
-    state.llmModel = (modelInput?.value.trim()) || "gemini-3-flash-preview";
+    state.llmModel = (modelInput?.value.trim()) || "gemini-2.5-flash";
     state.apiKey = keyInput.value.trim();
 
     localStorage.setItem("manga_backend_url", state.backendUrl);

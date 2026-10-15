@@ -2,7 +2,7 @@
 // Gemini 3 Flash Vision pipeline for Manga/Manhwa: OCR, Contextual Translation, and Refinement
 // Inspired by VisionBox architecture & best practices
 
-const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_API_KEY = process.env.API_KEY_GEMINI || process.env.GEMINI_API_KEY || "";
 
 const BLANK_MARKER_RE = /^[\s(\[{]*(?:bỏ\s*trống|để\s*trống|blank|empty|no\s*text|untranslated|n\/a)[\s)\]}]*$/i;
@@ -308,7 +308,10 @@ module.exports = async (req, res) => {
       },
     };
 
-    const targetModel = (model || DEFAULT_MODEL).trim();
+    let targetModel = (model || DEFAULT_MODEL).trim();
+    if (["gemini-1.5-flash", "gemini-3-flash-preview", "gemini-3-flash"].includes(targetModel)) {
+      targetModel = "gemini-2.5-flash";
+    }
     const googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeKey}`;
 
     // Retry handling for HTTP 429

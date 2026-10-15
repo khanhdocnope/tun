@@ -680,7 +680,7 @@ async def api_translate_page(
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý translate-page: {type(exc).__name__}: {exc}")
 class TranslateDirectRequest(BaseModel):
     messages: List[Dict[str, Any]]
-    model: Optional[str] = "gemini-3-flash-preview"
+    model: Optional[str] = "gemini-2.5-flash"
     base_url: Optional[str] = "https://generativelanguage.googleapis.com/v1beta/openai"
     api_key: Optional[str] = None
     temperature: Optional[float] = 0.3
@@ -705,7 +705,9 @@ async def api_translate_direct(req: TranslateDirectRequest):
     if not active_key:
         raise HTTPException(status_code=400, detail="Chưa cấu hình API Key.")
 
-    active_model = req.model or "gemini-3-flash-preview"
+    active_model = req.model or "gemini-2.5-flash"
+    if active_model in ["gemini-1.5-flash", "gemini-3-flash-preview", "gemini-3-flash"]:
+        active_model = "gemini-2.5-flash"
     is_gemini = "gemini" in active_model.lower()
 
     default_base = "https://generativelanguage.googleapis.com/v1beta/openai" if is_gemini else "https://discovery-api.intern-ai.org.cn/v1"

@@ -2,7 +2,7 @@
 // Proxy or server-side fallback for LLM completions (DeepSeek, Intern-AI, OpenAI)
 
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
-const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_MODEL = "gemini-2.5-flash";
 const DEFAULT_API_KEY = process.env.API_KEY_GEMINI || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || "";
 
 module.exports = async (req, res) => {
@@ -37,7 +37,10 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: "Chưa cấu hình API Key. Vui lòng nhập API Key vào Cài đặt (⚙️)." });
     }
 
-    const activeModel = (model || DEFAULT_MODEL).trim();
+    let activeModel = (model || DEFAULT_MODEL).trim();
+    if (["gemini-1.5-flash", "gemini-3-flash-preview", "gemini-3-flash"].includes(activeModel)) {
+      activeModel = "gemini-2.5-flash";
+    }
     const isGemini = activeModel.toLowerCase().includes("gemini");
     const chosenBase = (baseUrl || (isGemini ? "https://generativelanguage.googleapis.com/v1beta/openai" : "https://discovery-api.intern-ai.org.cn/v1")).trim().replace(/\/+$/, "");
     const endpoint = `${chosenBase}/chat/completions`;

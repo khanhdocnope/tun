@@ -1134,7 +1134,7 @@ details.modern-details[open] summary::after {
           <div class="form-group" style="margin-bottom: 1.25rem;">
             <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
               <span>⚙️ Chế độ dịch AI</span>
-              <span class="badge-tag badge-purple">⚡ Gemini 3 Flash Vision</span>
+              <span class="badge-tag badge-purple">⚡ Gemini 2.5 Flash Vision</span>
             </label>
             <div class="mode-segmented-tabs">
               <button type="button" id="trans-btn-mode-quick" class="mode-segmented-btn active">
@@ -1218,14 +1218,15 @@ details.modern-details[open] summary::after {
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch</label>
                 <select id="trans-llm-model" class="form-select">
-                  <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
-                  <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-                  <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-                  <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-                  <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-                  <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-                  <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
-                </select>
+              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
+              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
+              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
+              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
+              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+            </select>
               </div>
 
               <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; justify-content:center; padding:0.75rem 1rem;">
@@ -1375,7 +1376,8 @@ details.modern-details[open] summary::after {
             <div class="form-group">
               <label class="form-label" for="batch-llm-model">🤖 Mô hình AI Dịch Ngữ Cảnh</label>
               <select id="batch-llm-model" class="form-select">
-              <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
+              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
               <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
               <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
               <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
@@ -1497,7 +1499,8 @@ Ví dụ:
           <div class="form-group">
             <label class="form-label" for="retrans-model-select">🤖 Mô hình AI Dịch Ngữ Cảnh (Tốc độ 1.5s/đợt)</label>
             <select id="retrans-model-select" class="form-select">
-              <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
+              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
               <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc độ, mượt mà)</option>
               <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
               <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ)</option>
@@ -1590,7 +1593,8 @@ Ví dụ:
         <div class="form-group" style="margin-bottom:0.75rem;">
           <label class="form-label" for="setting-llm-model">Tên Mô Hình AI (Model)</label>
           <select id="setting-llm-model" class="form-select">
-              <option value="gemini-3-flash-preview" selected>⚡ Google Gemini 3 Flash Preview (Mặc định - Siêu tốc 0.7s, 65K Tokens)</option>
+              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
               <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
               <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
               <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
@@ -1637,7 +1641,11 @@ const state = {
   backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
   apiKey: localStorage.getItem("manga_api_key") || "",
   llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://generativelanguage.googleapis.com/v1beta/openai",
-  llmModel: localStorage.getItem("manga_llm_model") || "gemini-3-flash-preview",
+  llmModel: (() => {
+    const m = localStorage.getItem("manga_llm_model");
+    if (!m || m === "gemini-3-flash-preview" || m === "gemini-1.5-flash") return "gemini-2.5-flash";
+    return m;
+  })(),
   
   // Cleaner Tab State
   cleanerFile: null,
@@ -2115,7 +2123,7 @@ function initTranslator() {
       readingOrder: document.getElementById("trans-reading-order")?.value || "manga",
       skipSfx: document.getElementById("trans-chat-only-toggle")?.checked ?? true,
       targetLang: document.getElementById("trans-target-lang")?.value.trim() || "Tiếng Việt",
-      model: state.llmModel || "gemini-3-flash-preview",
+      model: state.llmModel || "gemini-2.5-flash",
       apiKey: state.apiKey,
       ...extraPayload,
     };
@@ -2145,7 +2153,7 @@ function initTranslator() {
 
   async function callGeminiVisionDirect(payload) {
     const apiKey = state.apiKey;
-    const model = state.llmModel || "gemini-3-flash-preview";
+    const model = state.llmModel || "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const cleanBase64 = (payload.imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
 
@@ -2530,7 +2538,7 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   let responseData = null;
   let lastError = "";
 
-  const activeModel = (state.llmModel || "gemini-3-flash-preview").trim();
+  const activeModel = (state.llmModel || "gemini-2.5-flash").trim();
   const isGemini = activeModel.toLowerCase().includes("gemini");
 
   // 1. Thử gọi trực tiếp từ trình duyệt đến OpenAI-Compatible Endpoint (Client-side)
@@ -3295,7 +3303,7 @@ function initSettings() {
   saveBtn.addEventListener("click", () => {
     state.backendUrl = urlInput.value.trim() || "https://dobietdc-backe-manga-remove.hf.space";
     state.llmBaseUrl = (llmUrlInput?.value.trim()) || "https://generativelanguage.googleapis.com/v1beta/openai";
-    state.llmModel = (modelInput?.value.trim()) || "gemini-3-flash-preview";
+    state.llmModel = (modelInput?.value.trim()) || "gemini-2.5-flash";
     state.apiKey = keyInput.value.trim();
 
     localStorage.setItem("manga_backend_url", state.backendUrl);

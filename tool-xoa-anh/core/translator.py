@@ -29,7 +29,7 @@ DEFAULT_API_KEY = (
     or os.getenv("OPENAI_API_KEY")
     or ""
 )
-DEFAULT_MODEL = os.getenv("MODEL") or os.getenv("GEMINI_MODEL") or "gemini-3-flash-preview"
+DEFAULT_MODEL = os.getenv("MODEL") or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
 DEFAULT_BASE_URL = (
     os.getenv("GEMINI_BASE_URL")
     or ("https://generativelanguage.googleapis.com/v1beta/openai" if "gemini" in DEFAULT_MODEL.lower() else "https://discovery-api.intern-ai.org.cn/v1")
