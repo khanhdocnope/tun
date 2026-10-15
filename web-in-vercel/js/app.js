@@ -901,13 +901,13 @@ function initBatch() {
     runBtn.disabled = false;
   }
 
-  // Run Batch
+  // Run Batch (Client-Side Real-Time Engine với JSZip & Báo % thực tế)
   runBtn.addEventListener("click", async () => {
     if (!state.batchFile) return;
 
     const mode = modeSelect.value;
     runBtn.disabled = true;
-    runBtn.innerHTML = `<span>⏳ Đang xử lý toàn bộ tệp ZIP...</span>`;
+    runBtn.innerHTML = `<span>⏳ Đang xử lý tệp ZIP...</span>`;
 
     const progressCard = document.getElementById("batch-progress-card");
     const progressBar = document.getElementById("batch-progress-bar");
@@ -916,159 +916,241 @@ function initBatch() {
     const logBox = document.getElementById("batch-log-box");
 
     progressCard.style.display = "block";
-    progressBar.style.width = "25%";
-    progressPct.textContent = "25%";
-    progressStatus.textContent = "Đang tải tệp lên server và giải nén...";
-    logBox.innerHTML = `[${new Date().toLocaleTimeString()}] Bắt đầu tải lên: ${state.batchFile.name}...<br>`;
-
-    const formData = new FormData();
-    formData.append("file", state.batchFile);
+    progressBar.style.width = "3%";
+    progressPct.textContent = "3%";
+    progressStatus.textContent = "Đang đọc và giải nén tệp ZIP trên trình duyệt...";
+    logBox.innerHTML = `[${new Date().toLocaleTimeString()}] Bắt đầu đọc tệp: <strong>${state.batchFile.name}</strong> (${(state.batchFile.size / 1024 / 1024).toFixed(2)} MB)...<br>`;
 
     try {
-      let isCloudHandled = false;
-
-      // 1. Ưu tiên xử lý trên Vercel Cloud Node.js (tiết kiệm 100% RAM client)
-      try {
-        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang tải lên Cloud Serverless Node.js...<br>`;
-        progressBar.style.width = "40%";
-        progressPct.textContent = "40%";
-        const zipBase64 = await fileToBase64(state.batchFile);
-
-        const cloudRes = await fetch("/api/batch-zip", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            zipBase64,
-            action: mode,
-            readingOrder: document.getElementById("batch-trans-order").value,
-            ocrEngine: document.getElementById("batch-trans-engine").value,
-            chatOnly: document.getElementById("batch-trans-chat-only").checked,
-            apiKey: state.apiKey,
-            inpaintModel: document.getElementById("batch-clean-model").value,
-            cleanSFX: document.getElementById("batch-clean-sfx-toggle").checked,
-            targetLang: "vi",
-            llmModel: document.getElementById("batch-llm-model")?.value || state.llmModel,
-            llmBaseUrl: state.llmBaseUrl,
-          }),
+      // 1. Đảm bảo thư viện JSZip sẵn sàng
+      if (typeof JSZip === "undefined") {
+        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang tải thư viện JSZip...<br>`;
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
         });
+      }
 
-        if (cloudRes.ok) {
-          const cloudData = await cloudRes.json();
-          isCloudHandled = true;
-          progressBar.style.width = "100%";
-          progressPct.textContent = "100%";
-          progressStatus.textContent = `✅ Đã xử lý xong ${cloudData.totalPages} trang trên Cloud!`;
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Hoàn thành xử lý ${cloudData.totalPages} trang trong ${cloudData.elapsedSeconds}s!<br>`;
+      const inZip = new JSZip();
+      const zipData = await inZip.loadAsync(state.batchFile);
+      
+      const validExts = [".png", ".jpg", ".jpeg", ".webp", ".bmp"];
+      const imageEntries = [];
+      zipData.forEach((relPath, file) => {
+        if (!file.dir && !relPath.startsWith("__MACOSX/") && !file.name.startsWith(".")) {
+          const lower = file.name.toLowerCase();
+          if (validExts.some((ext) => lower.endsWith(ext))) {
+            imageEntries.push(file);
+          }
+        }
+      });
 
-          let downloadBlob, downloadFilename;
-          if (mode === "clean" && cloudData.cleanedZipBase64) {
-            const byteChars = atob(cloudData.cleanedZipBase64);
-            const byteNums = new Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) {
-              byteNums[i] = byteChars.charCodeAt(i);
-            }
-            downloadBlob = new Blob([new Uint8Array(byteNums)], { type: "application/zip" });
-            downloadFilename = `cleaned_${state.batchFile.name}`;
+      // Sắp xếp thứ tự tự nhiên (01, 02, ... 10, ...)
+      imageEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+
+      if (imageEntries.length === 0) {
+        throw new Error("Không tìm thấy tệp ảnh hợp lệ (.jpg, .png, .webp) bên trong file ZIP.");
+      }
+
+      const totalPages = imageEntries.length;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📦 Đã giải nén: Tìm thấy <strong>${totalPages} trang ảnh</strong>. Bắt đầu xử lý song song...<br>`;
+      progressBar.style.width = "5%";
+      progressPct.textContent = "5%";
+      progressStatus.textContent = `0/${totalPages} trang (0%)...`;
+
+      const readingOrder = document.getElementById("batch-trans-order").value;
+      const ocrEngine = document.getElementById("batch-trans-engine").value;
+      const chatOnly = document.getElementById("batch-trans-chat-only").checked;
+      const inpaintModel = document.getElementById("batch-clean-model").value;
+      const cleanSFX = document.getElementById("batch-clean-sfx-toggle").checked;
+
+      let completedCount = 0;
+      const results = new Array(totalPages);
+      const startTime = performance.now();
+      const outZip = mode === "clean" ? new JSZip() : null;
+
+      // Hàm xử lý từng trang độc lập với cập nhật tiến trình % thực tế
+      async function processPage(fileEntry, index) {
+        const pageIdx = index + 1;
+        const filename = fileEntry.name;
+        const tStartPage = performance.now();
+
+        try {
+          const blob = await fileEntry.async("blob");
+
+          if (mode === "clean") {
+            // Chế độ XÓA CHỮ (Inpainting)
+            const base64Img = await fileToBase64(blob);
+            const cleanResp = await fetch(`${getCleanBackendUrl()}/clean_page`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                imageBase64: base64Img,
+                cleanSFX: Boolean(cleanSFX),
+                dilationPx: 4,
+                detThreshold: 0.20,
+                inpaintModel,
+              }),
+            });
+
+            if (!cleanResp.ok) throw new Error(`HTTP ${cleanResp.status}`);
+            const cleanData = await cleanResp.json();
+            
+            const b64 = cleanData.cleanedImageBase64.includes(";base64,")
+              ? cleanData.cleanedImageBase64.split(";base64,").pop()
+              : cleanData.cleanedImageBase64;
+            outZip.file(filename, b64, { base64: true });
+
+            const pageSec = ((performance.now() - tStartPage) / 1000).toFixed(1);
+            results[index] = {
+              pageIndex: pageIdx,
+              filename,
+              success: true,
+              cleanedImageBase64: cleanData.cleanedImageBase64,
+              stats: cleanData.stats,
+              totalBoxes: cleanData.stats?.chat_count ?? 0,
+            };
+
+            completedCount++;
+            const pct = Math.round((completedCount / totalPages) * 100);
+            progressBar.style.width = `${pct}%`;
+            progressPct.textContent = `${pct}%`;
+            progressStatus.textContent = `Đang xóa chữ: ${completedCount}/${totalPages} trang (${pct}%)...`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ [${completedCount}/${totalPages}] <strong>${filename}</strong>: Xóa sạch chữ (${pageSec}s)<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+
           } else {
-            downloadBlob = new Blob([cloudData.scriptText || "Hoàn thành"], { type: "text/plain;charset=utf-8" });
-            downloadFilename = `kich_ban_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`;
+            // Chế độ DỊCH THUẬT & BÓC TÁCH BÓNG THOẠI
+            // Bước 1: OCR trang qua backend (chỉ mất ~0.5s)
+            const formData = new FormData();
+            formData.append("file", blob, filename);
+            formData.append("reading_order", readingOrder);
+            formData.append("ocr_engine", ocrEngine);
+            formData.append("chat_only", chatOnly ? "true" : "false");
+            formData.append("target_lang", "vi");
+            formData.append("ocr_only", "true");
+
+            const ocrRes = await fetch(`${getCleanBackendUrl()}/api/v1/translate-page`, {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!ocrRes.ok) {
+              const errTxt = await ocrRes.text().catch(() => "");
+              throw new Error(`OCR HTTP ${ocrRes.status} ${errTxt.slice(0, 80)}`);
+            }
+            const ocrData = await ocrRes.json();
+            const boxes = ocrData.data || [];
+
+            // Bước 2: Dịch các câu thoại bằng LLM tốc độ cao
+            if (boxes.length > 0) {
+              await translateSpeechBubblesFrontend(boxes, "vi");
+            }
+
+            const pageSec = ((performance.now() - tStartPage) / 1000).toFixed(1);
+            results[index] = {
+              pageIndex: pageIdx,
+              filename,
+              success: true,
+              data: boxes,
+              totalBoxes: boxes.length,
+            };
+
+            completedCount++;
+            const pct = Math.round((completedCount / totalPages) * 100);
+            progressBar.style.width = `${pct}%`;
+            progressPct.textContent = `${pct}%`;
+            progressStatus.textContent = `Đang dịch: ${completedCount}/${totalPages} trang (${pct}%)...`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ [${completedCount}/${totalPages}] <strong>${filename}</strong>: ${boxes.length} câu thoại (${pageSec}s)<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
           }
 
-          showBatchResult({
-            title: `Đã xử lý xong ${cloudData.totalPages} trang truyện trên Cloud`,
-            desc: `Thời gian thực thi: ${cloudData.elapsedSeconds}s | Chế độ: ${mode.toUpperCase()}`,
-            downloadBlob: downloadBlob,
-            filename: downloadFilename,
-            pages: cloudData.results || [],
-          });
-          showToast("Đã xử lý xong tệp ZIP trên Cloud!", "success");
-          return;
+        } catch (pageErr) {
+          console.error(`Lỗi xử lý trang ${filename}:`, pageErr);
+          completedCount++;
+          results[index] = {
+            pageIndex: pageIdx,
+            filename,
+            success: false,
+            error: pageErr.message,
+            data: [],
+          };
+          const pct = Math.round((completedCount / totalPages) * 100);
+          progressBar.style.width = `${pct}%`;
+          progressPct.textContent = `${pct}%`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ [${completedCount}/${totalPages}] <strong>${filename}</strong>: Lỗi (${pageErr.message})<br>`;
+          logBox.scrollTop = logBox.scrollHeight;
         }
-      } catch (cloudErr) {
-        logBox.innerHTML += `[Chú ý] Chuyển tiếp sang xử lý trực tiếp: ${cloudErr.message}<br>`;
       }
 
-      // 2. Fallback gọi trực tiếp backend nếu không có Cloud API
-      if (!isCloudHandled) {
-        if (mode === "clean") {
-          formData.append("inpaint_model", document.getElementById("batch-clean-model").value);
-          formData.append("clean_sfx", document.getElementById("batch-clean-sfx-toggle").checked ? "true" : "false");
-          formData.append("dilation_px", "4");
-
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang chạy Anime/Big-LaMa inpainting toàn bộ các trang...<br>`;
-          progressBar.style.width = "65%";
-          progressPct.textContent = "65%";
-
-          const res = await fetch(`${getCleanBackendUrl()}/api/clean_zip`, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!res.ok) throw new Error(`Lỗi server HTTP ${res.status}`);
-          const blob = await res.blob();
-
-          progressBar.style.width = "100%";
-          progressPct.textContent = "100%";
-          progressStatus.textContent = "✅ Hoàn tất xử lý tệp ZIP!";
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Hoàn thành tạo file ZIP ảnh đã xóa!<br>`;
-
-          showBatchResult({
-            title: "Đã làm sạch toàn bộ trang trong tệp ZIP",
-            desc: "Tất cả bóng thoại đã được khôi phục nét vẽ nguyên bản.",
-            downloadBlob: blob,
-            filename: `cleaned_${state.batchFile.name}`,
-          });
-        } else {
-          formData.append("reading_order", document.getElementById("batch-trans-order").value);
-          formData.append("ocr_engine", document.getElementById("batch-trans-engine").value);
-          formData.append("chat_only", document.getElementById("batch-trans-chat-only").checked ? "true" : "false");
-          formData.append("target_lang", "vi");
-          if (state.apiKey) formData.append("api_key", state.apiKey);
-
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đang bóc tách bóng thoại & OCR...<br>`;
-          progressBar.style.width = "75%";
-          progressPct.textContent = "75%";
-
-          const res = await fetch(`${getCleanBackendUrl()}/api/v1/translate-zip`, {
-            method: "POST",
-            body: formData,
-          });
-
-          if (!res.ok) throw new Error(`Lỗi server HTTP ${res.status}`);
-          const data = await res.json();
-
-          progressBar.style.width = "100%";
-          progressPct.textContent = "100%";
-          progressStatus.textContent = `✅ Đã dịch xong ${data.total_pages} trang!`;
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Đã dịch ${data.total_dialogue_boxes || 0} câu trong ${data.execution_time_seconds}s!<br>`;
-
-          const fullTxt = (data.pages || [])
-            .map(
-              (p) =>
-                `=== ${p.filename} (Trang ${p.page_index}) ===\n` +
-                (p.data || []).map((d) => `[#${d.id}] Gốc: ${d.original_text} -> Dịch: ${d.translated_text}`).join("\n")
-            )
-            .join("\n\n--------------------------------------------\n\n");
-
-          const blob = new Blob([fullTxt], { type: "text/plain;charset=utf-8" });
-
-          showBatchResult({
-            title: `Đã dịch xong ${data.total_pages} trang truyện (${data.total_dialogue_boxes} câu thoại)`,
-            desc: `Thời gian thực thi: ${data.execution_time_seconds}s | Lọc bong bóng chat: Bật`,
-            downloadBlob: blob,
-            filename: `translated_script_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`,
-            pages: data.pages || [],
-          });
+      // Worker pool xử lý song song 2 luồng
+      const concurrency = 2;
+      let nextIndex = 0;
+      async function worker() {
+        while (nextIndex < totalPages) {
+          const idx = nextIndex++;
+          await processPage(imageEntries[idx], idx);
         }
-        showToast("Đã xử lý xong tệp ZIP!", "success");
       }
+
+      const workers = [];
+      for (let w = 0; w < Math.min(concurrency, totalPages); w++) {
+        workers.push(worker());
+      }
+      await Promise.all(workers);
+
+      // Hoàn tất 100%
+      const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      progressBar.style.width = "100%";
+      progressPct.textContent = "100%";
+      progressStatus.textContent = `🎉 Hoàn tất toàn bộ ${totalPages} trang (${totalElapsed}s)!`;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🚀 Hoàn thành toàn bộ ${totalPages} trang trong ${totalElapsed}s!<br>`;
+      logBox.scrollTop = logBox.scrollHeight;
+
+      let downloadBlob, downloadFilename;
+      if (mode === "clean") {
+        downloadBlob = await outZip.generateAsync({ type: "blob" });
+        downloadFilename = `cleaned_${state.batchFile.name}`;
+      } else {
+        // Gom kịch bản thoại text theo đúng format chuẩn === filename ===
+        const scriptLines = [];
+        results.forEach((r) => {
+          if (!r) return;
+          scriptLines.push(`=== ${r.filename} ===`);
+          if (!r.success) {
+            scriptLines.push(`[Lỗi: ${r.error}]`);
+          } else {
+            (r.data || []).forEach((b) => {
+              const text = (b.translated_text || b.original_text || "").trim();
+              if (text) scriptLines.push(text);
+            });
+          }
+          scriptLines.push("");
+        });
+        downloadBlob = new Blob([scriptLines.join("\n")], { type: "text/plain;charset=utf-8" });
+        downloadFilename = `kich_ban_${state.batchFile.name.replace(/\.zip$/i, "")}.txt`;
+      }
+
+      showBatchResult({
+        title: `Đã xử lý xong ${totalPages} trang truyện`,
+        desc: `Thời gian thực thi: ${totalElapsed}s | Chế độ: ${mode.toUpperCase()} (${concurrency} luồng song song)`,
+        downloadBlob: downloadBlob,
+        filename: downloadFilename,
+        pages: results,
+      });
+
+      showToast(`Đã xử lý thành công toàn bộ ${totalPages} trang!`, "success");
+
     } catch (err) {
       showToast(`Lỗi xử lý hàng loạt: ${err.message}`, "error");
       progressStatus.textContent = "❌ Thất bại";
       logBox.innerHTML += `[LỖI] ${err.message}<br>`;
     } finally {
       runBtn.disabled = false;
-      runBtn.innerHTML = `<span>🚀 Bắt Đầu Xử Lý Hàng Loạt Tệp ZIP</span>`;
+      runBtn.innerHTML = `<span>🚀 Bắt Đầu Xử Lý Hàng Loạt</span>`;
     }
   });
 
