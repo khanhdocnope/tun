@@ -16,7 +16,7 @@ if sys.platform == "win32":
         pass
 
 # ================= CẤU HÌNH =================
-HF_TOKEN = "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"
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
 REPO_ID = "dobietdc/backe-manga-remove"
 REPO_TYPE = "space"
 
@@ -41,10 +41,17 @@ PROJECT_FOLDERS = [
 BASE_DIR = Path(__file__).resolve().parent
 
 def main():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(BASE_DIR.parent / ".env")
+        load_dotenv(BASE_DIR / ".env")
+    except Exception:
+        pass
+
     token = os.environ.get("HF_TOKEN") or HF_TOKEN
 
     if not token or token == "PASTE_YOUR_HF_TOKEN_HERE":
-        print("[!] LOI: Ban chua dien Hugging Face Token!")
+        print("[!] LOI: Ban chua dien Hugging Face Token (them HF_TOKEN vao .env)!")
         sys.exit(1)
 
     api = HfApi(token=token)
