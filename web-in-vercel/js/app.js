@@ -9,8 +9,8 @@
 const state = {
   backendUrl: localStorage.getItem("manga_backend_url") || "https://dobietdc-backe-manga-remove.hf.space",
   apiKey: localStorage.getItem("manga_api_key") || "",
-  llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://discovery-api.intern-ai.org.cn/v1",
-  llmModel: localStorage.getItem("manga_llm_model") || "minimax-m3",
+  llmBaseUrl: localStorage.getItem("manga_llm_base_url") || "https://generativelanguage.googleapis.com/v1beta/openai",
+  llmModel: localStorage.getItem("manga_llm_model") || "gemini-3-flash-preview",
   
   // Cleaner Tab State
   cleanerFile: null,
@@ -36,7 +36,7 @@ function getCleanBackendUrl() {
 }
 
 function getCleanLlmUrl() {
-  let url = (state.llmBaseUrl || "https://discovery-api.intern-ai.org.cn/v1").trim().replace(/\/+$/, "");
+  let url = (state.llmBaseUrl || "https://generativelanguage.googleapis.com/v1beta/openai").trim().replace(/\/+$/, "");
   url = url.replace(/\/chat\/completions\/?$/, "").replace(/\/chat\/?$/, "");
   return url.replace(/\/+$/, "");
 }
@@ -577,21 +577,26 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   let responseData = null;
   let lastError = "";
 
+  const activeModel = (state.llmModel || "gemini-3-flash-preview").trim();
+  const isGemini = activeModel.toLowerCase().includes("gemini");
+
   // 1. Thử gọi trực tiếp từ trình duyệt đến OpenAI-Compatible Endpoint (Client-side)
   try {
+    const directPayload = {
+      model: activeModel,
+      messages,
+      temperature: 0.3,
+      max_tokens: 4096,
+    };
+    if (!isGemini) directPayload.thinking = { type: "disabled" };
+
     const directRes = await fetch(`${getCleanLlmUrl()}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${activeKey}`,
       },
-      body: JSON.stringify({
-        model: state.llmModel || "minimax-m3",
-        messages,
-        temperature: 0.3,
-        thinking: { type: "disabled" },
-        max_tokens: 4096,
-      }),
+      body: JSON.stringify(directPayload),
       signal: AbortSignal.timeout(60000),
     });
 
@@ -610,18 +615,20 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   // 2. Fallback sang Vercel Serverless proxy (/api/translate)
   if (!responseData) {
     try {
+      const proxyPayload = {
+        messages,
+        model: activeModel,
+        baseUrl: state.llmBaseUrl,
+        apiKey: activeKey,
+        temperature: 0.3,
+        max_tokens: 4096,
+      };
+      if (!isGemini) proxyPayload.thinking = { type: "disabled" };
+
       const proxyRes = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages,
-          model: state.llmModel,
-          baseUrl: state.llmBaseUrl,
-          apiKey: activeKey,
-          temperature: 0.3,
-          thinking: { type: "disabled" },
-          max_tokens: 4096,
-        }),
+        body: JSON.stringify(proxyPayload),
         signal: AbortSignal.timeout(65000),
       });
       if (proxyRes.ok) {
@@ -638,18 +645,20 @@ async function translateSpeechBubblesFrontend(items, targetLang = "vi") {
   // 3. Fallback sang Hugging Face Backend Proxy (/api/v1/translate)
   if (!responseData) {
     try {
+      const hfPayload = {
+        messages,
+        model: activeModel,
+        base_url: state.llmBaseUrl,
+        api_key: activeKey,
+        temperature: 0.3,
+        max_tokens: 4096,
+      };
+      if (!isGemini) hfPayload.thinking = { type: "disabled" };
+
       const hfRes = await fetch(`${getCleanBackendUrl()}/api/v1/translate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages,
-          model: state.llmModel,
-          base_url: state.llmBaseUrl,
-          api_key: activeKey,
-          temperature: 0.3,
-          thinking: { type: "disabled" },
-          max_tokens: 4096,
-        }),
+        body: JSON.stringify(hfPayload),
         signal: AbortSignal.timeout(70000),
       });
       if (hfRes.ok) {
@@ -1321,8 +1330,8 @@ function initSettings() {
 
   saveBtn.addEventListener("click", () => {
     state.backendUrl = urlInput.value.trim() || "https://dobietdc-backe-manga-remove.hf.space";
-    state.llmBaseUrl = (llmUrlInput?.value.trim()) || "https://discovery-api.intern-ai.org.cn/v1";
-    state.llmModel = (modelInput?.value.trim()) || "deepseek-v4-flash-0731";
+    state.llmBaseUrl = (llmUrlInput?.value.trim()) || "https://generativelanguage.googleapis.com/v1beta/openai";
+    state.llmModel = (modelInput?.value.trim()) || "gemini-3-flash-preview";
     state.apiKey = keyInput.value.trim();
 
     localStorage.setItem("manga_backend_url", state.backendUrl);
@@ -1334,6 +1343,8 @@ function initSettings() {
     if (tModel) tModel.value = state.llmModel;
     const bModel = document.getElementById("batch-llm-model");
     if (bModel) bModel.value = state.llmModel;
+    const rModel = document.getElementById("retrans-model-select");
+    if (rModel) rModel.value = state.llmModel;
 
     showToast("Đã lưu cấu hình thành công!", "success");
     modal.classList.remove("open");
@@ -1479,6 +1490,7 @@ function initScriptRetranslator() {
   const dlBtn = document.getElementById("btn-download-retrans");
 
   if (!dropzone || !rawInput) return;
+  if (modelSelect) modelSelect.value = state.llmModel;
 
   function isJapaneseText(str) {
     return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(str);

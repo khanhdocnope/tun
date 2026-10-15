@@ -21,9 +21,19 @@ logger = logging.getLogger("translator")
 
 load_dotenv()
 
-DEFAULT_BASE_URL = os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://discovery-api.intern-ai.org.cn/v1"
-DEFAULT_MODEL = os.getenv("DEEPSEEK_MODEL") or os.getenv("MODEL") or "deepseek-v4-flash-0731"
-DEFAULT_API_KEY = os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+DEFAULT_API_KEY = (
+    os.getenv("API_KEY_GEMINI")
+    or os.getenv("GEMINI_API_KEY")
+    or os.getenv("DEEPSEEK_API_KEY")
+    or os.getenv("API_KEY")
+    or os.getenv("OPENAI_API_KEY")
+    or ""
+)
+DEFAULT_MODEL = os.getenv("MODEL") or os.getenv("GEMINI_MODEL") or "gemini-3-flash-preview"
+DEFAULT_BASE_URL = (
+    os.getenv("GEMINI_BASE_URL")
+    or ("https://generativelanguage.googleapis.com/v1beta/openai" if "gemini" in DEFAULT_MODEL.lower() else "https://discovery-api.intern-ai.org.cn/v1")
+)
 
 
 PROMPT_TXT_PATH = Path(__file__).resolve().parent.parent / "prompt.txt"
@@ -170,8 +180,10 @@ class MangaTranslator:
             "temperature": 0.3,
             "stream": False,
         }
+        if "gemini" not in self.model.lower():
+            request_body["thinking"] = {"type": "disabled"}
 
-        logger.info("Đang gửi %d đoạn thoại tới DeepSeek LLM (%s)...", len(payload_input), self.model)
+        logger.info("Đang gửi %d đoạn thoại tới AI (%s)...", len(payload_input), self.model)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:

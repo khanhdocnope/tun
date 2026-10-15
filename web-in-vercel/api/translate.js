@@ -1,9 +1,9 @@
 // Vercel Serverless Function: POST /api/translate
 // Proxy or server-side fallback for LLM completions (DeepSeek, Intern-AI, OpenAI)
 
-const DEFAULT_BASE_URL = "https://discovery-api.intern-ai.org.cn/v1";
-const DEFAULT_MODEL = "deepseek-v4-flash-0731";
-const DEFAULT_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+const DEFAULT_MODEL = "gemini-3-flash-preview";
+const DEFAULT_API_KEY = process.env.API_KEY_GEMINI || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || "";
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -22,10 +22,9 @@ module.exports = async (req, res) => {
     const {
       messages,
       model = DEFAULT_MODEL,
-      baseUrl = DEFAULT_BASE_URL,
+      baseUrl = "",
       apiKey = "",
       temperature = 0.3,
-      thinking = { type: "disabled" },
       max_tokens = 4096,
     } = req.body || {};
 
@@ -38,8 +37,20 @@ module.exports = async (req, res) => {
       return res.status(401).json({ error: "Chưa cấu hình API Key. Vui lòng nhập API Key vào Cài đặt (⚙️)." });
     }
 
-    const cleanBaseUrl = (baseUrl || DEFAULT_BASE_URL).trim().replace(/\/+$/, "");
-    const endpoint = `${cleanBaseUrl}/chat/completions`;
+    const activeModel = (model || DEFAULT_MODEL).trim();
+    const isGemini = activeModel.toLowerCase().includes("gemini");
+    const chosenBase = (baseUrl || (isGemini ? "https://generativelanguage.googleapis.com/v1beta/openai" : "https://discovery-api.intern-ai.org.cn/v1")).trim().replace(/\/+$/, "");
+    const endpoint = `${chosenBase}/chat/completions`;
+
+    const bodyPayload = {
+      model: activeModel,
+      messages,
+      temperature,
+      max_tokens: max_tokens || 4096,
+    };
+    if (!isGemini) {
+      bodyPayload.thinking = { type: "disabled" };
+    }
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -47,13 +58,7 @@ module.exports = async (req, res) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${activeKey}`,
       },
-      body: JSON.stringify({
-        model: model || DEFAULT_MODEL,
-        messages,
-        temperature,
-        thinking: thinking || { type: "disabled" },
-        max_tokens: max_tokens || 4096,
-      }),
+      body: JSON.stringify(bodyPayload),
       signal: AbortSignal.timeout(60000),
     });
 

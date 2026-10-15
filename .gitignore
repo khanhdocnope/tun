@@ -1,5 +1,7 @@
 .env
+**/.env
 Do-not-touch/
 __pycache__
 weights/
-*.mp4
+*.mp4
+scratch/

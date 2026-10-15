@@ -1,0 +1,84 @@
+# ==============================================================================
+# DANH SÁCH TOÀN BỘ CÁC MÔ HÌNH GOOGLE GEMINI KHẢ DỤNG CHO API KEY (Tổng: 50 mô hình)
+# Cập nhật trực tiếp từ endpoint Google Generative Language API
+# ==============================================================================
+
+## 1. CÁC MÔ HÌNH NGÔN NGỮ & DỊCH THUẬT (LLM / TEXT GENERATION) (21 mô hình)
+
+| Model ID | Tên hiển thị | Input Limit | Output Limit | Tính năng & Ghi chú |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-2.5-flash` | Gemini 2.5 Flash | 1,048,576 tokens | 65,536 tokens | Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 mill... |
+| `gemini-2.5-pro` | Gemini 2.5 Pro | 1,048,576 tokens | 65,536 tokens | Stable release (June 17th, 2025) of Gemini 2.5 Pro |
+| `gemma-4-26b-a4b-it` | Gemma 4 26B A4B IT | 262,144 tokens | 32,768 tokens | Gemma 4 26B A4B IT |
+| `gemma-4-31b-it` | Gemma 4 31B IT | 262,144 tokens | 32,768 tokens | Gemma 4 31B IT |
+| `gemini-flash-latest` | Gemini Flash Latest | 1,048,576 tokens | 65,536 tokens | Latest release of Gemini Flash |
+| `gemini-flash-lite-latest` | Gemini Flash-Lite Latest | 1,048,576 tokens | 65,536 tokens | Latest release of Gemini Flash-Lite |
+| `gemini-pro-latest` | Gemini Pro Latest | 1,048,576 tokens | 65,536 tokens | Latest release of Gemini Pro |
+| `gemini-2.5-flash-lite` | Gemini 2.5 Flash-Lite | 1,048,576 tokens | 65,536 tokens | Stable version of Gemini 2.5 Flash-Lite, released in July of 2025 |
+| `gemini-3-flash-preview` | Gemini 3 Flash Preview | 1,048,576 tokens | 65,536 tokens | Gemini 3 Flash Preview |
+| `gemini-3.1-pro-preview` | Gemini 3.1 Pro Preview | 1,048,576 tokens | 65,536 tokens | Gemini 3.1 Pro Preview |
+| `gemini-3.1-pro-preview-customtools` | Gemini 3.1 Pro Preview Custom Tools | 1,048,576 tokens | 65,536 tokens | Gemini 3.1 Pro Preview optimized for custom tool usage |
+| `gemini-3.1-flash-lite-preview` | Gemini 3.1 Flash Lite Preview | 1,048,576 tokens | 65,536 tokens | Gemini 3.1 Flash Lite Preview |
+| `gemini-3.1-flash-lite` | Gemini 3.1 Flash Lite | 1,048,576 tokens | 65,536 tokens | Gemini 3.1 Flash Lite |
+| `gemini-3.5-flash` | Gemini 3.5 Flash | 1,048,576 tokens | 65,536 tokens | Gemini 3.5 Flash |
+| `gemini-3.5-flash-lite` | Gemini 3.5 Flash Lite | 1,048,576 tokens | 65,536 tokens | Gemini 3.5 Flash Lite |
+| `gemini-omni-flash-preview` | Gemini Omni Flash Preview | 131,072 tokens | 65,536 tokens | Gemini Omni Flash Preview |
+| `gemini-omni-1.1-flash` | Gemini Omni 1.1 Flash | 131,072 tokens | 65,536 tokens | Gemini Omni 1.1 Flash |
+| `gemini-3.6-flash` | Gemini 3.6 Flash | 1,048,576 tokens | 65,536 tokens | Gemini 3.6 Flash |
+| `gemini-3.7-flash` | Gemini 3.7 Flash | 1,048,576 tokens | 65,536 tokens | Gemini 3.7 Flash |
+| `gemini-3.8-flash` | Gemini 3.8 Flash | 1,048,576 tokens | 65,536 tokens | Gemini 3.8 Flash |
+| `gemini-4-argon` | Gemini 4 Argon | 1,048,576 tokens | 32,768 tokens | Gemini 4 Argon |
+
+
+## 2. CÁC MÔ HÌNH THỊ GIÁC & HÌNH ẢNH (VISION & IMAGE GENERATION) (8 mô hình)
+
+| Model ID | Tên hiển thị | Input Limit | Output Limit | Tính năng & Ghi chú |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-2.5-flash-image` | Nano Banana | 32,768 tokens | 32,768 tokens | Gemini 2.5 Flash Preview Image |
+| `gemini-3-pro-image-preview` | Nano Banana Pro | 131,072 tokens | 32,768 tokens | Gemini 3 Pro Image Preview |
+| `gemini-3-pro-image` | Nano Banana Pro | 131,072 tokens | 32,768 tokens | Gemini 3 Pro Image |
+| `nano-banana-pro-preview` | Nano Banana Pro | 131,072 tokens | 32,768 tokens | Gemini 3 Pro Image Preview |
+| `gemini-3.1-flash-image-preview` | Nano Banana 2 | 65,536 tokens | 65,536 tokens | Gemini 3.1 Flash Image Preview. |
+| `gemini-3.1-flash-image` | Nano Banana 2 | 65,536 tokens | 65,536 tokens | Gemini 3.1 Flash Image. |
+| `gemini-3.1-flash-lite-image` | Nano Banana 2 Lite | 65,536 tokens | 65,536 tokens | Gemini 3.1 Flash Lite Image. |
+| `gemini-nano-banana-2.1` | Nano Banana 2.1 | 65,536 tokens | 65,536 tokens | Gemini Nano Banana 2.1. |
+
+
+## 3. CÁC MÔ HÌNH AGENT & NGHIÊN CỨU SÂU (AGENT & DEEP RESEARCH) (8 mô hình)
+
+| Model ID | Tên hiển thị | Input Limit | Output Limit | Tính năng & Ghi chú |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-robotics-er-2-preview` | Gemini Robotics-ER 2 Preview | 131,072 tokens | 65,536 tokens | Gemini Robotics-ER 2 Preview |
+| `gemini-2.5-computer-use-preview-10-2025` | Gemini 2.5 Computer Use Preview 10-2025 | 131,072 tokens | 65,536 tokens | Gemini 2.5 Computer Use Preview 10-2025 |
+| `antigravity-preview-05-2026` | Antigravity Agent Preview | 1,048,576 tokens | 65,536 tokens | Preview release of Antigravity Agent (05-2026) |
+| `antigravity-preview-09-2026` | Antigravity Agent Preview | 1,048,576 tokens | 65,536 tokens | Preview release of Antigravity Agent (09-2026) |
+| `antigravity-preview-latest` | Antigravity Agent Preview Latest | 1,048,576 tokens | 65,536 tokens | Latest preview release of Antigravity Agent |
+| `deep-research-max-preview-04-2026` | Deep Research Max Preview (Apr-21-2026) | 131,072 tokens | 65,536 tokens | Preview release (April 21st, 2026) of Deep Research Max |
+| `deep-research-preview-04-2026` | Deep Research Preview (Apr-21-2026) | 131,072 tokens | 65,536 tokens | Preview release (April 21th, 2026) of Deep Research |
+| `deep-research-pro-preview-12-2025` | Deep Research Pro Preview (Dec-12-2025) | 131,072 tokens | 65,536 tokens | Preview release (December 12th, 2025) of Deep Research Pro |
+
+
+## 4. CÁC MÔ HÌNH ÂM THANH, NHẠC & GIỌNG NÓI (AUDIO, MUSIC & TTS) (9 mô hình)
+
+| Model ID | Tên hiển thị | Input Limit | Output Limit | Tính năng & Ghi chú |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-2.5-flash-preview-tts` | Gemini 2.5 Flash Preview TTS | 8,192 tokens | 16,384 tokens | Gemini 2.5 Flash Preview TTS |
+| `gemini-2.5-pro-preview-tts` | Gemini 2.5 Pro Preview TTS | 8,192 tokens | 16,384 tokens | Gemini 2.5 Pro Preview TTS |
+| `gemini-3.5-transcribe` | Gemini 3.5 Transcribe | 98,304 tokens | 32,768 tokens | Gemini 3.5 Transcribe |
+| `lyria-3-clip-preview` | Lyria 3 Clip Preview | 1,048,576 tokens | 65,536 tokens | Lyria 3 30s model Preview |
+| `lyria-3-pro-preview` | Lyria 3 Pro Preview | 1,048,576 tokens | 65,536 tokens | Lyria 3 Pro Preview |
+| `lyria-3.5` | Lyria 3.5 | 1,048,576 tokens | 65,536 tokens | Music Generation model |
+| `gemini-3.1-flash-tts-preview` | Gemini 3.1 Flash TTS Preview | 8,192 tokens | 16,384 tokens | Gemini 3.1 Flash TTS Preview |
+| `gemini-3.8-flash-tts` | Gemini 3.8 Flash TTS | 8,192 tokens | 16,384 tokens | Gemini 3.8 Flash TTS |
+| `gemini-3.8-flash-lite-tts` | Gemini 3.8 Flash Lite TTS | 8,192 tokens | 16,384 tokens | Gemini 3.8 Flash Lite TTS |
+
+
+## 5. CÁC MÔ HÌNH KHÁC (EMBEDDINGS & UTILITIES) (4 mô hình)
+
+| Model ID | Tên hiển thị | Input Limit | Output Limit | Tính năng & Ghi chú |
+| :--- | :--- | :--- | :--- | :--- |
+| `gemini-embedding-001` | Gemini Embedding 001 | 2,048 tokens | 1 tokens | Obtain a distributed representation of a text. |
+| `gemini-embedding-2-preview` | Gemini Embedding 2 Preview | 8,192 tokens | 1 tokens | Obtain a distributed representation of multimodal content. |
+| `gemini-embedding-2` | Gemini Embedding 2 | 8,192 tokens | 1 tokens | Obtain a distributed representation of multimodal content. |
+| `aqa` | Model that performs Attributed Question Answering. | 7,168 tokens | 1,024 tokens | Model trained to return answers to questions that are grounded in provided sources, along wi... |
+

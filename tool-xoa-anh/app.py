@@ -680,25 +680,36 @@ async def api_translate_page(
         raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý translate-page: {type(exc).__name__}: {exc}")
 class TranslateDirectRequest(BaseModel):
     messages: List[Dict[str, Any]]
-    model: Optional[str] = "deepseek-v4-flash-0731"
-    base_url: Optional[str] = "https://discovery-api.intern-ai.org.cn/v1"
+    model: Optional[str] = "gemini-3-flash-preview"
+    base_url: Optional[str] = "https://generativelanguage.googleapis.com/v1beta/openai"
     api_key: Optional[str] = None
     temperature: Optional[float] = 0.3
-    thinking: Optional[Dict[str, Any]] = {"type": "disabled"}
+    thinking: Optional[Dict[str, Any]] = None
     max_tokens: Optional[int] = 4096
 
 
 @api_router.post(
     "/api/v1/translate",
     tags=["Translation & OCR"],
-    summary="Proxy endpoint gọi AI Dịch (DeepSeek / OpenAI)",
+    summary="Proxy endpoint gọi AI Dịch (Gemini / DeepSeek / OpenAI)",
 )
 async def api_translate_direct(req: TranslateDirectRequest):
-    active_key = (req.api_key or os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY") or "").strip()
+    active_key = (
+        req.api_key
+        or os.getenv("API_KEY_GEMINI")
+        or os.getenv("GEMINI_API_KEY")
+        or os.getenv("DEEPSEEK_API_KEY")
+        or os.getenv("API_KEY")
+        or ""
+    ).strip()
     if not active_key:
         raise HTTPException(status_code=400, detail="Chưa cấu hình API Key.")
 
-    clean_base = (req.base_url or "https://discovery-api.intern-ai.org.cn/v1").rstrip("/")
+    active_model = req.model or "gemini-3-flash-preview"
+    is_gemini = "gemini" in active_model.lower()
+
+    default_base = "https://generativelanguage.googleapis.com/v1beta/openai" if is_gemini else "https://discovery-api.intern-ai.org.cn/v1"
+    clean_base = (req.base_url or default_base).rstrip("/")
     if clean_base.endswith("/chat/completions"):
         clean_base = clean_base[:-len("/chat/completions")].rstrip("/")
     url = f"{clean_base}/chat/completions"
@@ -708,12 +719,13 @@ async def api_translate_direct(req: TranslateDirectRequest):
         "Authorization": f"Bearer {active_key}",
     }
     payload = {
-        "model": req.model or "deepseek-v4-flash-0731",
+        "model": active_model,
         "messages": req.messages,
         "temperature": float(req.temperature or 0.3),
-        "thinking": req.thinking if req.thinking is not None else {"type": "disabled"},
         "max_tokens": int(req.max_tokens or 4096),
     }
+    if not is_gemini:
+        payload["thinking"] = req.thinking if req.thinking is not None else {"type": "disabled"}
 
     try:
         import httpx
