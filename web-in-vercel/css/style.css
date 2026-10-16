@@ -185,6 +185,30 @@ body {
   box-shadow: 0 0 12px var(--primary-glow);
 }
 
+.nav-batch-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.2), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(225, 29, 72, 0.5);
+  color: #fca5a5;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.nav-batch-link:hover {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.35), rgba(168, 85, 247, 0.35));
+  border-color: #f43f5e;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.3);
+  transform: translateY(-1px);
+}
+
+
 /* --------------------------------------------------------------------------
    CONTAINER & TABS
    -------------------------------------------------------------------------- */

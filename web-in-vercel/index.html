@@ -199,6 +199,30 @@ body {
   box-shadow: 0 0 12px var(--primary-glow);
 }
 
+.nav-batch-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.2), rgba(168, 85, 247, 0.2));
+  border: 1px solid rgba(225, 29, 72, 0.5);
+  color: #fca5a5;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--radius-full);
+  transition: var(--transition-fast);
+  white-space: nowrap;
+}
+.nav-batch-link:hover {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.35), rgba(168, 85, 247, 0.35));
+  border-color: #f43f5e;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.3);
+  transform: translateY(-1px);
+}
+
+
 /* --------------------------------------------------------------------------
    CONTAINER & TABS
    -------------------------------------------------------------------------- */
@@ -978,6 +1002,9 @@ details.modern-details[open] summary::after {
     </a>
     
     <div class="nav-actions">
+      <a href="/batch-studio" target="_blank" class="nav-batch-link" title="Mở Web Con: Batch Studio Pro (Trình OCR & Dịch Nhiều Trang Hàng Loạt)">
+        <span>📚 Batch Studio Pro(test) ↗</span>
+      </a>
       <div id="server-status-pill" class="status-pill" title="Nhấn để kiểm tra kết nối API">
         <span class="status-dot"></span>
         <span id="server-status-text">Đang kết nối backend...</span>
@@ -1002,6 +1029,9 @@ details.modern-details[open] summary::after {
       </button>
       <button class="tab-btn" data-tab="tab-script-retrans">
         <span>📝</span> Dịch Lại Kịch Bản (.txt)
+      </button>
+      <button class="tab-btn" data-tab="tab-batch-studio">
+        <span>📚</span> Batch Studio Pro (test)
       </button>
     </nav>
 
@@ -1546,6 +1576,29 @@ Ví dụ:
           <div id="retrans-result-view" style="display:none; height:100%;">
             <textarea id="retrans-result-output" class="form-input" rows="22" style="width:100%; height:calc(100% - 10px); resize:vertical; font-family:'JetBrains Mono', monospace; font-size:0.88rem; line-height:1.6; padding:0.75rem; background:rgba(0,0,0,0.4); border:1px solid rgba(139,92,246,0.3); border-radius:var(--radius-sm); color:#fff;" readonly></textarea>
           </div>
+        </div>
+      </div>
+    <!-- ================= TAB 5: BATCH STUDIO PRO (WEB CON) ================= -->
+    <section id="tab-batch-studio" class="tab-pane">
+      <div class="panel" style="padding: 1.25rem; border-radius: var(--radius-lg); background: var(--bg-card);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 40px; height: 40px; border-radius: var(--radius-md); background: linear-gradient(135deg, #e11d48, #a855f7); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; box-shadow: 0 0 15px rgba(225, 29, 72, 0.35);">
+              📚
+            </div>
+            <div>
+              <h3 style="font-size: 1.15rem; font-weight: 700; color: #fff; margin-bottom: 2px;">Batch Studio Pro — Web Con Xử Lý Hàng Loạt (Đến 100 Trang)</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted);">Trích xuất văn bản thô chuẩn Nhật theo thứ tự đọc, dịch song ngữ song song, chỉnh sửa trực tiếp & xuất kịch bản .txt / .doc</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="/batch-studio" target="_blank" class="btn-primary" style="text-decoration: none; padding: 0.55rem 1.1rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #e11d48, #a855f7);">
+              <span>Mở Toàn Màn Hình Trong Tab Mới ↗</span>
+            </a>
+          </div>
+        </div>
+        <div style="position: relative; width: 100%; height: 82vh; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-subtle); background: #090d16;">
+          <iframe id="iframe-batch-studio" src="/batch-studio" style="width: 100%; height: 100%; border: none; display: block;" title="Batch Studio Pro Sub-Web"></iframe>
         </div>
       </div>
     </section>
