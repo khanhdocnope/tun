@@ -982,16 +982,24 @@ kbd {
   .batch-buttons {
     width: 100%;
     display: grid;
-    grid-template-columns: 1fr 1fr 1.3fr 0.8fr;
-    gap: 6px;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .batch-buttons .btn-sub {
-    padding: 7px 4px;
-    font-size: 0.72rem;
+    padding: 8px 6px;
+    font-size: 0.78rem;
     text-align: center;
     justify-content: center;
     white-space: nowrap;
+    border-radius: var(--radius-sm);
+  }
+
+  .batch-buttons .btn-primary-highlight {
+    grid-column: span 2;
+    padding: 10px 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
   }
 
   .batch-stats {
@@ -999,15 +1007,20 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
   }
 
   .stat-badge {
-    font-size: 0.72rem;
+    font-size: 0.76rem;
+    white-space: nowrap;
   }
 
   .model-badge {
-    font-size: 0.68rem;
-    padding: 2px 6px;
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    white-space: nowrap;
   }
 
   /* Queue Progress Bar Mobile */

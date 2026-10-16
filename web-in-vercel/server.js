@@ -39,9 +39,26 @@ app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
 // Serve sub-web Batch Studio static files
-app.use("/batch-studio", express.static(path.join(__dirname, "batch-studio")));
 app.get("/batch-studio", (req, res) => {
-  res.sendFile(path.join(__dirname, "batch-studio", "index.html"));
+  res.redirect("/batch-studio/");
+});
+app.use("/batch-studio", express.static(path.join(__dirname, "batch-studio")));
+app.use("/batch-studio", express.static(path.join(__dirname, "public", "batch-studio")));
+app.use("/batch-studio", express.static(path.join(__dirname, "public")));
+
+// Fallback handlers for style.css & app.js in case loaded relatively
+app.get(["/batch-studio/style.css", "/style.css"], (req, res) => {
+  const p1 = path.join(__dirname, "batch-studio", "style.css");
+  const p2 = path.join(__dirname, "public", "style.css");
+  res.type("text/css");
+  res.sendFile(require("fs").existsSync(p1) ? p1 : p2);
+});
+
+app.get(["/batch-studio/app.js", "/app.js"], (req, res) => {
+  const p1 = path.join(__dirname, "batch-studio", "app.js");
+  const p2 = path.join(__dirname, "public", "app.js");
+  res.type("application/javascript");
+  res.sendFile(require("fs").existsSync(p1) ? p1 : p2);
 });
 
 // Serve assets & main static frontend files
