@@ -44,7 +44,8 @@ app.get("/batch-studio", (req, res) => {
   res.sendFile(path.join(__dirname, "batch-studio", "index.html"));
 });
 
-// Serve main static frontend files
+// Serve assets & main static frontend files
+app.use("/assets", express.static(path.join(__dirname, "assets")));
 app.use(express.static(__dirname));
 
 // Fallback to index.html for SPA
