@@ -117,11 +117,221 @@
     return keys;
   }
 
+  // ---------------------------------------------------------------------------
+  // LƯU TIẾN TRÌNH (IndexedDB): tải lại trang / mất tab vẫn giữ ảnh, OCR, bản dịch
+  //  - kho "pages": ảnh (nặng, chỉ ghi 1 lần khi thêm trang)
+  //  - kho "state": trạng thái + văn bản (nhẹ, ghi mỗi khi có thay đổi)
+  // ---------------------------------------------------------------------------
+  const store = (function () {
+    const DB_NAME = 'manga_studio_batch';
+    const DB_VERSION = 1;
+    const PAGES = 'pages';
+    const STATE = 'state';
+    let dbPromise = null;
+    let dbHandle = null;
+
+    function open() {
+      if (dbPromise) return dbPromise;
+      dbPromise = new Promise((resolve) => {
+        if (!('indexedDB' in window) || !window.indexedDB) return resolve(null);
+        let req;
+        try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { return resolve(null); }
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(PAGES)) db.createObjectStore(PAGES, { keyPath: 'id' });
+          if (!db.objectStoreNames.contains(STATE)) db.createObjectStore(STATE, { keyPath: 'id' });
+        };
+        req.onsuccess = () => { dbHandle = req.result; resolve(dbHandle); };
+        req.onerror = () => resolve(null);
+        req.onblocked = () => resolve(null);
+      });
+      return dbPromise;
+    }
+
+    // Chạy 1 giao dịch trên các kho đã chọn; fn nhận tx và trả về request cần đọc kết quả
+    async function run(mode, names, fn) {
+      const db = await open();
+      if (!db) return { ok: false, result: null };
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(names, mode);
+          const out = fn(tx);
+          tx.oncomplete = () => resolve({ ok: true, result: out });
+          tx.onerror = () => resolve({ ok: false, result: null });
+          tx.onabort = () => resolve({ ok: false, result: null });
+        } catch (e) {
+          resolve({ ok: false, result: null });
+        }
+      });
+    }
+
+    return {
+      async loadAll() {
+        const r = await run('readonly', [PAGES, STATE], (tx) => ({
+          pages: tx.objectStore(PAGES).getAll(),
+          states: tx.objectStore(STATE).getAll()
+        }));
+        if (!r.ok) return [];
+        const pages = r.result.pages.result || [];
+        const byId = new Map((r.result.states.result || []).map((x) => [x.id, x]));
+        return pages
+          .sort((x, y) => (x.seq || 0) - (y.seq || 0))
+          .map((pg) => Object.assign({}, pg, byId.get(pg.id) || {}));
+      },
+      async putPage(rec) { return (await run('readwrite', [PAGES], (tx) => { tx.objectStore(PAGES).put(rec); })).ok; },
+      async putState(rec) { return (await run('readwrite', [STATE], (tx) => { tx.objectStore(STATE).put(rec); })).ok; },
+      // Dùng khi tab sắp đóng: không có await nào giữa chừng nên giao dịch được tạo ngay trong sự kiện
+      putStateSync(rec) {
+        if (!dbHandle) return;
+        try { dbHandle.transaction([STATE], 'readwrite').objectStore(STATE).put(rec); } catch (e) { /* bỏ qua */ }
+      },
+      async remove(id) {
+        return (await run('readwrite', [PAGES, STATE], (tx) => {
+          tx.objectStore(PAGES).delete(id);
+          tx.objectStore(STATE).delete(id);
+        })).ok;
+      },
+      async clear() {
+        return (await run('readwrite', [PAGES, STATE], (tx) => {
+          tx.objectStore(PAGES).clear();
+          tx.objectStore(STATE).clear();
+        })).ok;
+      },
+      open
+    };
+  })();
+
+  let seqCounter = 0;
+  let saveFailureShown = false;
+  const pendingSaves = new Map(); // id -> { timer, item }
+
+  function nextSeq() {
+    seqCounter = (seqCounter + 1) % 1000;
+    return Date.now() * 1000 + seqCounter; // tăng dần -> giữ đúng thứ tự trang khi khôi phục
+  }
+
+  function serializePage(item) {
+    return { id: item.id, seq: item.seq, name: item.name, sizeStr: item.sizeStr, base64: item.base64 };
+  }
+
+  function serializeState(item) {
+    return {
+      id: item.id,
+      // 'processing' không phải trạng thái bền vững: nếu bị ngắt giữa chừng thì quay về 'idle'
+      status: item.status === 'processing' ? 'idle' : item.status,
+      stage: item.stage || 0, // 0: chưa làm gì | 1: đã OCR | 2: đã dịch
+      ocrText: item.ocrText || '',
+      viText: item.viText || '',
+      updatedAt: Date.now()
+    };
+  }
+
+  function reportSaveFailure() {
+    if (saveFailureShown) return;
+    saveFailureShown = true;
+    showToast('Lỗi: không lưu được tiến trình vào trình duyệt (bộ nhớ đầy hoặc đang ở chế độ ẩn danh). Hãy xuất .txt thường xuyên.');
+  }
+
+  // Thêm trang mới: ghi ảnh (1 lần) + trạng thái
+  async function persistNewPage(item) {
+    const okPage = await store.putPage(serializePage(item));
+    const okState = await store.putState(serializeState(item));
+    if (!okPage || !okState) reportSaveFailure();
+  }
+
+  async function persistNow(item) {
+    if (!state.images.includes(item)) return; // trang đã bị xóa
+    if (!(await store.putState(serializeState(item)))) reportSaveFailure();
+  }
+
+  function scheduleSave(item, delay = 300) {
+    const prev = pendingSaves.get(item.id);
+    if (prev) clearTimeout(prev.timer);
+    const timer = setTimeout(() => {
+      pendingSaves.delete(item.id);
+      persistNow(item);
+    }, delay);
+    pendingSaves.set(item.id, { timer, item });
+  }
+
+  // Ghi ngay mọi thay đổi đang chờ (gọi khi ẩn tab / đóng trang)
+  function flushPendingSaves() {
+    for (const { timer, item } of pendingSaves.values()) {
+      clearTimeout(timer);
+      if (state.images.includes(item)) store.putStateSync(serializeState(item));
+    }
+    pendingSaves.clear();
+  }
+
+  function dropPendingSave(id) {
+    const prev = pendingSaves.get(id);
+    if (prev) clearTimeout(prev.timer);
+    pendingSaves.delete(id);
+  }
+
+  window.addEventListener('pagehide', flushPendingSaves);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingSaves();
+  });
+
+  async function restoreSession() {
+    await store.open();
+    const rows = await store.loadAll();
+    if (!rows.length) return;
+
+    state.images = rows.map((r) => {
+      const status = r.status === 'done' ? 'done' : (r.status === 'error' ? 'error' : 'idle');
+      return {
+        id: r.id,
+        seq: r.seq || nextSeq(),
+        name: r.name,
+        sizeStr: r.sizeStr || '',
+        base64: r.base64,
+        status,
+        stage: typeof r.stage === 'number' ? r.stage : (status === 'done' ? 2 : 0),
+        dialogues: [],
+        ocrText: r.ocrText || '',
+        viText: r.viText || '',
+        tokens: 0
+      };
+    });
+
+    const finished = state.images.filter((i) => i.stage >= 2).length;
+    const remaining = state.images.length - finished;
+    showToast(
+      remaining > 0
+        ? `Đã khôi phục ${state.images.length} trang (${finished} đã xong, ${remaining} còn lại). Bấm "OCR + Dịch" để làm tiếp phần còn lại.`
+        : `Đã khôi phục ${state.images.length} trang, tất cả đã xong. Bạn có thể xuất .txt.`
+    );
+  }
+
+  // Ngữ cảnh truyện: vài dòng dịch cuối của trang gần nhất đã có bản dịch (lùi tối đa 3 trang,
+  // vì khi chạy 2 luồng song song thì trang ngay trước có thể chưa xong)
+  function getPrevContext(item) {
+    const idx = state.images.indexOf(item);
+    for (let i = idx - 1; i >= Math.max(0, idx - 3); i--) {
+      const text = (state.images[i].viText || '').trim();
+      if (text) {
+        return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-12);
+      }
+    }
+    return [];
+  }
+
+  // Trang nào cần xử lý trong chế độ hàng đợi tương ứng (không làm lại phần đã xong)
+  function needsWork(img, mode) {
+    const stage = img.stage || 0;
+    if (mode === 'ocr_only') return stage < 1;
+    if (mode === 'translate_only') return stage < 2 && !!(img.ocrText && img.ocrText.trim());
+    return stage < 2;
+  }
+
   // Initialize
   async function init() {
     bindEvents();
     await checkConfig();
     applySettingsToUI();
+    await restoreSession();
     renderBatchView();
   }
 
@@ -263,6 +473,7 @@
 
     // Batch Actions
     el.btnProcessAll.addEventListener('click', () => runBatchQueue('all'));
+    el.btnClearAll.addEventListener('click', clearAllBatch);
     el.btnOcrAll.addEventListener('click', () => runBatchQueue('ocr_only'));
     el.btnTranslateAll.addEventListener('click', () => runBatchQueue('translate_only'));
     // Export Dropdown Trigger
@@ -481,13 +692,17 @@
         dialogues: [],
         ocrText: '',
         viText: '',
-        tokens: 0
+        tokens: 0,
+        seq: nextSeq(),
+        stage: 0
       };
 
       state.images.push(item);
+      persistNewPage(item);
     }
 
     renderBatchView();
+    if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
     if (compressedCount > 0) {
       showToast(`Đã thêm ${totalFiles} ảnh (đã tối ưu ${compressedCount} ảnh sang WebP)!`);
     } else {
@@ -713,11 +928,17 @@
 
     textareaJp.addEventListener('input', () => {
       item.ocrText = textareaJp.value;
+      scheduleSave(item);
     });
 
     textareaVi.addEventListener('input', () => {
       item.viText = textareaVi.value;
+      scheduleSave(item);
     });
+
+    // Rời ô nhập (blur) là lưu ngay, không chờ debounce
+    textareaJp.addEventListener('change', () => scheduleSave(item, 0));
+    textareaVi.addEventListener('change', () => scheduleSave(item, 0));
 
     // Copy buttons
     card.querySelector('.btn-copy-jp').addEventListener('click', () => {
@@ -731,6 +952,8 @@
     // Individual Action buttons
     card.querySelector('.btn-row-delete').addEventListener('click', () => {
       state.images = state.images.filter(x => x.id !== item.id);
+      dropPendingSave(item.id);
+      store.remove(item.id);
       renderBatchView();
     });
 
@@ -783,7 +1006,8 @@
         skipSFX: state.settings.skipSFX,
         readingOrder: state.settings.readingOrder,
         sourceLang: 'ja',
-        targetLang: 'vi'
+        targetLang: 'vi',
+        prevContext: mode === 'ocr_only' ? [] : getPrevContext(item)
       };
 
       const res = await fetch('/api/process-batch', {
@@ -805,14 +1029,22 @@
       if (mode === 'all' || mode === 'translate_only') {
         item.viText = data.viTextBlock || '';
       }
+      item.stage = (mode === 'ocr_only') ? Math.max(item.stage || 0, 1) : 2;
 
       updateCardDOM(item);
+      scheduleSave(item, 0);
+
+      const missing = data.missingTranslation || [];
+      if (missing.length) {
+        showToast(`Trang ${item.name}: dòng ${missing.join(', ')} chưa dịch được, đã giữ nguyên bản gốc. Hãy kiểm tra lại.`);
+      }
       return true;
 
     } catch (err) {
       console.error(err);
       item.status = 'error';
       updateCardDOM(item);
+      scheduleSave(item, 0);
       showToast(`Lỗi trang ${item.name}: ${err.message}`);
       return false;
     }
@@ -844,7 +1076,8 @@
           tone: state.settings.tone,
           readingOrder: state.settings.readingOrder,
           sourceLang: 'ja',
-          targetLang: 'vi'
+          targetLang: 'vi',
+          prevContext: getPrevContext(item)
         })
       });
 
@@ -852,12 +1085,15 @@
       if (!res.ok || !data.success) throw new Error(data.error || 'Lỗi dịch text.');
 
       item.status = 'done';
+      item.stage = 2;
       item.viText = data.text_vi || '';
       updateCardDOM(item);
+      scheduleSave(item, 0);
       return true;
     } catch (err) {
       item.status = 'error';
       updateCardDOM(item);
+      scheduleSave(item, 0);
       alert('Lỗi dịch: ' + err.message);
       return false;
     }
@@ -867,7 +1103,7 @@
   async function runBatchQueue(mode = 'all') {
     if (state.isQueueRunning) return;
 
-    const queueItems = state.images.filter(img => img.status !== 'done');
+    const queueItems = state.images.filter(img => needsWork(img, mode));
     if (queueItems.length === 0) {
       showToast('Tất cả các trang trong danh sách đã được xử lý xong!');
       return;
@@ -953,6 +1189,9 @@
     if (state.images.length === 0) return;
     if (confirm('Bạn có chắc muốn xóa toàn bộ danh sách trang hiện tại?')) {
       state.images = [];
+      pendingSaves.forEach(({ timer }) => clearTimeout(timer));
+      pendingSaves.clear();
+      store.clear();
       renderBatchView();
     }
   }

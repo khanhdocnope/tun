@@ -149,7 +149,7 @@ function stripEmptyLines(text) {
     .join("\n");
 }
 
-function buildOcrPrompt(sourceLang = "ja", skipSfx = true, readingOrder = "manga") {
+function getOcrRuleBlocks(skipSfx = true, readingOrder = "manga") {
   const isWebtoon = readingOrder === "webtoon";
   const orderDirective = isWebtoon
     ? `READING ORDER DIRECTIVE (WEBTOON / MANHWA):
@@ -183,6 +183,12 @@ SFX RULE (exclude completely):
 SFX RULE (include, keep in true reading position):
 - If the page contains SFX (stylized sound-effect lettering drawn directly onto the artwork, with no enclosing outline), include each one as its own separate output line, placed EXACTLY where it falls in the true reading order of the page.
 - Look CAREFULLY at the actual shape of every letter and transcribe EXACTLY what you see. Do NOT guess a common sound effect if it does not match.`;
+
+  return { isWebtoon, orderDirective, bubbleRule, sfxInstruction };
+}
+
+function buildOcrPrompt(sourceLang = "ja", skipSfx = true, readingOrder = "manga") {
+  const { isWebtoon, orderDirective, bubbleRule, sfxInstruction } = getOcrRuleBlocks(skipSfx, readingOrder);
 
   const outro = `
 If a bubble/box truly has no legible text, skip that line entirely instead of writing a placeholder note/marker.
@@ -240,22 +246,46 @@ ${sfxInstruction}
 ${outro}`;
 }
 
-function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural", readingOrder = "manga") {
-  const sourceName = LANG_NAMES[sourceLang] || sourceLang;
-  const targetName = LANG_NAMES[targetLang] || targetLang;
-  const isWebtoon = readingOrder === "webtoon";
-
+function getToneNote(tone) {
   let toneNote = "";
   if (tone === "shounen") toneNote = `\n- Genre Tone: Shounen comic tone (energetic, dramatic, natural pronouns like tớ/cậu, mày/tao when appropriate).`;
   if (tone === "romcom") toneNote = `\n- Genre Tone: Rom-Com comic tone (gentle, sweet, romantic, natural pronouns like anh/em, cậu/tớ).`;
   if (tone === "historical") toneNote = `\n- Genre Tone: Historical / martial arts tone (honorifics like huynh đệ, tại hạ, các hạ).`;
   if (tone === "raw") toneNote = `\n- Genre Tone: Literal translation to assist editor proofreading.`;
+  return toneNote;
+}
+
+const PREV_CONTEXT_MAX_LINES = 12;
+const PREV_CONTEXT_MAX_CHARS = 200;
+
+// Lấy tối đa N dòng cuối của trang trước làm ngữ cảnh (chỉ để giữ nhất quán xưng hô / tên riêng).
+function sanitizePrevContext(prevContext) {
+  if (!prevContext) return [];
+  const arr = Array.isArray(prevContext) ? prevContext : String(prevContext).split(/\r?\n/);
+  return arr
+    .map((l) => String(l || "").replace(/\s+/g, " ").trim().slice(0, PREV_CONTEXT_MAX_CHARS))
+    .filter(Boolean)
+    .slice(-PREV_CONTEXT_MAX_LINES);
+}
+
+function buildPrevBlock(prevContext) {
+  const lines = sanitizePrevContext(prevContext);
+  if (lines.length === 0) return "";
+  return `PREVIOUS PAGE (already translated). Use it ONLY for story context and consistency of names, pronouns and tone. Do NOT translate it again and do NOT include it in your output:\n${lines.join("\n")}\n\n`;
+}
+
+function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural", readingOrder = "manga", prevContext = []) {
+  const sourceName = LANG_NAMES[sourceLang] || sourceLang;
+  const targetName = LANG_NAMES[targetLang] || targetLang;
+  const isWebtoon = readingOrder === "webtoon";
+
+  const toneNote = getToneNote(tone);
 
   return `You are a professional comic localization translator with 20+ years of experience translating ${isWebtoon ? 'Webtoons/Manhwa' : 'Manga'} from ${sourceName} to ${targetName}.
 
 Below is the OCR text scanned from a ${isWebtoon ? 'Webtoon (vertical scroll, read top-to-bottom)' : 'traditional Manga (read top-to-bottom, right-to-left)'} page, along with the image of that same page. EACH LINE is a separate speech bubble / text box in reading sequence.
 
-OCR text:
+${buildPrevBlock(prevContext)}OCR text:
 ${text}
 
 TRANSLATION INSTRUCTIONS:
@@ -276,6 +306,119 @@ TRANSLATION INSTRUCTIONS:
 Return ONLY the translation. Do not add any explanation or notes.`;
 }
 
+
+// ---------------------------------------------------------------------------
+// COMBINED MODE: OCR + dịch trong MỘT lần gọi Gemini (tiết kiệm ~50% quota/ngày)
+// ---------------------------------------------------------------------------
+
+// Gộp mọi part text của candidate đầu tiên; ném lỗi rõ ràng nếu bị chặn / rỗng.
+function extractText(data) {
+  const block = data && data.promptFeedback && data.promptFeedback.blockReason;
+  if (block) throw new Error(`Gemini từ chối xử lý ảnh này (${block}).`);
+  const cand = data && data.candidates && data.candidates[0];
+  const parts = (cand && cand.content && cand.content.parts) || [];
+  const text = parts.map((p) => (p && typeof p.text === "string" ? p.text : "")).join("");
+  if (!text.trim() && cand && cand.finishReason && cand.finishReason !== "STOP") {
+    throw new Error(`Gemini không trả kết quả (finishReason: ${cand.finishReason}).`);
+  }
+  return text;
+}
+
+function buildCombinedPrompt({
+  sourceLang = "ja",
+  targetLang = "vi",
+  skipSfx = true,
+  readingOrder = "manga",
+  tone = "natural",
+  prevContext = []
+} = {}) {
+  const { isWebtoon, orderDirective, bubbleRule, sfxInstruction } = getOcrRuleBlocks(skipSfx, readingOrder);
+  const sourceName = LANG_NAMES[sourceLang] || sourceLang;
+  const targetName = LANG_NAMES[targetLang] || targetLang;
+  const toneNote = getToneNote(tone);
+  const furigana = sourceLang === "ja"
+    ? "\n- If kanji is paired with furigana, read only the main text (the kanji) and ignore the furigana."
+    : "";
+
+  return `You are a professional comic OCR specialist AND a senior ${sourceName}-to-${targetName} localization translator.
+This image is one page of a ${sourceName} ${isWebtoon ? "webtoon / vertical strip" : "manga"}. Do BOTH jobs in ONE pass:
+  A) OCR the text of every speech bubble / caption box exactly as written.
+  B) Translate each of those bubbles into natural ${targetName}.
+
+${buildPrevBlock(prevContext)}=== OCR RULES ===
+${orderDirective}
+${bubbleRule}
+${sfxInstruction}
+- Do NOT translate inside the "src" field: keep the exact original text and punctuation.${furigana}
+
+=== TRANSLATION RULES ===
+- Use the IMAGE (expressions, relationships, scene) to translate with the right meaning and emotion.
+- Natural spoken ${targetName} suited to comic dialogue; choose pronouns / forms of address that fit the characters.${toneNote}
+- Use normal sentence case; do NOT write whole sentences in capitals just because the source lettering is uppercase.
+- The Japanese wave dash "〜" / "～" marks a drawn-out sound: keep it or render the elongation naturally, do NOT turn it into "...".
+- A standalone sound-effect word: translate or transliterate it BRIEFLY, keeping the spirit of a sound effect.
+- NEVER write placeholders such as "(blank)", "(empty)", "(bỏ trống)", "N/A".
+
+=== OUTPUT FORMAT (STRICT) ===
+Return ONLY a JSON array, with no markdown fences and no commentary. One element per bubble, in reading order:
+[{"n":1,"src":"<original text of bubble 1, ONE line>","tgt":"<${targetName} translation of bubble 1, ONE line>"}]
+- "n" starts at 1 and increases by 1 with no gaps.
+- "src" and "tgt" must each be a single line (never contain a line break).
+- Every element MUST have a non-empty "tgt" that translates exactly its own "src".
+- If the page has no readable text, return [].`;
+}
+
+function cleanCell(v) {
+  return String(v == null ? "" : v)
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function isBlankCell(v) {
+  return !v || BLANK_MARKER_RE.test(v);
+}
+
+// Trả về { lines: [{src, tgt}], missing: [1-based index dòng thiếu bản dịch] } hoặc null nếu không parse được.
+function parseCombinedOutput(raw) {
+  let text = String(raw || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  let arr = null;
+  try {
+    arr = JSON.parse(text);
+  } catch (e) {
+    const m = text.match(/\[[\s\S]*\]/);
+    if (m) {
+      try { arr = JSON.parse(m[0]); } catch (e2) { arr = null; }
+    }
+  }
+  if (arr && !Array.isArray(arr)) {
+    arr = arr.lines || arr.bubbles || arr.items || null;
+  }
+  if (!Array.isArray(arr)) return null;
+
+  const lines = [];
+  const missing = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const src = cleanCell(item.src != null ? item.src : (item.jp != null ? item.jp : item.ocr));
+    if (isBlankCell(src)) continue; // bubble rỗng / placeholder: bỏ cả src lẫn tgt để 2 cột luôn thẳng hàng
+    let tgt = cleanCell(item.tgt != null ? item.tgt : (item.vi != null ? item.vi : item.translation));
+    if (isBlankCell(tgt)) {
+      tgt = src; // thiếu bản dịch -> giữ dòng gốc đúng vị trí, số dòng vẫn khớp
+      missing.push(lines.length + 1);
+    }
+    lines.push({ src, tgt });
+  }
+  return { lines, missing };
+}
+
 module.exports = {
   LITE_MODELS_FALLBACK,
   getAllGeminiApiKeys,
@@ -283,5 +426,9 @@ module.exports = {
   callGeminiWithFallback,
   stripEmptyLines,
   buildOcrPrompt,
-  buildTranslatePrompt
+  buildTranslatePrompt,
+  buildCombinedPrompt,
+  parseCombinedOutput,
+  extractText,
+  sanitizePrevContext
 };

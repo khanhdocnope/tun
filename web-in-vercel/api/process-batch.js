@@ -4,7 +4,11 @@ const {
   callGeminiWithFallback,
   stripEmptyLines,
   buildOcrPrompt,
-  buildTranslatePrompt
+  buildTranslatePrompt,
+  buildCombinedPrompt,
+  parseCombinedOutput,
+  extractText,
+  sanitizePrevContext
 } = require("./batch-helper");
 
 module.exports = async (req, res) => {
@@ -63,69 +67,71 @@ module.exports = async (req, res) => {
     const mode = (req.body && req.body.mode) || "all"; // 'all', 'ocr_only', 'translate_only'
     const readingOrder = (req.body && (req.body.readingOrder || req.body.comicType)) || "manga";
 
+    const prevContext = sanitizePrevContext(req.body && req.body.prevContext);
+
     let ocrTextBlock = (req.body && req.body.existingOcr) || "";
     let viTextBlock = "";
     let modelUsedFinal = modelName;
     let keyUsedIndex = 0;
     let totalElapsed = 0;
+    let apiCalls = 0;
+    let missing = [];
+    let usedFallback = false;
 
-    // STEP 1: Run OCR if needed
-    if (mode === "all" || mode === "ocr_only") {
-      const ocrPrompt = buildOcrPrompt(sourceLang, skipSFX, readingOrder);
-      const ocrPayload = {
-        contents: [
-          {
-            parts: [
-              { text: ocrPrompt },
-              { inline_data: { mime_type: mimeType, data: base64Image } }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1
-        }
-      };
+    const imagePart = { inline_data: { mime_type: mimeType, data: base64Image } };
 
-      const startOcr = Date.now();
-      const { data, modelUsed, keyIndex } = await callGeminiWithFallback(modelName, allKeys, ocrPayload);
-      totalElapsed += Date.now() - startOcr;
-      modelUsedFinal = modelUsed;
-      keyUsedIndex = keyIndex || 0;
-
-      let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      rawText = rawText
-        .replace(/\n\s*\n/g, "\n")
-        .replace(/[ \t]{2,}/g, " ")
-        .trim();
-      ocrTextBlock = stripEmptyLines(rawText);
+    // Một lần gọi Gemini, cộng dồn thống kê
+    async function callGemini(promptText, generationConfig) {
+      const started = Date.now();
+      const out = await callGeminiWithFallback(modelName, allKeys, {
+        contents: [{ parts: [{ text: promptText }, imagePart] }],
+        generationConfig
+      });
+      totalElapsed += Date.now() - started;
+      apiCalls += 1;
+      modelUsedFinal = out.modelUsed;
+      keyUsedIndex = out.keyIndex || 0;
+      return extractText(out.data);
     }
 
-    // STEP 2: Run Translate if needed
-    if ((mode === "all" || mode === "translate_only") && ocrTextBlock) {
-      const transPrompt = buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone, readingOrder);
-      const transPayload = {
-        contents: [
-          {
-            parts: [
-              { text: transPrompt },
-              { inline_data: { mime_type: mimeType, data: base64Image } }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.6
-        }
-      };
+    // Luồng 2 bước cũ (OCR rồi dịch) - dùng cho ocr_only / translate_only và làm fallback
+    async function runOcrStep() {
+      const raw = await callGemini(buildOcrPrompt(sourceLang, skipSFX, readingOrder), { temperature: 0.1 });
+      ocrTextBlock = stripEmptyLines(raw.replace(/\n\s*\n/g, "\n").replace(/[ \t]{2,}/g, " ").trim());
+    }
 
-      const startTrans = Date.now();
-      const { data, modelUsed, keyIndex } = await callGeminiWithFallback(modelName, allKeys, transPayload);
-      totalElapsed += Date.now() - startTrans;
-      modelUsedFinal = modelUsed;
-      keyUsedIndex = keyIndex || 0;
+    async function runTranslateStep() {
+      const raw = await callGemini(
+        buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone, readingOrder, prevContext),
+        { temperature: 0.6 }
+      );
+      viTextBlock = stripEmptyLines(
+        raw.replace(/^(?:Translation:|Translated text:|Here is the translation:)/i, "").trim()
+      );
+    }
 
-      let rawTrans = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      rawTrans = rawTrans.replace(/^(?:Translation:|Translated text:|Here is the translation:)/i, "").trim();
-      viTextBlock = stripEmptyLines(rawTrans);
+    if (mode === "all") {
+      // OCR + dịch trong MỘT lần gọi -> mỗi trang tốn 1 request thay vì 2
+      const raw = await callGemini(
+        buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext }),
+        { temperature: 0.6, responseMimeType: "application/json" }
+      );
+      const parsed = parseCombinedOutput(raw);
+
+      if (parsed) {
+        ocrTextBlock = parsed.lines.map((l) => l.src).join("\n");
+        viTextBlock = parsed.lines.map((l) => l.tgt).join("\n");
+        missing = parsed.missing;
+      } else {
+        // Gemini trả JSON hỏng -> quay lại luồng 2 bước để vẫn có kết quả
+        console.warn("[process-batch] Combined output không parse được, fallback 2 bước.");
+        usedFallback = true;
+        await runOcrStep();
+        if (ocrTextBlock) await runTranslateStep();
+      }
+    } else {
+      if (mode === "ocr_only") await runOcrStep();
+      if (mode === "translate_only" && ocrTextBlock) await runTranslateStep();
     }
 
     res.json({
@@ -133,6 +139,10 @@ module.exports = async (req, res) => {
       timeMs: totalElapsed,
       model: modelUsedFinal,
       keyIndex: keyUsedIndex,
+      apiCalls,
+      fallback: usedFallback,
+      missingTranslation: missing,
+      lineCount: ocrTextBlock ? ocrTextBlock.split("\n").length : 0,
       ocrTextBlock,
       viTextBlock
     });
