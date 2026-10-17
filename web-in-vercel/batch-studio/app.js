@@ -32,6 +32,14 @@
     btnExportTxt: document.getElementById('btnExportTxt'),
     btnExportDoc: document.getElementById('btnExportDoc'),
     btnCopyChapter: document.getElementById('btnCopyChapter'),
+    exportModal: document.getElementById('exportModal'),
+    btnCloseExportModal: document.getElementById('btnCloseExportModal'),
+    btnDismissExportModal: document.getElementById('btnDismissExportModal'),
+    modalBtnDownloadTxt: document.getElementById('modalBtnDownloadTxt'),
+    modalBtnDownloadDoc: document.getElementById('modalBtnDownloadDoc'),
+    modalBtnCopyAll: document.getElementById('modalBtnCopyAll'),
+    exportPreviewTextarea: document.getElementById('exportPreviewTextarea'),
+    exportTextLengthBadge: document.getElementById('exportTextLengthBadge'),
 
     // Batch Actions
     btnOcrAll: document.getElementById('btnOcrAll'),
@@ -225,6 +233,34 @@
         el.exportMenu.style.display = 'none';
       }
     });
+
+    // Export Modal Event Listeners
+    if (el.btnCloseExportModal) {
+      el.btnCloseExportModal.addEventListener('click', closeExportModal);
+    }
+    if (el.btnDismissExportModal) {
+      el.btnDismissExportModal.addEventListener('click', closeExportModal);
+    }
+    if (el.modalBtnDownloadTxt) {
+      el.modalBtnDownloadTxt.addEventListener('click', () => {
+        const text = el.exportPreviewTextarea.value;
+        const filename = 'Manga_Chapter_Script_' + Date.now() + '.txt';
+        executeFileDownload(filename, text, 'txt');
+      });
+    }
+    if (el.modalBtnDownloadDoc) {
+      el.modalBtnDownloadDoc.addEventListener('click', () => {
+        const text = el.exportPreviewTextarea.value;
+        const filename = 'Manga_Chapter_Script_' + Date.now() + '.doc';
+        executeFileDownload(filename, text, 'doc');
+      });
+    }
+    if (el.modalBtnCopyAll) {
+      el.modalBtnCopyAll.addEventListener('click', () => {
+        const text = el.exportPreviewTextarea.value;
+        copyToClipboard(text, 'Đã sao chép toàn bộ kịch bản vào bộ nhớ tạm!');
+      });
+    }
 
     el.btnStopQueue.addEventListener('click', () => {
       state.stopQueueRequested = true;
@@ -720,21 +756,33 @@
     }
   }
 
-  // Download file helper (hoạt động 100% trên PC, điện thoại và trong iframe)
-  function downloadTextFile(filename, text, format = 'txt') {
+  // Modal & Download helpers (hoạt động 100% trên PC, Mobile Safari/Chrome và trong iFrame)
+  function openExportModal(text) {
+    if (!el.exportModal) return;
+    if (el.exportPreviewTextarea) el.exportPreviewTextarea.value = text;
+    if (el.exportTextLengthBadge) el.exportTextLengthBadge.textContent = text.length.toLocaleString('vi-VN') + ' ký tự';
+    el.exportModal.style.display = 'flex';
+  }
+
+  function closeExportModal() {
+    if (el.exportModal) el.exportModal.style.display = 'none';
+  }
+
+  // Thực hiện tải file với đa cơ chế (Blob link không target blank, Fallback Form POST/GET, Data URL)
+  function executeFileDownload(filename, text, format = 'txt') {
     if (!text || !text.trim()) {
-      showToast('⚠️ Nội dung trống, không thể tải xuống.');
+      showToast('⚠️ Nội dung trống, không thể tải.');
       return;
     }
 
-    // 1. Tải trực tiếp bằng Blob (nhanh, chuẩn UTF-8 BOM cho Notepad/Word, không bị trễ context người dùng)
+    // 1. Thử cơ chế Blob URL (CHUẨN NHẤT: Bỏ hoàn toàn target="_blank" để không bị Popup Blocker chặn)
     try {
       const mime = format === 'doc' ? 'application/msword;charset=utf-8' : 'text/plain;charset=utf-8';
       const blob = new Blob(['\uFEFF' + text], { type: mime });
 
       if (window.navigator && window.navigator.msSaveOrOpenBlob) {
         window.navigator.msSaveOrOpenBlob(blob, filename);
-        showToast(`Đã tải xuống file: ${filename}`);
+        showToast('Đã lưu file: ' + filename);
         return;
       }
 
@@ -742,28 +790,27 @@
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
-      a.target = '_blank';
-      a.rel = 'noopener';
+      // Tuyệt đối KHÔNG gán a.target = '_blank' trên blob URL vì Chrome/Safari/Iframe sẽ chặn vì tưởng popup
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
 
       setTimeout(() => {
         if (a.parentNode) document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }, 3500);
+      }, 2000);
 
-      showToast(`Đã tải xuống file: ${filename}`);
+      showToast('Đang tải file: ' + filename);
       return;
     } catch (err) {
-      console.warn('Direct blob download failed, trying server fallback:', err);
+      console.warn('Blob download error:', err);
     }
 
-    // 2. Dự phòng gửi Form POST qua API Server
+    // 2. Dự phòng: Điều hướng Form POST về API Server
     try {
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = '/api/download-script';
-      form.target = '_blank';
       form.style.display = 'none';
 
       const addField = (n, v) => {
@@ -782,10 +829,32 @@
       setTimeout(() => {
         if (form.parentNode) form.parentNode.removeChild(form);
       }, 2000);
-      showToast(`Đang tải xuống file: ${filename}`);
+      showToast('Đang tải file qua server...');
+      return;
     } catch (e2) {
+      console.warn('Server fallback failed:', e2);
+    }
+
+    // 3. Dự phòng cuối: Data URI
+    try {
+      const encoded = encodeURIComponent(text);
+      const a = document.createElement('a');
+      a.href = 'data:text/plain;charset=utf-8,\uFEFF' + encoded;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { if (a.parentNode) document.body.removeChild(a); }, 1000);
+      showToast('Đã tải qua Data URI');
+    } catch (e3) {
       copyToClipboard(text, 'Không thể tải file tự động, đã sao chép toàn bộ kịch bản vào bộ nhớ tạm!');
     }
+  }
+
+  function downloadTextFile(filename, text, format = 'txt') {
+    // Luôn mở Export Modal để người dùng có giao diện xem trước & nút bấm trực tiếp (đặc biệt hữu ích trên điện thoại / iframe)
+    openExportModal(text);
+    // Đồng thời kích hoạt tải file ngay lập tức
+    executeFileDownload(filename, text, format);
   }
 
   function generateChapterContent() {
