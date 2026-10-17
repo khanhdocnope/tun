@@ -61,6 +61,7 @@ Dự án đã được chốt và tối ưu cơ chế Dual-Key & Model Gemini nh
 5. Tối ưu Mobile CSS: Cấu hình grid 2x2 cho nút bấm trên di động (< 480px), thanh công cụ không bị vỡ.
 6. Thay thế toàn bộ emoji thành icon SVG vector sắc nét trên cả trang chính và Batch Studio Pro.
 7. Khắc phục triệt để lỗi định tuyến Vercel: Truy cập `/batch-studio` hiển thị chính xác trang phòng dịch Batch Studio Pro, không bị rơi về trang chủ.
+8. Chuẩn hóa định dạng kịch bản xuất (.txt / copy): Ngắn gọn, súc tích chuẩn `=== <tên_file> ===` kèm danh sách câu thoại dịch, loại bỏ hoàn toàn các banner, header rườm rà hay nhãn tag thừa.
 
 ---
 

@@ -884,29 +884,35 @@
   }
 
   function generateChapterContent() {
-    let content = `=======================================================\n`;
-    content += `MANGA CHAPTER TRANSLATION SCRIPT (KỊCH BẢN DỊCH MANGA)\n`;
-    content += `Thời gian xuất: ${new Date().toLocaleString('vi-VN')}\n`;
-    content += `Tổng số trang: ${state.images.length}\n`;
-    content += `=======================================================\n\n`;
+    const pageBlocks = [];
 
-    state.images.forEach((img, idx) => {
-      content += `-------------------------------------------------------\n`;
-      content += `TRANG ${idx + 1}: ${img.name}\n`;
-      content += `-------------------------------------------------------\n`;
-
+    state.images.forEach((img) => {
+      let lines = [];
       if (img.dialogues && img.dialogues.length > 0) {
-        img.dialogues.forEach(d => {
-          content += `[${d.id}]\n`;
-          content += `JP: ${d.jp || ''}\n`;
-          content += `VI: ${d.vi || ''}\n\n`;
-        });
+        lines = img.dialogues
+          .map(d => (d.vi || d.jp || '').trim())
+          .filter(Boolean);
+      } else if (img.viText && img.viText.trim()) {
+        lines = img.viText
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(Boolean);
+      } else if (img.ocrText && img.ocrText.trim()) {
+        lines = img.ocrText
+          .split(/\r?\n/)
+          .map(l => l.trim())
+          .filter(Boolean);
+      }
+
+      const body = lines.join('\n');
+      if (body) {
+        pageBlocks.push(`=== ${img.name} ===\n${body}`);
       } else {
-        content += `[RAW JP]:\n${img.ocrText || '(Trống)'}\n\n`;
-        content += `[DỊCH VI]:\n${img.viText || '(Trống)'}\n\n`;
+        pageBlocks.push(`=== ${img.name} ===`);
       }
     });
-    return content;
+
+    return pageBlocks.join('\n\n') + '\n';
   }
 
   // Export Full Chapter Script
