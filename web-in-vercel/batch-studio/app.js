@@ -550,7 +550,7 @@
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
-          <button class="btn-zoom-preview" title="Xem ảnh lớn">
+          <button class="btn-zoom-preview" title="Chỉnh kích thước ảnh (Phóng to / Thu nhỏ)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
@@ -580,7 +580,7 @@
               </svg>
             </button>
           </div>
-          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình">
+          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -606,26 +606,116 @@
     // Bind item events
     const thumbCol = card.querySelector('.col-thumb');
     const btnZoom = card.querySelector('.btn-zoom-preview');
+    const cardSizeWidget = card.querySelector('.card-size-widget');
     const cardSlider = card.querySelector('.card-slider');
     const cardReset = card.querySelector('.card-reset-size');
     const imgEl = card.querySelector('.col-thumb img');
 
+    // 1. Chỉ hiện thanh trượt khi ấn vào nút [⤢] (toggle bật/tắt)
+    btnZoom.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = cardSizeWidget.classList.toggle('show');
+      btnZoom.classList.toggle('active', isVisible);
+    });
+
+    // Ngăn chặn sự kiện click bên trong widget làm tắt chính nó hoặc kéo ảnh
+    const preventDragThroughWidget = (e) => e.stopPropagation();
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(evt => {
+      cardSizeWidget.addEventListener(evt, preventDragThroughWidget);
+    });
+
+    // Đóng widget khi click ra bên ngoài card
+    const handleOutsideClick = (e) => {
+      if (!card.contains(e.target)) {
+        cardSizeWidget.classList.remove('show');
+        btnZoom.classList.remove('active');
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+
+    // Xử lý kéo thanh trượt zoom
     cardSlider.addEventListener('input', (e) => {
       applyThumbZoom(e.target.value);
     });
 
+    // Nút reset zoom về 0%
     cardReset.addEventListener('click', (e) => {
       e.stopPropagation();
       applyThumbZoom(0);
       thumbCol.scrollTop = 0;
+      thumbCol.scrollLeft = 0;
     });
 
-    const openLightbox = () => {
+    // 2. Kéo rê chuột hoặc chạm vuốt (touch) vào ảnh để di chuyển ảnh khi phóng to
+    let isPointerDown = false;
+    let startX = 0;
+    let startY = 0;
+    let startScrollLeft = 0;
+    let startScrollTop = 0;
+    let hasDragged = false;
+
+    // Chặn kéo thả hình ảnh mặc định của trình duyệt
+    imgEl.setAttribute('draggable', 'false');
+    imgEl.addEventListener('dragstart', (e) => e.preventDefault());
+
+    thumbCol.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.card-size-widget')) return;
+      if (e.button !== 0 && e.pointerType === 'mouse') return; // Chỉ nhận click chuột trái hoặc chạm ngón tay
+      isPointerDown = true;
+      hasDragged = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      startScrollLeft = thumbCol.scrollLeft;
+      startScrollTop = thumbCol.scrollTop;
+      try {
+        thumbCol.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    });
+
+    thumbCol.addEventListener('pointermove', (e) => {
+      if (!isPointerDown) return;
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        hasDragged = true;
+        thumbCol.classList.add('is-panning');
+      }
+
+      if (hasDragged) {
+        thumbCol.scrollLeft = startScrollLeft - deltaX;
+        thumbCol.scrollTop = startScrollTop - deltaY;
+      }
+    });
+
+    const handlePointerEnd = (e) => {
+      if (!isPointerDown) return;
+      isPointerDown = false;
+      thumbCol.classList.remove('is-panning');
+      try {
+        if (thumbCol.hasPointerCapture(e.pointerId)) {
+          thumbCol.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+      if (hasDragged) {
+        // Trì hoãn 1 chút để không kích hoạt nhầm sự kiện click mở lightbox
+        setTimeout(() => { hasDragged = false; }, 80);
+      }
+    };
+
+    thumbCol.addEventListener('pointerup', handlePointerEnd);
+    thumbCol.addEventListener('pointercancel', handlePointerEnd);
+
+    // Chỉ mở lightbox khi người dùng bấm click đơn thuần (không phải sau khi rê/kéo ảnh)
+    imgEl.addEventListener('click', (e) => {
+      if (hasDragged) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       el.lightboxImg.src = item.base64;
       el.lightboxModal.style.display = 'flex';
-    };
-    btnZoom.addEventListener('click', openLightbox);
-    imgEl.addEventListener('click', openLightbox);
+    });
 
     // Text inputs
     const textareaJp = card.querySelector('.textarea-jp');
