@@ -19,7 +19,7 @@
   
   <style>
 /* ==========================================================================
-   ⚡ MANGA STUDIO AI - ULTRA PREMIUM STYLING (DARK / CYBERPUNK MANGA)
+   MANGA STUDIO AI - ULTRA PREMIUM STYLING (DARK / CYBERPUNK MANGA)
    ========================================================================== */
 
 :root {
@@ -1064,7 +1064,7 @@ details.modern-details[open] summary::after {
           
           <div id="cleaner-preview-wrap" class="file-preview">
             <img id="cleaner-preview-img" alt="Preview">
-            <button id="cleaner-clear-btn" class="btn-clear" title="Xóa ảnh">✕</button>
+            <button id="cleaner-clear-btn" class="btn-clear" title="Xóa ảnh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
 
           <div class="form-group">
@@ -1128,8 +1128,8 @@ details.modern-details[open] summary::after {
 
           <div class="view-modes">
             <button id="btn-mode-split" class="btn-view-mode active">↔ So sánh kéo trượt (Split)</button>
-            <button id="btn-mode-cleaned" class="btn-view-mode">✨ Chỉ xem ảnh đã xóa</button>
-            <button id="btn-mode-mask" class="btn-view-mode">🎭 Xem Color Mask (Xanh: Chat / Đỏ: SFX)</button>
+            <button id="btn-mode-cleaned" class="btn-view-mode">Chỉ xem ảnh đã xóa</button>
+            <button id="btn-mode-mask" class="btn-view-mode">Xem Color Mask (Xanh: Chat / Đỏ: SFX)</button>
           </div>
 
           <div style="display:flex; gap:1rem; margin-top:1.25rem;">
@@ -1156,7 +1156,7 @@ details.modern-details[open] summary::after {
 
           <div id="trans-dropzone" class="dropzone">
             <input type="file" id="trans-file-input" accept="image/*" style="display:none;">
-            <div class="drop-icon">💬</div>
+            <div class="drop-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
             <div class="drop-text">
               <h4>Tải trang truyện Manga/Manhwa cần dịch</h4>
               <p>Hỗ trợ tiếng Nhật, Hàn, Trung, Anh</p>
@@ -1165,32 +1165,32 @@ details.modern-details[open] summary::after {
 
           <div id="trans-preview-wrap" class="file-preview">
             <img id="trans-preview-img" alt="Preview">
-            <button id="trans-clear-btn" class="btn-clear" title="Xóa ảnh">✕</button>
+            <button id="trans-clear-btn" class="btn-clear" title="Xóa ảnh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
 
           <!-- AI Vision Mode Switcher (VisionBox inspired) -->
           <div class="form-group" style="margin-bottom: 1.25rem;">
             <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>⚙️ Chế độ dịch AI</span>
-              <span class="badge-tag badge-purple">⚡ Gemini 2.5 Flash Vision</span>
+              <span>Chế độ dịch AI</span>
+              <span class="badge-tag badge-purple">Gemini 2.5 Flash Vision</span>
             </label>
             <div class="mode-segmented-tabs">
               <button type="button" id="trans-btn-mode-quick" class="mode-segmented-btn active">
-                ⚡ Quick (1-Click)
+                Quick (1-Click)
               </button>
               <button type="button" id="trans-btn-mode-pro" class="mode-segmented-btn">
-                🛠️ Pro (OCR → Sửa)
+                Pro (OCR → Sửa)
               </button>
             </div>
             <p id="trans-mode-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem; line-height:1.4;">
-              ⚡ <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).
+              <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).
             </p>
           </div>
 
           <!-- Speech Bubble Only Filter (User Highlighted Request) -->
           <div class="toggle-card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
             <div class="toggle-info">
-              <h5 style="color: var(--emerald);">🎯 Chỉ nhận diện chữ trong Bong Bóng Thoại</h5>
+              <h5 style="color: var(--emerald);">Chỉ nhận diện chữ trong Bong Bóng Thoại</h5>
               <p>Tự động bỏ qua SFX vẽ tay ngoài nền artwork (Bubble Boundary Rule)</p>
             </div>
             <label class="switch">
@@ -1202,8 +1202,8 @@ details.modern-details[open] summary::after {
           <div class="form-group">
             <label class="form-label">Thứ tự đọc logic</label>
             <select id="trans-reading-order" class="form-select">
-              <option value="manga" selected>📖 Manga truyền thống (Phải qua Trái, Trên xuống Dưới)</option>
-              <option value="webtoon">📜 Webtoon / Manhwa (Trên xuống Dưới tuần tự)</option>
+              <option value="manga" selected>Manga truyền thống (Phải qua Trái, Trên xuống Dưới)</option>
+              <option value="webtoon">Webtoon / Manhwa (Trên xuống Dưới tuần tự)</option>
             </select>
           </div>
 
@@ -1215,31 +1215,31 @@ details.modern-details[open] summary::after {
           <!-- Quick Mode Actions -->
           <div id="trans-quick-controls">
             <button id="btn-run-quick-trans" class="btn-primary" disabled style="background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%); font-weight:700; width:100%;">
-              <span>⚡ Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>
+              <span>Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>
             </button>
           </div>
 
           <!-- Pro Mode Actions (Step-by-step: OCR -> Edit -> Translate) -->
           <div id="trans-pro-controls" style="display:none; flex-direction:column; gap:0.6rem;">
             <button id="btn-run-vision-ocr" class="btn-primary" disabled style="background: linear-gradient(135deg, #2563eb, #3b82f6); font-weight:700; width:100%;">
-              <span>🔍 Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>
+              <span>Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>
             </button>
             <button id="btn-run-vision-translate" class="btn-primary" disabled style="background: linear-gradient(135deg, #059669, #10b981); font-weight:700; width:100%;">
-              <span>🌐 Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>
+              <span>Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>
             </button>
           </div>
 
           <!-- Legacy / Advanced Detector Dropdown (Collapsible) -->
           <details class="modern-details" style="margin-top:1.25rem;">
             <summary>
-              <span>⚙️ Tùy chọn nâng cao (Engine Bounding Box)</span>
+              <span>Tùy chọn nâng cao (Engine Bounding Box)</span>
             </summary>
             <div style="margin-top:0.85rem; display:flex; flex-direction:column; gap:0.75rem;">
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label">Công cụ nhận diện OCR</label>
                 <select id="trans-ocr-engine" class="form-select">
                   <option value="ja_manga" selected>🇯🇵 manga-ocr (Chuyên tiếng Nhật, chữ dọc & ngang)</option>
-                  <option value="multilingual">🌏 PaddleOCR (Hàn, Trung, Anh, v.v.)</option>
+                  <option value="multilingual">PaddleOCR (Hàn, Trung, Anh, v.v.)</option>
                 </select>
               </div>
 
@@ -1254,7 +1254,7 @@ details.modern-details[open] summary::after {
               </div>
 
               <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch</label>
+                <label class="form-label" for="trans-llm-model">Mô hình AI Dịch</label>
                 <select id="trans-llm-model" class="form-select">
               <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
               <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
@@ -1268,7 +1268,7 @@ details.modern-details[open] summary::after {
               </div>
 
               <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; justify-content:center; padding:0.75rem 1rem;">
-                <span>🤖 Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>
+                <span>Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>
               </button>
             </div>
           </details>
@@ -1310,23 +1310,23 @@ details.modern-details[open] summary::after {
           <!-- Refine Loop Toolbox (VisionBox feature) -->
           <div id="trans-refine-box" style="display:none; margin-top:1rem; padding:0.85rem 1rem; border-radius:var(--radius-md); background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-              <span style="font-size:0.85rem; font-weight:600; color:var(--text-main);">🪄 Tinh Chỉnh & Soát Lỗi (Refine Loop)</span>
+              <span style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Tinh Chỉnh & Soát Lỗi (Refine Loop)</span>
               <span style="font-size:0.72rem; color:var(--cyan); background:rgba(6,182,212,0.1); padding:0.15rem 0.5rem; border-radius:4px;">Gemini 3 Flash</span>
             </div>
             <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
               <input type="text" id="trans-refine-input" class="form-input" placeholder="Chỉ đạo riêng: vd 'đổi xưng hô mày/tao', 'dịch sát nghĩa hơn'..." style="flex:1; min-width:200px; font-size:0.82rem; padding:0.4rem 0.75rem;">
               <button id="btn-refine-translate" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
-                ✨ Sửa Bản Dịch
+                Sửa Bản Dịch
               </button>
               <button id="btn-refine-ocr" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
-                🔍 Soát Lỗi OCR
+                Soát Lỗi OCR
               </button>
             </div>
           </div>
 
           <div style="display:flex; gap:1rem; margin-top:1.25rem;">
             <button id="btn-copy-script" class="btn-primary" style="flex:1; background:#4f46e5;">
-              📋 Sao Chép Kịch Bản Dịch
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Sao Chép Kịch Bản Dịch
             </button>
             <a id="btn-download-script-txt" class="btn-primary" style="flex:1; text-decoration:none; background:#0891b2; display:none;">
               ⬇️ Tải Kịch Bản (.txt)
@@ -1348,7 +1348,7 @@ details.modern-details[open] summary::after {
 
           <div id="batch-dropzone" class="dropzone">
             <input type="file" id="batch-file-input" accept=".zip" style="display:none;">
-            <div class="drop-icon">📦</div>
+            <div class="drop-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
             <div class="drop-text">
               <h4>Kéo thả tệp .ZIP chứa toàn bộ chapter (nhiều trang)</h4>
               <p>Hỗ trợ tệp ZIP chứa nhiều file PNG/JPG/WebP</p>
@@ -1358,8 +1358,8 @@ details.modern-details[open] summary::after {
           <div class="form-group">
             <label class="form-label">Chọn tác vụ xử lý hàng loạt</label>
             <select id="batch-mode-select" class="form-select">
-              <option value="clean" selected>🧹 Tẩy chữ & Inpainting hàng loạt (Batch Cleaner)</option>
-              <option value="translate">🌐 Dịch thuật & Xuất kịch bản hàng loạt (Batch Translator)</option>
+              <option value="clean" selected>Tẩy chữ & Inpainting hàng loạt (Batch Cleaner)</option>
+              <option value="translate">Dịch thuật & Xuất kịch bản hàng loạt (Batch Translator)</option>
             </select>
           </div>
 
@@ -1368,9 +1368,9 @@ details.modern-details[open] summary::after {
             <div class="form-group">
               <label class="form-label">Mô hình Inpainting</label>
               <select id="batch-clean-model" class="form-select">
-                <option value="anime-lama" selected>🌸 Anime-Manga LaMa</option>
-                <option value="big-lama">🎨 Big-LaMa Standard</option>
-                <option value="opencv-telea">⚡ OpenCV Telea</option>
+                <option value="anime-lama" selected>Anime-Manga LaMa</option>
+                <option value="big-lama">Big-LaMa Standard</option>
+                <option value="opencv-telea">OpenCV Telea</option>
               </select>
             </div>
             <div class="toggle-card">
@@ -1389,7 +1389,7 @@ details.modern-details[open] summary::after {
           <div id="batch-translate-options" style="display:none;">
             <div class="toggle-card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
               <div class="toggle-info">
-                <h5 style="color:var(--emerald);">🎯 Chỉ dịch chữ trong Bong bóng chat</h5>
+                <h5 style="color:var(--emerald);">Chỉ dịch chữ trong Bong bóng chat</h5>
                 <p>Loại bỏ SFX vẽ tay để kịch bản thoại chuẩn 100%</p>
               </div>
               <label class="switch">
@@ -1412,22 +1412,22 @@ details.modern-details[open] summary::after {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" for="batch-llm-model">🤖 Mô hình AI Dịch Ngữ Cảnh</label>
+              <label class="form-label" for="batch-llm-model">Mô hình AI Dịch Ngữ Cảnh</label>
               <select id="batch-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
-              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
+              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
+              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
+              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
+              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
               </select>
             </div>
           </div>
 
           <button id="btn-run-batch" class="btn-primary" disabled>
-            <span>🚀 Bắt Đầu Xử Lý Hàng Loạt Tệp ZIP</span>
+            <span>Bắt Đầu Xử Lý Hàng Loạt Tệp ZIP</span>
           </button>
 
           <!-- Progress -->
@@ -1453,7 +1453,7 @@ details.modern-details[open] summary::after {
           </div>
 
           <div id="batch-empty-view" style="text-align:center; padding: 4rem 2rem; color:var(--text-muted);">
-            <div style="font-size:3rem; margin-bottom:1rem;">📂</div>
+            <div style="margin-bottom:1rem; color:#6366f1;"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
             <h4>Chưa có dữ liệu xử lý ZIP</h4>
             <p style="font-size:0.85rem; margin-top:0.5rem;">Tải tệp ZIP lên để xem tiến trình từng trang và tải gói kết quả hoàn chỉnh.</p>
           </div>
@@ -1498,7 +1498,7 @@ details.modern-details[open] summary::after {
 
           <div id="retrans-dropzone" class="dropzone" style="margin-bottom:1rem; padding:1.25rem;">
             <input type="file" id="retrans-file-input" accept=".txt,text/plain" style="display:none;">
-            <div class="drop-icon" style="font-size:2rem; margin-bottom:0.25rem;">📄</div>
+            <div class="drop-icon" style="margin-bottom:0.25rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
             <div class="drop-text">
               <h4 style="font-size:0.95rem;">Tải tệp .txt kịch bản dịch dở / câu tiếng Nhật</h4>
               <p style="font-size:0.8rem;">Kéo thả hoặc nhấn để chọn file (Hỗ trợ UTF-8)</p>
@@ -1521,33 +1521,33 @@ Ví dụ:
 
           <!-- Badges analysis -->
           <div id="retrans-stats-box" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; font-size:0.82rem;">
-            <span class="badge-tag badge-purple">📄 <span id="retrans-stat-pages">0</span> trang</span>
-            <span class="badge-tag badge-cyan">💬 <span id="retrans-stat-lines">0</span> câu thoại</span>
+            <span class="badge-tag badge-purple"><span id="retrans-stat-pages">0</span> trang</span>
+            <span class="badge-tag badge-cyan"><span id="retrans-stat-lines">0</span> câu thoại</span>
             <span class="badge-tag badge-rose">🇯🇵 <span id="retrans-stat-ja">0</span> câu tiếng Nhật</span>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="retrans-mode-select">Chế độ Dịch lại</label>
             <select id="retrans-mode-select" class="form-select">
-              <option value="only_japanese" selected>⚡ Chỉ dịch các câu còn tiếng Nhật / chưa dịch (Giữ nguyên câu đã dịch tốt)</option>
-              <option value="all">🌐 Dịch lại toàn bộ kịch bản từ đầu</option>
+              <option value="only_japanese" selected>Chỉ dịch các câu còn tiếng Nhật / chưa dịch (Giữ nguyên câu đã dịch tốt)</option>
+              <option value="all">Dịch lại toàn bộ kịch bản từ đầu</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="retrans-model-select">🤖 Mô hình AI Dịch Ngữ Cảnh (Tốc độ 1.5s/đợt)</label>
+            <label class="form-label" for="retrans-model-select">Mô hình AI Dịch Ngữ Cảnh (Tốc độ 1.5s/đợt)</label>
             <select id="retrans-model-select" class="form-select">
-              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
-              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc độ, mượt mà)</option>
-              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ)</option>
-              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro)</option>
+              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
+              <option value="minimax-m3">MiniMax-M3 (Siêu tốc độ, mượt mà)</option>
+              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
+              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ)</option>
+              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro)</option>
             </select>
           </div>
 
           <button id="btn-run-retrans" class="btn-primary" disabled style="margin-top:0.5rem;">
-            <span>🚀 Bắt Đầu Dịch Lại Kịch Bản Bằng AI</span>
+            <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Bắt Đầu Dịch Lại Kịch Bản Bằng AI</span>
           </button>
 
           <!-- Progress -->
@@ -1570,13 +1570,13 @@ Ví dụ:
           <div class="panel-title">
             <span>Kịch Bản Đã Dịch Hoàn Chỉnh</span>
             <div style="display:flex; gap:0.5rem;">
-              <button id="btn-copy-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem;" disabled>📋 Sao Chép</button>
-              <a id="btn-download-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem; text-decoration:none; display:none;" download="kich_ban_hoan_chinh.txt">💾 Tải .txt</a>
+              <button id="btn-copy-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem;" disabled>Sao Chép</button>
+              <a id="btn-download-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem; text-decoration:none; display:none;" download="kich_ban_hoan_chinh.txt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Tải .txt</a>
             </div>
           </div>
 
           <div id="retrans-empty-view" style="text-align:center; padding: 4rem 2rem; color:var(--text-muted);">
-            <div style="font-size:3rem; margin-bottom:1rem;">✨</div>
+            <div style="margin-bottom:1rem; color:#8b5cf6;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
             <h4>Chưa có kịch bản dịch mới</h4>
             <p style="font-size:0.85rem; margin-top:0.5rem;">Tải tệp kịch bản hoặc dán câu tiếng Nhật ở cột bên trái và bấm dịch để nhận kết quả tiếng Việt sạch sẽ.</p>
           </div>
@@ -1592,7 +1592,7 @@ Ví dụ:
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
           <div style="display: flex; align-items: center; gap: 0.75rem;">
             <div style="width: 40px; height: 40px; border-radius: var(--radius-md); background: linear-gradient(135deg, #e11d48, #a855f7); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; box-shadow: 0 0 15px rgba(225, 29, 72, 0.35);">
-              📚
+              
             </div>
             <div>
               <h3 style="font-size: 1.15rem; font-weight: 700; color: #fff; margin-bottom: 2px;">Batch Studio Pro — Web Con Xử Lý Hàng Loạt (Đến 100 Trang)</h3>
@@ -1618,7 +1618,7 @@ Ví dụ:
     <div class="modal-box" style="max-height: 90vh; overflow-y: auto;">
       <div class="modal-header">
         <h3 style="font-weight:700; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Cấu Hình Hệ Thống & Dịch Thuật</h3>
-        <button id="btn-close-settings" class="modal-close">✕</button>
+        <button id="btn-close-settings" class="modal-close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
       </div>
 
       <!-- Phần 1: Backend Vision -->
@@ -1654,14 +1654,14 @@ Ví dụ:
         <div class="form-group" style="margin-bottom:0.75rem;">
           <label class="form-label" for="setting-llm-model">Tên Mô Hình AI (Model)</label>
           <select id="setting-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
-              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
+              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
+              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
+              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
+              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
           </select>
         </div>
 
@@ -1691,7 +1691,7 @@ Ví dụ:
 
   <script>
 /**
- * ⚡ MangaStudio AI - Frontend Application Logic (Vercel Edition)
+ * MangaStudio AI - Frontend Application Logic (Vercel Edition)
  * Autonomous Manga Cleaner & Speech Bubble Context Translator
  */
 
@@ -1744,7 +1744,13 @@ function showToast(message, type = "info") {
   const container = document.getElementById("toast-container");
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
-  const icon = type === "success" ? "✅" : type === "error" ? "❌" : "ℹ️";
+  
+      const icon = type === "success"
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>'
+        : type === "error"
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+
   toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
@@ -1797,7 +1803,7 @@ async function checkBackendHealth() {
     }
   } catch (err) {
     pill.className = "status-pill offline";
-    text.textContent = "Backend Offline (Bấm ⚙️ đổi URL)";
+    text.textContent = "Backend Offline (Bấm biểu tượng Cài đặt để đổi URL)";
   }
 }
 
@@ -1951,7 +1957,7 @@ function initCleaner() {
       state.cleanerMaskB64 = data.colorMaskBase64;
 
       const elapsed = Math.round(performance.now() - startT);
-      badge.textContent = `⚡ ${data.stats?.total_time_ms || elapsed}ms | ${payload.inpaintModel}`;
+      badge.textContent = `${data.stats?.total_time_ms || elapsed}ms | ${payload.inpaintModel}`;
 
       // Update comparison views
       document.getElementById("comp-before").src = state.cleanerOriginalB64;
@@ -1975,7 +1981,7 @@ function initCleaner() {
       badge.textContent = "Thất Bại";
     } finally {
       runBtn.disabled = false;
-      runBtn.innerHTML = `<span>🚀 AI Bóc Tách & Làm Sạch Nét Vẽ</span>`;
+      runBtn.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>AI Bóc Tách & Làm Sạch Nét Vẽ</span>`;
     }
   });
 
@@ -2079,7 +2085,7 @@ function initTranslator() {
       if (quickControls) quickControls.style.display = "block";
       if (proControls) proControls.style.display = "none";
       if (modeHint) {
-        modeHint.innerHTML = "⚡ <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).";
+        modeHint.innerHTML = "<b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).";
       }
     });
 
@@ -2090,7 +2096,7 @@ function initTranslator() {
       if (proControls) proControls.style.display = "flex";
       if (quickControls) quickControls.style.display = "none";
       if (modeHint) {
-        modeHint.innerHTML = "🛠️ <b>Pro Mode</b>: Quét OCR bóc tách từng bóng thoại (Temp 0.1) → Sửa chữ gốc → Dịch ngữ cảnh kèm ảnh (Temp 0.6).";
+        modeHint.innerHTML = "<b>Pro Mode</b>: Quét OCR bóc tách từng bóng thoại (Temp 0.1) → Sửa chữ gốc → Dịch ngữ cảnh kèm ảnh (Temp 0.6).";
       }
     });
   }
@@ -2261,7 +2267,7 @@ function initTranslator() {
 
       btnRunQuick.disabled = true;
       btnRunQuick.innerHTML = `<span>⏳ Đang đọc ảnh & dịch bằng Gemini Vision...</span>`;
-      badge.textContent = "⚡ Gemini Vision đang dịch...";
+      badge.textContent = "Gemini Vision đang dịch...";
 
       const startT = performance.now();
       try {
@@ -2282,16 +2288,16 @@ function initTranslator() {
         updateScriptDownloadLink();
 
         const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
-        badge.textContent = `✅ ${lines.length} câu | ${elapsed}s (Gemini Vision)`;
+        badge.textContent = `[OK] ${lines.length} câu | ${elapsed}s (Gemini Vision)`;
         if (refineBox) refineBox.style.display = "block";
 
-        showToast(`⚡ Gemini Vision đã dịch ${lines.length} câu trong ${elapsed}s!`, "success");
+        showToast(`Gemini Vision đã dịch ${lines.length} câu trong ${elapsed}s!`, "success");
       } catch (err) {
         showToast(`Lỗi Gemini Vision: ${err.message}`, "error");
         badge.textContent = "Lỗi Xử Lý";
       } finally {
         btnRunQuick.disabled = false;
-        btnRunQuick.innerHTML = `<span>⚡ Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>`;
+        btnRunQuick.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>`;
       }
     });
   }
@@ -2303,7 +2309,7 @@ function initTranslator() {
 
       btnRunVisionOcr.disabled = true;
       btnRunVisionOcr.innerHTML = `<span>⏳ Đang quét OCR bằng Gemini Vision...</span>`;
-      badge.textContent = "🔍 Gemini Vision đang OCR...";
+      badge.textContent = "Gemini Vision đang OCR...";
 
       const startT = performance.now();
       try {
@@ -2327,7 +2333,7 @@ function initTranslator() {
         if (refineBox) refineBox.style.display = "block";
 
         const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
-        badge.textContent = `🔍 Đã OCR ${lines.length} câu (${elapsed}s)`;
+        badge.textContent = `Đã OCR ${lines.length} câu (${elapsed}s)`;
 
         showToast(`Đã nhận diện ${lines.length} bóng thoại! Bạn có thể kiểm tra và sửa chữ gốc ở cột giữa.`, "info");
       } catch (err) {
@@ -2335,7 +2341,7 @@ function initTranslator() {
         badge.textContent = "Lỗi OCR";
       } finally {
         btnRunVisionOcr.disabled = false;
-        btnRunVisionOcr.innerHTML = `<span>🔍 Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>`;
+        btnRunVisionOcr.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>`;
       }
     });
   }
@@ -2350,7 +2356,7 @@ function initTranslator() {
 
       btnRunVisionTranslate.disabled = true;
       btnRunVisionTranslate.innerHTML = `<span>⏳ Đang dịch ngữ cảnh kèm ảnh gốc...</span>`;
-      badge.textContent = "🤖 Đang dịch ngữ cảnh...";
+      badge.textContent = "Đang dịch ngữ cảnh...";
 
       const startT = performance.now();
       try {
@@ -2368,7 +2374,7 @@ function initTranslator() {
         updateScriptDownloadLink();
 
         const elapsed = (data.elapsed_s || ((performance.now() - startT) / 1000)).toFixed(1);
-        badge.textContent = `✅ Đã dịch ${state.transResultData.length} câu (${elapsed}s)`;
+        badge.textContent = `[OK] Đã dịch ${state.transResultData.length} câu (${elapsed}s)`;
 
         showToast(`Đã hoàn tất dịch ${state.transResultData.length} câu kèm ngữ cảnh ảnh!`, "success");
       } catch (err) {
@@ -2376,7 +2382,7 @@ function initTranslator() {
         badge.textContent = "Lỗi Dịch";
       } finally {
         btnRunVisionTranslate.disabled = false;
-        btnRunVisionTranslate.innerHTML = `<span>🌐 Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>`;
+        btnRunVisionTranslate.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"></path></svg>Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>`;
       }
     });
   }
@@ -2406,12 +2412,12 @@ function initTranslator() {
         });
         renderTranslationTable(state.transResultData);
         updateScriptDownloadLink();
-        showToast("✨ Đã tinh chỉnh bản dịch thành công!", "success");
+        showToast("Đã tinh chỉnh bản dịch thành công!", "success");
       } catch (err) {
         showToast(`Lỗi tinh chỉnh: ${err.message}`, "error");
       } finally {
         btnRefineTranslate.disabled = false;
-        btnRefineTranslate.textContent = "✨ Sửa Bản Dịch";
+        btnRefineTranslate.textContent = "Sửa Bản Dịch";
       }
     });
   }
@@ -2435,12 +2441,12 @@ function initTranslator() {
         }));
         renderTranslationTable(state.transResultData);
         updateScriptDownloadLink();
-        showToast("🔍 Đã soát lỗi và cập nhật cấu trúc bong bóng thoại!", "success");
+        showToast("Đã soát lỗi và cập nhật cấu trúc bong bóng thoại!", "success");
       } catch (err) {
         showToast(`Lỗi soát OCR: ${err.message}`, "error");
       } finally {
         btnRefineOcr.disabled = false;
-        btnRefineOcr.textContent = "🔍 Soát Lỗi OCR";
+        btnRefineOcr.textContent = "Soát Lỗi OCR";
       }
     });
   }
@@ -2451,7 +2457,7 @@ function initTranslator() {
       if (!state.transFile) return;
 
       runBtn.disabled = true;
-      runBtn.innerHTML = `<span>🔍 Đang bóc tách bóng thoại & OCR...</span>`;
+      runBtn.innerHTML = `<span>Đang bóc tách bóng thoại & OCR...</span>`;
       badge.textContent = "AI Đang OCR...";
 
       const targetLang = document.getElementById("trans-target-lang")?.value.trim() || "vi";
@@ -2502,7 +2508,7 @@ function initTranslator() {
         state.transResultData = data.data || [];
         const ocrElapsed = Math.round(performance.now() - startT);
         const totalCount = data.total_boxes || data.totalBoxes || state.transResultData.length || 0;
-        badge.textContent = `🔍 Đã nhận diện ${totalCount} bóng thoại (${ocrElapsed}ms)`;
+        badge.textContent = `Đã nhận diện ${totalCount} bóng thoại (${ocrElapsed}ms)`;
 
         renderBubbleOverlay(state.transResultData);
         renderTranslationTable(state.transResultData);
@@ -2511,13 +2517,13 @@ function initTranslator() {
         const chosenModel = document.getElementById("trans-llm-model")?.value || state.llmModel;
         state.llmModel = chosenModel;
 
-        runBtn.innerHTML = `<span>🤖 Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
-        badge.textContent = `🤖 Đang dịch (${chosenModel})...`;
+        runBtn.innerHTML = `<span>Đang dịch ngữ cảnh bằng ${chosenModel}...</span>`;
+        badge.textContent = `Đang dịch (${chosenModel})...`;
 
         await translateSpeechBubblesFrontend(state.transResultData, targetLang);
 
         const totalElapsed = Math.round(performance.now() - startT);
-        badge.textContent = `✅ ${totalCount} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
+        badge.textContent = `[OK] ${totalCount} câu | OCR: ${ocrElapsed}ms | Tổng: ${totalElapsed}ms`;
 
         renderBubbleOverlay(state.transResultData);
         renderTranslationTable(state.transResultData);
@@ -2530,7 +2536,7 @@ function initTranslator() {
         badge.textContent = "Lỗi Xử Lý";
       } finally {
         runBtn.disabled = false;
-        runBtn.innerHTML = `<span>🤖 Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>`;
+        runBtn.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>`;
       }
     });
   }
@@ -3018,7 +3024,7 @@ function initBatch() {
       }
 
       const totalPages = imageEntries.length;
-      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📦 Đã giải nén: Tìm thấy <strong>${totalPages} trang ảnh</strong>. Bắt đầu xử lý song song...<br>`;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [ZIP] Đã giải nén: Tìm thấy <strong>${totalPages} trang ảnh</strong>. Bắt đầu xử lý song song...<br>`;
       progressBar.style.width = "5%";
       progressPct.textContent = "5%";
       progressStatus.textContent = `0/${totalPages} trang (0%)...`;
@@ -3081,7 +3087,7 @@ function initBatch() {
             progressBar.style.width = `${pct}%`;
             progressPct.textContent = `${pct}%`;
             progressStatus.textContent = `Đang xóa chữ: ${completedCount}/${totalPages} trang (${pct}%)...`;
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ [${completedCount}/${totalPages}] <strong>${filename}</strong>: Xóa sạch chữ (${pageSec}s)<br>`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [OK] [${completedCount}/${totalPages}] <strong>${filename}</strong>: Xóa sạch chữ (${pageSec}s)<br>`;
             logBox.scrollTop = logBox.scrollHeight;
 
           } else {
@@ -3121,7 +3127,7 @@ function initBatch() {
             progressBar.style.width = `${pct}%`;
             progressPct.textContent = `${pct}%`;
             progressStatus.textContent = `[Giai đoạn 1/2] Đang quét OCR: ${completedCount}/${totalPages} trang (${pct}%)...`;
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🔍 [${completedCount}/${totalPages}] <strong>${filename}</strong>: Nhận diện ${boxes.length} bóng thoại (${pageSec}s)<br>`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [OCR] [${completedCount}/${totalPages}] <strong>${filename}</strong>: Nhận diện ${boxes.length} bóng thoại (${pageSec}s)<br>`;
             logBox.scrollTop = logBox.scrollHeight;
           }
 
@@ -3139,7 +3145,7 @@ function initBatch() {
           const pct = Math.round((completedCount / totalPages) * basePct);
           progressBar.style.width = `${pct}%`;
           progressPct.textContent = `${pct}%`;
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ [${completedCount}/${totalPages}] <strong>${filename}</strong>: Lỗi (${pageErr.message})<br>`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [WARN] [${completedCount}/${totalPages}] <strong>${filename}</strong>: Lỗi (${pageErr.message})<br>`;
           logBox.scrollTop = logBox.scrollHeight;
         }
       }
@@ -3165,7 +3171,7 @@ function initBatch() {
         progressBar.style.width = "60%";
         progressPct.textContent = "60%";
         progressStatus.textContent = `[Giai đoạn 2/2] Đang gom kịch bản cả chap để dịch AI theo mạch truyện...`;
-        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🌐 Bắt đầu [Giai đoạn 2/2]: Dịch ngữ cảnh toàn bộ chương...<br>`;
+        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [DỊCH] Bắt đầu [Giai đoạn 2/2]: Dịch ngữ cảnh toàn bộ chương...<br>`;
         logBox.scrollTop = logBox.scrollHeight;
 
         // Gom tất cả bóng thoại của cả chương theo thứ tự trang
@@ -3183,9 +3189,9 @@ function initBatch() {
         });
 
         if (allItems.length === 0) {
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ Không tìm thấy câu thoại tiếng Nhật nào cần dịch.<br>`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [WARN] Không tìm thấy câu thoại tiếng Nhật nào cần dịch.<br>`;
         } else {
-          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📝 Tìm thấy tổng cộng ${allItems.length} câu thoại từ ${totalPages} trang. Bắt đầu dịch AI...<br>`;
+          logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [KỊCH BẢN] Tìm thấy tổng cộng ${allItems.length} câu thoại từ ${totalPages} trang. Bắt đầu dịch AI...<br>`;
           logBox.scrollTop = logBox.scrollHeight;
 
           // Chia thành các đợt (chunks) 50 câu theo yêu cầu người dùng
@@ -3198,7 +3204,7 @@ function initBatch() {
             const tStartChunk = performance.now();
 
             progressStatus.textContent = `[Giai đoạn 2/2] Đang dịch AI kịch bản cả chap (Đợt ${chunkIdx}/${totalChunks})...`;
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🤖 Đang dịch phần ${chunkIdx}/${totalChunks} (${chunk.length} câu thoại)...<br>`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [AI] Đang dịch phần ${chunkIdx}/${totalChunks} (${chunk.length} câu thoại)...<br>`;
             logBox.scrollTop = logBox.scrollHeight;
 
             const translationItems = chunk.map((b) => ({
@@ -3216,16 +3222,16 @@ function initBatch() {
                   }
                 });
                 const chunkSec = ((performance.now() - tStartChunk) / 1000).toFixed(1);
-                logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ Hoàn tất dịch đợt ${chunkIdx}/${totalChunks} (${chunkSec}s)<br>`;
+                logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [OK] Hoàn tất dịch đợt ${chunkIdx}/${totalChunks} (${chunkSec}s)<br>`;
                 chunkSuccess = true;
                 break;
               } catch (chunkErr) {
                 if (attempt === 1) {
-                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🔄 Đợt ${chunkIdx} gặp trục trặc mạng (${chunkErr.message}), đang thử lại...<br>`;
+                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [THỬ LẠI] Đợt ${chunkIdx} gặp trục trặc mạng (${chunkErr.message}), đang thử lại...<br>`;
                   logBox.scrollTop = logBox.scrollHeight;
                   await new Promise((r) => setTimeout(r, 1500));
                 } else {
-                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ Đợt ${chunkIdx} không thể kết nối AI (${chunkErr.message}) - giữ nguyên câu gốc tiếng Nhật.<br>`;
+                  logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [WARN] Đợt ${chunkIdx} không thể kết nối AI (${chunkErr.message}) - giữ nguyên câu gốc tiếng Nhật.<br>`;
                 }
               }
             }
@@ -3243,8 +3249,8 @@ function initBatch() {
       const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
       progressBar.style.width = "100%";
       progressPct.textContent = "100%";
-      progressStatus.textContent = `🎉 Hoàn tất toàn bộ ${totalPages} trang (${totalElapsed}s)!`;
-      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🚀 Hoàn thành toàn bộ ${totalPages} trang trong ${totalElapsed}s!<br>`;
+      progressStatus.textContent = `Hoàn tất toàn bộ ${totalPages} trang (${totalElapsed}s)!`;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [XONG] Hoàn thành toàn bộ ${totalPages} trang trong ${totalElapsed}s!<br>`;
       logBox.scrollTop = logBox.scrollHeight;
 
       let downloadBlob, downloadFilename;
@@ -3283,11 +3289,11 @@ function initBatch() {
 
     } catch (err) {
       showToast(`Lỗi xử lý hàng loạt: ${err.message}`, "error");
-      progressStatus.textContent = "❌ Thất bại";
+      progressStatus.textContent = "[Thất bại]";
       logBox.innerHTML += `[LỖI] ${err.message}<br>`;
     } finally {
       runBtn.disabled = false;
-      runBtn.innerHTML = `<span>🚀 Bắt Đầu Xử Lý Hàng Loạt</span>`;
+      runBtn.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Bắt Đầu Xử Lý Hàng Loạt</span>`;
     }
   });
 
@@ -3397,7 +3403,7 @@ function initSettings() {
     } catch (e) {
       showToast(`Không thể kết nối tới Backend: ${testUrl}`, "error");
     } finally {
-      testBtn.textContent = "🔌 Kiểm Tra Kết Nối Backend";
+      testBtn.textContent = "Kiểm Tra Kết Nối Backend";
     }
   });
 
@@ -3483,7 +3489,7 @@ function initSettings() {
       } catch (err) {
         showToast(`Không thể kết nối AI Dịch: ${err.message}`, "error");
       } finally {
-        testLlmBtn.textContent = "🤖 Kiểm Tra Kết Nối AI Dịch (Ping LLM)";
+        testLlmBtn.textContent = "Kiểm Tra Kết Nối AI Dịch (Ping LLM)";
       }
     });
   }
@@ -3647,7 +3653,7 @@ function initScriptRetranslator() {
       const itemsToTranslate = parsedItems.filter((it) => it.needsTrans);
       const totalToTranslate = itemsToTranslate.length;
 
-      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 📝 Tìm thấy ${totalToTranslate} câu cần dịch (${mode === "only_japanese" ? "Chỉ câu tiếng Nhật" : "Toàn bộ"}).<br>`;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [KỊCH BẢN] Tìm thấy ${totalToTranslate} câu cần dịch (${mode === "only_japanese" ? "Chỉ câu tiếng Nhật" : "Toàn bộ"}).<br>`;
       logBox.scrollTop = logBox.scrollHeight;
 
       if (totalToTranslate === 0) {
@@ -3668,7 +3674,7 @@ function initScriptRetranslator() {
         const tStartChunk = performance.now();
 
         progressStatus.textContent = `Đang dịch đợt ${chunkIdx}/${totalChunks}...`;
-        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🤖 Dịch đợt ${chunkIdx}/${totalChunks} (${chunk.length} câu)...<br>`;
+        logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [AI] Dịch đợt ${chunkIdx}/${totalChunks} (${chunk.length} câu)...<br>`;
         logBox.scrollTop = logBox.scrollHeight;
 
         const transPayload = chunk.map((b) => ({
@@ -3686,16 +3692,16 @@ function initScriptRetranslator() {
               }
             });
             const chunkSec = ((performance.now() - tStartChunk) / 1000).toFixed(1);
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ Hoàn tất đợt ${chunkIdx}/${totalChunks} (${chunkSec}s)<br>`;
+            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [OK] Hoàn tất đợt ${chunkIdx}/${totalChunks} (${chunkSec}s)<br>`;
             chunkOk = true;
             break;
           } catch (chunkErr) {
             if (attempt === 1) {
-              logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🔄 Đợt ${chunkIdx} gặp lỗi (${chunkErr.message}), đang thử lại...<br>`;
+              logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [THỬ LẠI] Đợt ${chunkIdx} gặp lỗi (${chunkErr.message}), đang thử lại...<br>`;
               logBox.scrollTop = logBox.scrollHeight;
               await new Promise((r) => setTimeout(r, 1200));
             } else {
-              logBox.innerHTML += `[${new Date().toLocaleTimeString()}] ⚠️ Đợt ${chunkIdx} thất bại (${chunkErr.message}) - giữ nguyên câu gốc.<br>`;
+              logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [WARN] Đợt ${chunkIdx} thất bại (${chunkErr.message}) - giữ nguyên câu gốc.<br>`;
             }
           }
         }
@@ -3709,8 +3715,8 @@ function initScriptRetranslator() {
       const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
       progressBar.style.width = "100%";
       progressPct.textContent = "100%";
-      progressStatus.textContent = `🎉 Hoàn tất dịch lại toàn bộ ${totalToTranslate} câu (${totalElapsed}s)!`;
-      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] 🚀 Hoàn thành toàn bộ kịch bản trong ${totalElapsed}s!<br>`;
+      progressStatus.textContent = `Hoàn tất dịch lại toàn bộ ${totalToTranslate} câu (${totalElapsed}s)!`;
+      logBox.innerHTML += `[${new Date().toLocaleTimeString()}] [XONG] Hoàn thành toàn bộ kịch bản trong ${totalElapsed}s!<br>`;
       logBox.scrollTop = logBox.scrollHeight;
 
       // Gom kịch bản đầu ra
@@ -3739,12 +3745,12 @@ function initScriptRetranslator() {
 
     } catch (err) {
       showToast(`Lỗi khi dịch lại kịch bản: ${err.message}`, "error");
-      progressStatus.textContent = "❌ Thất bại";
+      progressStatus.textContent = "Thất bại";
       logBox.innerHTML += `[LỖI] ${err.message}<br>`;
     } finally {
       state.llmModel = originalModel;
       runBtn.disabled = false;
-      runBtn.innerHTML = `<span>🚀 Bắt Đầu Dịch Lại Kịch Bản Bằng AI</span>`;
+      runBtn.innerHTML = `<span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Bắt Đầu Dịch Lại Kịch Bản Bằng AI</span>`;
     }
   });
 
