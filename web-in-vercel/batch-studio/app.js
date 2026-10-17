@@ -30,22 +30,12 @@
     currentZoomVal = v;
     localStorage.setItem('manga_zoom_val', v);
 
-    let colWidth, imgWidthPercent;
-
-    if (v <= 25) {
-      // 0% -> 25% của thanh slider: Box dãn dần từ 200px lên 280px (~25% card)
-      const ratio = v / 25;
-      colWidth = Math.round(200 + ratio * 80);
-      imgWidthPercent = 100;
-    } else {
-      // Khi vượt ngưỡng 25%: Box giữ cố định ở 280px, ảnh bên trong phóng to cuộn dọc
-      colWidth = 280;
-      const zoomRatio = (v - 25) / 75;
-      imgWidthPercent = Math.round(100 + zoomRatio * 180);
-    }
+    // Chiều rộng cột dãn từ 200px đến 680px (bao trọn 100% chiều rộng ảnh)
+    // 2 ô box dịch (OCR và Translation) tự động co dãn tỉ lệ thích ứng
+    const colWidth = Math.round(200 + (v / 100) * 480);
 
     document.documentElement.style.setProperty('--thumb-width', colWidth + 'px');
-    document.documentElement.style.setProperty('--thumb-img-width', imgWidthPercent + '%');
+    document.documentElement.style.setProperty('--thumb-img-width', '100%');
 
     // Sync all sliders on page
     document.querySelectorAll('.card-slider').forEach(s => {
