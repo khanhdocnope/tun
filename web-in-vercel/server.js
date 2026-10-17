@@ -38,6 +38,11 @@ app.all("/api/process-batch", (req, res) => processBatchHandler(req, res));
 app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
+// Batch Studio Pro route (hỗ trợ cả có và không có dấu gạch chéo)
+app.get(["/batch-studio", "/batch-studio/"], (req, res) => {
+  res.sendFile(path.join(__dirname, "batch-studio", "index.html"));
+});
+
 // Phục vụ tĩnh chuẩn Single-Source-of-Truth
 app.use(express.static(__dirname));
 

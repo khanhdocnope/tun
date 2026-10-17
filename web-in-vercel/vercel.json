@@ -2,6 +2,7 @@
   "version": 2,
   "name": "mangastudio-ai",
   "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
     "api/*.js": {
       "maxDuration": 60,
@@ -11,7 +12,11 @@
   "rewrites": [
     {
       "source": "/batch-studio",
-      "destination": "/batch-studio/index.html"
+      "destination": "/batch-studio/index"
+    },
+    {
+      "source": "/batch-studio/:match*",
+      "destination": "/batch-studio/:match*"
     }
   ]
 }
