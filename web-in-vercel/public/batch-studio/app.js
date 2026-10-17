@@ -22,20 +22,34 @@
     }
   };
 
-  // Thumbnail Size Controller
-  let currentThumbWidth = parseInt(localStorage.getItem('manga_thumb_width') || '200', 10);
+  // Thumbnail Size & Zoom Controller (0 -> 100)
+  let currentZoomVal = parseInt(localStorage.getItem('manga_zoom_val') || '0', 10);
 
-  function applyThumbSize(width) {
-    const clamped = Math.max(140, Math.min(550, parseInt(width, 10) || 200));
-    currentThumbWidth = clamped;
-    const height = Math.round(clamped * 1.35);
-    document.documentElement.style.setProperty('--thumb-width', clamped + 'px');
-    document.documentElement.style.setProperty('--thumb-height', height + 'px');
-    localStorage.setItem('manga_thumb_width', clamped);
+  function applyThumbZoom(val) {
+    const v = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+    currentZoomVal = v;
+    localStorage.setItem('manga_zoom_val', v);
+
+    let colWidth, imgWidthPercent;
+
+    if (v <= 25) {
+      // 0% -> 25% của thanh slider: Box dãn dần từ 200px lên 280px (~25% card)
+      const ratio = v / 25;
+      colWidth = Math.round(200 + ratio * 80);
+      imgWidthPercent = 100;
+    } else {
+      // Khi vượt ngưỡng 25%: Box giữ cố định ở 280px, ảnh bên trong phóng to cuộn dọc
+      colWidth = 280;
+      const zoomRatio = (v - 25) / 75;
+      imgWidthPercent = Math.round(100 + zoomRatio * 180);
+    }
+
+    document.documentElement.style.setProperty('--thumb-width', colWidth + 'px');
+    document.documentElement.style.setProperty('--thumb-img-width', imgWidthPercent + '%');
 
     // Sync all sliders on page
-    document.querySelectorAll('.size-slider').forEach(s => {
-      if (parseInt(s.value, 10) !== clamped) s.value = clamped;
+    document.querySelectorAll('.card-slider').forEach(s => {
+      if (parseInt(s.value, 10) !== v) s.value = v;
     });
   }
 
@@ -71,8 +85,6 @@
     btnClearAll: document.getElementById('btnClearAll'),
     statBadge: document.getElementById('statBadge'),
     currentModelBadge: document.getElementById('currentModelBadge'),
-    globalSizeSlider: document.getElementById('globalSizeSlider'),
-    btnResetGlobalSize: document.getElementById('btnResetGlobalSize'),
 
     // Queue Progress Bar
     queueProgressBar: document.getElementById('queueProgressBar'),
@@ -218,24 +230,8 @@
       el.selectReadingOrder.addEventListener('change', () => setReadingOrder(el.selectReadingOrder.value));
     }
 
-    // Apply saved Image Size
-    applyThumbSize(currentThumbWidth);
-
-    if (el.globalSizeSlider) {
-      el.globalSizeSlider.value = currentThumbWidth;
-      el.globalSizeSlider.addEventListener('input', (e) => applyThumbSize(e.target.value));
-    }
-    if (el.btnResetGlobalSize) {
-      el.btnResetGlobalSize.addEventListener('click', () => applyThumbSize(200));
-    }
-
-    // Close floating image size widget on outside click
-    window.addEventListener('click', (e) => {
-      if (!e.target.closest('.card-size-widget') && !e.target.closest('.btn-zoom-preview')) {
-        document.querySelectorAll('.card-size-widget.show').forEach(w => w.classList.remove('show'));
-        document.querySelectorAll('.btn-zoom-preview.active').forEach(b => b.classList.remove('active'));
-      }
-    });
+    // Apply saved Image Zoom & Size
+    applyThumbZoom(currentZoomVal);
 
     // Global Paste (Ctrl+V)
     window.addEventListener('paste', (e) => {
@@ -554,7 +550,7 @@
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
-          <button class="btn-zoom-preview" title="Chỉnh kích cỡ ảnh (Image size)">
+          <button class="btn-zoom-preview" title="Xem ảnh lớn">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
@@ -562,18 +558,6 @@
           <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
           <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
-
-          <!-- Floating Image Size Widget -->
-          <div class="image-size-widget card-size-widget">
-            <span class="size-label">Image size</span>
-            <input type="range" class="size-slider card-slider" min="140" max="550" value="${currentThumbWidth}" step="10">
-            <button type="button" class="btn-reset-size card-reset-size" title="Khôi phục kích thước ban đầu (200px)">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                <path d="M3 3v5h5"></path>
-              </svg>
-            </button>
-          </div>
         </div>
         <div class="row-header-right">
           <button class="btn-row-action btn-row-ocr">OCR</button>
@@ -584,10 +568,19 @@
       </div>
 
       <div class="row-body">
-        <!-- Col 1: Thumbnail -->
+        <!-- Col 1: Thumbnail with sticky Image Size controller at top left -->
         <div class="col-thumb">
-          <img src="${item.base64}" alt="${escapeHtml(item.name)}">
-          <div class="col-thumb-overlay"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>Bấm để phóng to</div>
+          <div class="image-size-widget card-size-widget">
+            <span class="size-label">Image size</span>
+            <input type="range" class="size-slider card-slider" min="0" max="100" value="${currentZoomVal}" step="1">
+            <button type="button" class="btn-reset-size card-reset-size" title="Khôi phục kích thước ban đầu">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+            </button>
+          </div>
+          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình">
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -613,37 +606,26 @@
     // Bind item events
     const thumbCol = card.querySelector('.col-thumb');
     const btnZoom = card.querySelector('.btn-zoom-preview');
-    const cardSizeWidget = card.querySelector('.card-size-widget');
     const cardSlider = card.querySelector('.card-slider');
     const cardReset = card.querySelector('.card-reset-size');
-
-    // Toggle Image Size popup when clicking [⤢] button
-    btnZoom.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const willShow = !cardSizeWidget.classList.contains('show');
-      document.querySelectorAll('.card-size-widget.show').forEach(w => w.classList.remove('show'));
-      document.querySelectorAll('.btn-zoom-preview.active').forEach(b => b.classList.remove('active'));
-
-      if (willShow) {
-        cardSizeWidget.classList.add('show');
-        btnZoom.classList.add('active');
-      }
-    });
+    const imgEl = card.querySelector('.col-thumb img');
 
     cardSlider.addEventListener('input', (e) => {
-      applyThumbSize(e.target.value);
+      applyThumbZoom(e.target.value);
     });
 
     cardReset.addEventListener('click', (e) => {
       e.stopPropagation();
-      applyThumbSize(200);
+      applyThumbZoom(0);
+      thumbCol.scrollTop = 0;
     });
 
     const openLightbox = () => {
       el.lightboxImg.src = item.base64;
       el.lightboxModal.style.display = 'flex';
     };
-    thumbCol.addEventListener('click', openLightbox);
+    btnZoom.addEventListener('click', openLightbox);
+    imgEl.addEventListener('click', openLightbox);
 
     // Text inputs
     const textareaJp = card.querySelector('.textarea-jp');
