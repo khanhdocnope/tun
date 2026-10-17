@@ -1,6 +1,6 @@
 // Vercel Serverless Function: POST /api/translate-text
 const {
-  getGeminiApiKey,
+  getAllGeminiApiKeys,
   callGeminiWithFallback,
   buildTranslatePrompt,
   stripEmptyLines
@@ -23,6 +23,8 @@ module.exports = async (req, res) => {
     const {
       text_jp,
       apiKey: clientKey,
+      apiKey2: clientKey2,
+      preferredKey,
       model,
       tone = "natural",
       sourceLang = "ja",
@@ -34,14 +36,19 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Thiếu văn bản gốc cần dịch." });
     }
 
-    const apiKey = getGeminiApiKey(clientKey);
-    if (!apiKey) {
+    let allKeys = getAllGeminiApiKeys(clientKey, clientKey2);
+    if (preferredKey && preferredKey.trim()) {
+      const pk = preferredKey.trim();
+      allKeys = [pk, ...allKeys.filter(k => k !== pk)];
+    }
+
+    if (allKeys.length === 0) {
       return res.status(400).json({
         error: "Chưa có Gemini API Key! Vui lòng cấu hình API_KEY_GEMINI hoặc nhập trong Cài đặt."
       });
     }
 
-    const modelName = model || "gemini-2.5-flash";
+    const modelName = model || "gemini-3.1-flash-lite";
     const prompt = buildTranslatePrompt(text_jp.trim(), sourceLang, targetLang, tone);
 
     const parts = [{ text: prompt }];
@@ -60,12 +67,12 @@ module.exports = async (req, res) => {
       generationConfig: { temperature: 0.6 }
     };
 
-    const { data, modelUsed } = await callGeminiWithFallback(modelName, apiKey, requestPayload);
+    const { data, modelUsed, keyIndex } = await callGeminiWithFallback(modelName, allKeys, requestPayload);
     let rawTrans = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     rawTrans = rawTrans.replace(/^(?:Translation:|Translated text:|Here is the translation:)/i, "").trim();
     const cleanTrans = stripEmptyLines(rawTrans);
 
-    res.json({ success: true, text_vi: cleanTrans, modelUsed });
+    res.json({ success: true, text_vi: cleanTrans, modelUsed, keyIndex: keyIndex || 0 });
   } catch (err) {
     console.error("translate-text error:", err);
     res.status(500).json({ error: err.message || "Lỗi dịch văn bản." });

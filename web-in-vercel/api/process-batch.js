@@ -1,6 +1,6 @@
 // Vercel Serverless Function: POST /api/process-batch
 const {
-  getGeminiApiKey,
+  getAllGeminiApiKeys,
   callGeminiWithFallback,
   stripEmptyLines,
   buildOcrPrompt,
@@ -39,14 +39,23 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Không tìm thấy dữ liệu ảnh (imageBase64)." });
     }
 
-    const apiKey = getGeminiApiKey(req.body && req.body.apiKey);
-    if (!apiKey) {
+    const clientKey = req.body && req.body.apiKey;
+    const clientKey2 = req.body && req.body.apiKey2;
+    const preferredKey = req.body && req.body.preferredKey;
+
+    let allKeys = getAllGeminiApiKeys(clientKey, clientKey2);
+    if (preferredKey && preferredKey.trim()) {
+      const pk = preferredKey.trim();
+      allKeys = [pk, ...allKeys.filter(k => k !== pk)];
+    }
+
+    if (allKeys.length === 0) {
       return res.status(400).json({
         error: "Chưa có API Key! Vui lòng cấu hình API_KEY_GEMINI trong .env hoặc nhập trong Cài đặt."
       });
     }
 
-    const modelName = (req.body && req.body.model) || "gemini-2.5-flash";
+    const modelName = (req.body && req.body.model) || "gemini-3.1-flash-lite";
     const sourceLang = (req.body && req.body.sourceLang) || "ja";
     const targetLang = (req.body && req.body.targetLang) || "vi";
     const tone = (req.body && req.body.tone) || "natural";
@@ -56,6 +65,7 @@ module.exports = async (req, res) => {
     let ocrTextBlock = (req.body && req.body.existingOcr) || "";
     let viTextBlock = "";
     let modelUsedFinal = modelName;
+    let keyUsedIndex = 0;
     let totalElapsed = 0;
 
     // STEP 1: Run OCR if needed
@@ -76,9 +86,10 @@ module.exports = async (req, res) => {
       };
 
       const startOcr = Date.now();
-      const { data, modelUsed } = await callGeminiWithFallback(modelName, apiKey, ocrPayload);
+      const { data, modelUsed, keyIndex } = await callGeminiWithFallback(modelName, allKeys, ocrPayload);
       totalElapsed += Date.now() - startOcr;
       modelUsedFinal = modelUsed;
+      keyUsedIndex = keyIndex || 0;
 
       let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       rawText = rawText
@@ -106,9 +117,10 @@ module.exports = async (req, res) => {
       };
 
       const startTrans = Date.now();
-      const { data, modelUsed } = await callGeminiWithFallback(modelName, apiKey, transPayload);
+      const { data, modelUsed, keyIndex } = await callGeminiWithFallback(modelName, allKeys, transPayload);
       totalElapsed += Date.now() - startTrans;
       modelUsedFinal = modelUsed;
+      keyUsedIndex = keyIndex || 0;
 
       let rawTrans = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
       rawTrans = rawTrans.replace(/^(?:Translation:|Translated text:|Here is the translation:)/i, "").trim();
@@ -119,6 +131,7 @@ module.exports = async (req, res) => {
       success: true,
       timeMs: totalElapsed,
       model: modelUsedFinal,
+      keyIndex: keyUsedIndex,
       ocrTextBlock,
       viTextBlock
     });

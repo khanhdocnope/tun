@@ -1,63 +1,128 @@
 // Shared helper for Batch Studio Pro Gemini OCR & Translation
 const LITE_MODELS_FALLBACK = [
-  "gemini-2.5-flash",
-  "gemini-flash-latest",
   "gemini-3.1-flash-lite",
-  "gemini-3.5-flash-lite",
-  "gemini-3.5-flash"
+  "gemini-3.5-flash-lite"
 ];
 
-function getGeminiApiKey(clientKey) {
-  if (clientKey && clientKey.trim()) {
-    return clientKey.trim();
+function getAllGeminiApiKeys(clientKey, clientKey2) {
+  const keys = [];
+
+  const addKey = (k) => {
+    if (!k) return;
+    const trimmed = String(k).trim();
+    if (trimmed && !keys.includes(trimmed)) {
+      keys.push(trimmed);
+    }
+  };
+
+  // 1. Client keys passed from frontend
+  if (clientKey) {
+    String(clientKey).split(',').forEach(addKey);
   }
-  return process.env.API_KEY_GEMINI || process.env.GEMINI_API_KEY || "";
-}
+  if (clientKey2) {
+    String(clientKey2).split(',').forEach(addKey);
+  }
 
-async function callGeminiWithFallback(primaryModel, apiKey, requestPayload) {
-  const modelsToTry = [
-    primaryModel || "gemini-2.5-flash",
-    ...LITE_MODELS_FALLBACK.filter((m) => m !== primaryModel)
+  // 2. Environment keys (.env)
+  const envCandidates = [
+    process.env.API_KEY_GEMINI,
+    process.env.API_KEY_GEMINI_2,
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2
   ];
-  let lastError = null;
 
-  for (const model of modelsToTry) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestPayload)
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return { data, modelUsed: model };
-      }
-
-      const errData = await response.json().catch(() => ({}));
-      const errMsg = errData.error?.message || response.statusText;
-      console.warn(`[Batch Studio] Model ${model} returned (${response.status}): ${errMsg}`);
-
-      if (
-        response.status === 503 ||
-        response.status === 429 ||
-        errMsg.includes("high demand") ||
-        errMsg.includes("quota") ||
-        errMsg.includes("overloaded") ||
-        errMsg.includes("Resource has been exhausted")
-      ) {
-        lastError = `[${model}] ${errMsg}`;
-        continue;
-      } else {
-        throw new Error(errMsg);
-      }
-    } catch (err) {
-      lastError = err.message;
+  for (const envVal of envCandidates) {
+    if (envVal) {
+      String(envVal).split(',').forEach(addKey);
     }
   }
 
-  throw new Error(lastError || "Tất cả các model đều đang bận hoặc hết hạn mức. Vui lòng thử lại sau.");
+  return keys;
+}
+
+function getGeminiApiKey(clientKey, clientKey2) {
+  const all = getAllGeminiApiKeys(clientKey, clientKey2);
+  return all.length > 0 ? all[0] : "";
+}
+
+async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload) {
+  // Normalize keys to array
+  let keys = [];
+  if (Array.isArray(apiKeyOrKeys)) {
+    keys = apiKeyOrKeys.filter(Boolean);
+  } else if (typeof apiKeyOrKeys === "string" && apiKeyOrKeys.includes(",")) {
+    keys = apiKeyOrKeys.split(",").map(k => k.trim()).filter(Boolean);
+  } else if (apiKeyOrKeys) {
+    keys = [String(apiKeyOrKeys).trim()];
+  } else {
+    keys = getAllGeminiApiKeys();
+  }
+
+  if (keys.length === 0) {
+    throw new Error("Không có Gemini API Key hợp lệ. Vui lòng cấu hình API_KEY_GEMINI trong .env hoặc trong Cài đặt.");
+  }
+
+  const defaultModel = (primaryModel === "gemini-3.5-flash-lite") ? "gemini-3.5-flash-lite" : "gemini-3.1-flash-lite";
+  const modelsToTry = [
+    defaultModel,
+    ...LITE_MODELS_FALLBACK.filter((m) => m !== defaultModel)
+  ];
+
+  let lastError = null;
+
+  // Try each API Key in order (Key 1 -> Key 2 if Key 1 hits 429/quota)
+  for (let kIdx = 0; kIdx < keys.length; kIdx++) {
+    const currentKey = keys[kIdx];
+
+    for (const model of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${currentKey}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return { data, modelUsed: model, keyIndex: kIdx };
+        }
+
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData.error?.message || response.statusText;
+        console.warn(`[Batch Studio] Key #${kIdx + 1} with Model ${model} returned (${response.status}): ${errMsg}`);
+
+        // Rate Limit (429) or Quota Exhausted on current key: immediately switch to next key if available!
+        if (
+          response.status === 429 ||
+          errMsg.includes("Resource has been exhausted") ||
+          errMsg.includes("quota") ||
+          errMsg.includes("Quota exceeded")
+        ) {
+          lastError = `[Key #${kIdx + 1}] ${errMsg}`;
+          // Break inner loop to try next API Key immediately
+          break;
+        }
+
+        // 503 Overloaded or High demand: try fallback model on same key first
+        if (
+          response.status === 503 ||
+          errMsg.includes("high demand") ||
+          errMsg.includes("overloaded")
+        ) {
+          lastError = `[Key #${kIdx + 1} - ${model}] ${errMsg}`;
+          continue;
+        } else {
+          lastError = errMsg;
+          break;
+        }
+      } catch (err) {
+        lastError = err.message;
+      }
+    }
+  }
+
+  throw new Error(lastError || "Tất cả các API Key hoặc Model đều bận/hết hạn mức. Vui lòng thử lại sau.");
 }
 
 const LANG_NAMES = {
@@ -201,6 +266,7 @@ Return ONLY the translation. Do not add any explanation or notes.`;
 
 module.exports = {
   LITE_MODELS_FALLBACK,
+  getAllGeminiApiKeys,
   getGeminiApiKey,
   callGeminiWithFallback,
   stripEmptyLines,

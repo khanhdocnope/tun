@@ -1,4 +1,6 @@
 // Vercel Serverless Function: GET /api/config
+const { getAllGeminiApiKeys } = require("./batch-helper");
+
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -8,18 +10,20 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
 
-  const hasEnvKey = Boolean(process.env.API_KEY_GEMINI || process.env.GEMINI_API_KEY);
+  const envKeys = getAllGeminiApiKeys();
+  const hasEnvKey = envKeys.length > 0;
+  const hasEnvKey2 = envKeys.length > 1;
+
   const liteModels = [
-    "gemini-2.5-flash",
-    "gemini-flash-latest",
     "gemini-3.1-flash-lite",
-    "gemini-3.5-flash-lite",
-    "gemini-3.5-flash"
+    "gemini-3.5-flash-lite"
   ];
 
   res.json({
     hasEnvKey,
-    defaultModel: "gemini-2.5-flash",
+    hasEnvKey2,
+    envKeyCount: envKeys.length,
+    defaultModel: "gemini-3.1-flash-lite",
     liteModels,
     defaultTone: "natural"
   });

@@ -10,8 +10,12 @@
     stopQueueRequested: false,
     hasEnvKey: false,
     settings: {
-      model: localStorage.getItem('manga_model') || 'gemini-2.5-flash',
+      model: (() => {
+        const m = localStorage.getItem('manga_model');
+        return (m === 'gemini-3.5-flash-lite') ? 'gemini-3.5-flash-lite' : 'gemini-3.1-flash-lite';
+      })(),
       apiKey: localStorage.getItem('manga_api_key') || '',
+      apiKey2: localStorage.getItem('manga_api_key_2') || '',
       tone: localStorage.getItem('manga_tone') || 'natural',
       skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false'
     }
@@ -59,9 +63,24 @@
     btnSaveSettings: document.getElementById('btnSaveSettings'),
     selectEngine: document.getElementById('selectEngine'),
     inputGeminiApiKey: document.getElementById('inputGeminiApiKey'),
+    inputGeminiApiKey2: document.getElementById('inputGeminiApiKey2'),
     selectTone: document.getElementById('selectTone'),
-    envKeyBadge: document.getElementById('envKeyBadge')
+    envKeyBadge: document.getElementById('envKeyBadge'),
+    envKeyBadge2: document.getElementById('envKeyBadge2'),
+    quotaSpeedText: document.getElementById('quotaSpeedText'),
+    quotaDailyText: document.getElementById('quotaDailyText')
   };
+
+  function getActiveKeys() {
+    const keys = [];
+    if (state.settings.apiKey) keys.push(state.settings.apiKey);
+    if (state.settings.apiKey2) keys.push(state.settings.apiKey2);
+    if (keys.length === 0 && state.hasEnvKey) {
+      keys.push('__env_key_1__');
+      if (state.hasEnvKey2) keys.push('__env_key_2__');
+    }
+    return keys;
+  }
 
   // Initialize
   async function init() {
@@ -77,8 +96,13 @@
       const res = await fetch('/api/config');
       const data = await res.json();
       state.hasEnvKey = data.hasEnvKey;
+      state.hasEnvKey2 = data.hasEnvKey2;
+      state.envKeyCount = data.envKeyCount || (data.hasEnvKey ? 1 : 0);
       if (el.envKeyBadge) {
         el.envKeyBadge.textContent = state.hasEnvKey ? 'Có sẵn từ .env' : 'Chưa cấu hình';
+      }
+      if (el.envKeyBadge2) {
+        el.envKeyBadge2.textContent = state.hasEnvKey2 ? 'Có sẵn từ .env' : 'Tùy chọn';
       }
     } catch (err) {
       console.warn('Không thể kiểm tra /api/config:', err);
@@ -89,9 +113,28 @@
   function applySettingsToUI() {
     el.selectEngine.value = state.settings.model;
     el.inputGeminiApiKey.value = state.settings.apiKey;
+    if (el.inputGeminiApiKey2) el.inputGeminiApiKey2.value = state.settings.apiKey2;
     el.selectTone.value = state.settings.tone;
     el.toggleSkipSFX.checked = state.settings.skipSFX;
-    el.currentModelBadge.textContent = `${state.settings.model} (15 RPM)`;
+
+    const activeKeys = getActiveKeys();
+    const isDual = activeKeys.length >= 2;
+
+    if (isDual) {
+      el.currentModelBadge.textContent = `${state.settings.model} (30 RPM ⚡ 2 Keys)`;
+      el.currentModelBadge.style.background = 'rgba(99, 102, 241, 0.2)';
+      el.currentModelBadge.style.color = '#a5b4fc';
+      el.currentModelBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
+      if (el.quotaSpeedText) el.quotaSpeedText.innerHTML = '<span style="color:#38bdf8; font-weight:700;">30 lượt / phút (⚡ Song song 2 luồng - Tốc độ X2)</span>';
+      if (el.quotaDailyText) el.quotaDailyText.innerHTML = '<span style="color:#10b981; font-weight:700;">1.000 trang truyện / ngày (500 x 2)</span>';
+    } else {
+      el.currentModelBadge.textContent = `${state.settings.model} (15 RPM)`;
+      el.currentModelBadge.style.background = 'rgba(16, 185, 129, 0.12)';
+      el.currentModelBadge.style.color = '#34d399';
+      el.currentModelBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      if (el.quotaSpeedText) el.quotaSpeedText.textContent = '15 lượt / phút (1 luồng)';
+      if (el.quotaDailyText) el.quotaDailyText.textContent = '500 trang truyện / ngày (RPD)';
+    }
   }
 
   // Bind UI Events
@@ -352,7 +395,7 @@
     el.btnOcrAll.disabled = !hasImages || state.isQueueRunning;
     el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
     el.btnClearAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnExportChapter.disabled = !state.images.some(img => img.status === 'done');
+    el.btnExportChapter.disabled = !hasImages;
 
     el.statBadge.textContent = `${state.images.length} trang trong danh sách`;
 
@@ -484,11 +527,11 @@
     const textareaVi = card.querySelector('.textarea-vi');
     if (textareaVi) textareaVi.value = item.viText;
 
-    el.btnExportChapter.disabled = !state.images.some(img => img.status === 'done');
+    el.btnExportChapter.disabled = state.images.length === 0;
   }
 
   // Process a Single Image via API
-  async function processSingleImage(item, mode = 'all') {
+  async function processSingleImage(item, mode = 'all', preferredKey = '') {
     item.status = 'processing';
     updateCardDOM(item);
 
@@ -501,6 +544,8 @@
         existingOcr: item.ocrText,
         model: state.settings.model,
         apiKey: state.settings.apiKey,
+        apiKey2: state.settings.apiKey2,
+        preferredKey: preferredKey,
         tone: state.settings.tone,
         skipSFX: state.settings.skipSFX,
         sourceLang: 'ja',
@@ -540,7 +585,7 @@
   }
 
   // Translate existing OCR text for a single image
-  async function translateSingleText(item) {
+  async function translateSingleText(item, preferredKey = '') {
     if (!item.ocrText || !item.ocrText.trim()) {
       alert('Vui lòng thực hiện OCR để có văn bản tiếng Nhật trước khi dịch.');
       return;
@@ -560,6 +605,8 @@
           imageBase64: optimizedImage,
           model: state.settings.model,
           apiKey: state.settings.apiKey,
+          apiKey2: state.settings.apiKey2,
+          preferredKey: preferredKey,
           tone: state.settings.tone,
           sourceLang: 'ja',
           targetLang: 'vi'
@@ -581,7 +628,7 @@
     }
   }
 
-  // Batch Queue Engine (Sequential processing to respect 15 RPM free limit)
+  // Batch Queue Engine (Dual-Worker Parallel Processing for 2 Keys / 30 RPM)
   async function runBatchQueue(mode = 'all') {
     if (state.isQueueRunning) return;
 
@@ -600,30 +647,50 @@
 
     let completed = 0;
     const total = queueItems.length;
+    let nextIndex = 0;
 
-    for (let i = 0; i < total; i++) {
-      if (state.stopQueueRequested) {
-        showToast('Đã dừng xử lý hàng loạt theo yêu cầu.');
-        break;
+    const activeKeys = getActiveKeys();
+    const isDual = activeKeys.length >= 2;
+    const concurrency = isDual ? 2 : 1;
+
+    // Worker function: each worker processes pages sequentially at 15 RPM
+    async function worker(workerId, workerKey) {
+      while (nextIndex < total && !state.stopQueueRequested) {
+        const itemIdx = nextIndex++;
+        if (itemIdx >= total) break;
+
+        const currentItem = queueItems[itemIdx];
+        if (!currentItem) break;
+
+        const tag = isDual ? `[Luồng ${workerId + 1}] ` : '';
+        el.queueProgressText.textContent = `${tag}Đang xử lý trang: ${currentItem.name} (${completed + 1}/${total})...`;
+        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+
+        if (mode === 'translate_only') {
+          await translateSingleText(currentItem, workerKey);
+        } else {
+          await processSingleImage(currentItem, mode, workerKey);
+        }
+
+        completed++;
+        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+
+        // Delay 1.8s per worker to strictly maintain < 15 RPM per key
+        if (!state.stopQueueRequested && nextIndex < total) {
+          await new Promise(r => setTimeout(r, 1800));
+        }
       }
+    }
 
-      const currentItem = queueItems[i];
-      const progressPercent = Math.round((i / total) * 100);
-      el.queueProgressFill.style.width = `${progressPercent}%`;
-      el.queueProgressText.textContent = `Đang xử lý trang ${i + 1} / ${total}: ${currentItem.name}...`;
-
-      if (mode === 'translate_only') {
-        await translateSingleText(currentItem);
-      } else {
-        await processSingleImage(currentItem, mode);
-      }
-
-      completed++;
-
-      // Sequential delay between requests (1.8s) to strictly maintain < 15 RPM rate limit
-      if (i < total - 1 && !state.stopQueueRequested) {
-        await new Promise(r => setTimeout(r, 1800));
-      }
+    if (concurrency === 2) {
+      const key1 = state.settings.apiKey || '';
+      const key2 = state.settings.apiKey2 || '';
+      await Promise.all([
+        worker(0, key1),
+        worker(1, key2)
+      ]);
+    } else {
+      await worker(0, state.settings.apiKey || '');
     }
 
     el.queueProgressFill.style.width = '100%';
@@ -653,44 +720,72 @@
     }
   }
 
-  // Download file helper (đảm bảo 100% có đuôi mở rộng trên Windows)
+  // Download file helper (hoạt động 100% trên PC, điện thoại và trong iframe)
   function downloadTextFile(filename, text, format = 'txt') {
-    // Ưu tiên tải qua API server để Windows nhận đúng Header Content-Disposition và MIME
-    fetch('/api/download-script', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text, filename, format })
-    }).then(res => res.blob()).then(blob => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (a.parentNode) document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 2000);
-      showToast(`Đã tải xuống file: ${filename}`);
-    }).catch(err => {
-      // Dự phòng tải trực tiếp bằng Blob với BOM UTF-8
-      console.warn('Fallback client download:', err);
+    if (!text || !text.trim()) {
+      showToast('⚠️ Nội dung trống, không thể tải xuống.');
+      return;
+    }
+
+    // 1. Tải trực tiếp bằng Blob (nhanh, chuẩn UTF-8 BOM cho Notepad/Word, không bị trễ context người dùng)
+    try {
       const mime = format === 'doc' ? 'application/msword;charset=utf-8' : 'text/plain;charset=utf-8';
       const blob = new Blob(['\uFEFF' + text], { type: mime });
+
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+        showToast(`Đã tải xuống file: ${filename}`);
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.style.display = 'none';
       a.href = url;
       a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
+
       setTimeout(() => {
         if (a.parentNode) document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }, 2000);
+      }, 3500);
+
       showToast(`Đã tải xuống file: ${filename}`);
-    });
+      return;
+    } catch (err) {
+      console.warn('Direct blob download failed, trying server fallback:', err);
+    }
+
+    // 2. Dự phòng gửi Form POST qua API Server
+    try {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/download-script';
+      form.target = '_blank';
+      form.style.display = 'none';
+
+      const addField = (n, v) => {
+        const inp = document.createElement('textarea');
+        inp.name = n;
+        inp.value = v;
+        form.appendChild(inp);
+      };
+
+      addField('content', text);
+      addField('filename', filename);
+      addField('format', format);
+
+      document.body.appendChild(form);
+      form.submit();
+      setTimeout(() => {
+        if (form.parentNode) form.parentNode.removeChild(form);
+      }, 2000);
+      showToast(`Đang tải xuống file: ${filename}`);
+    } catch (e2) {
+      copyToClipboard(text, 'Không thể tải file tự động, đã sao chép toàn bộ kịch bản vào bộ nhớ tạm!');
+    }
   }
 
   function generateChapterContent() {
@@ -721,7 +816,15 @@
 
   // Export Full Chapter Script
   function exportFullChapter(format = 'txt') {
-    if (state.images.length === 0) return;
+    if (state.images.length === 0) {
+      showToast('⚠️ Vui lòng thêm ảnh Manga trước khi xuất kịch bản.');
+      return;
+    }
+    const hasText = state.images.some(img => (img.ocrText && img.ocrText.trim()) || (img.viText && img.viText.trim()));
+    if (!hasText) {
+      showToast('⚠️ Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
+      return;
+    }
     const content = generateChapterContent();
     const ext = format === 'doc' ? 'doc' : 'txt';
     const filename = `Manga_Chapter_Script_${Date.now()}.${ext}`;
@@ -730,7 +833,15 @@
 
   // Copy full chapter to clipboard
   function copyChapterToClipboard() {
-    if (state.images.length === 0) return;
+    if (state.images.length === 0) {
+      showToast('⚠️ Vui lòng thêm ảnh Manga trước.');
+      return;
+    }
+    const hasText = state.images.some(img => (img.ocrText && img.ocrText.trim()) || (img.viText && img.viText.trim()));
+    if (!hasText) {
+      showToast('⚠️ Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
+      return;
+    }
     const content = generateChapterContent();
     copyToClipboard(content, 'Đã sao chép toàn bộ kịch bản chapter vào bộ nhớ tạm!');
   }
@@ -739,13 +850,17 @@
   function saveSettings() {
     state.settings.model = el.selectEngine.value;
     state.settings.apiKey = el.inputGeminiApiKey.value.trim();
+    if (el.inputGeminiApiKey2) {
+      state.settings.apiKey2 = el.inputGeminiApiKey2.value.trim();
+    }
     state.settings.tone = el.selectTone.value;
 
     localStorage.setItem('manga_model', state.settings.model);
     localStorage.setItem('manga_api_key', state.settings.apiKey);
+    localStorage.setItem('manga_api_key_2', state.settings.apiKey2);
     localStorage.setItem('manga_tone', state.settings.tone);
 
-    el.currentModelBadge.textContent = `${state.settings.model} (15 RPM)`;
+    applySettingsToUI();
     el.settingsModal.style.display = 'none';
     showToast('Đã lưu cấu hình thành công!');
   }
