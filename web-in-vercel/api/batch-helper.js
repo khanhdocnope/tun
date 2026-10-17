@@ -149,7 +149,18 @@ function stripEmptyLines(text) {
     .join("\n");
 }
 
-function buildOcrPrompt(sourceLang = "ja", skipSfx = true) {
+function buildOcrPrompt(sourceLang = "ja", skipSfx = true, readingOrder = "manga") {
+  const isWebtoon = readingOrder === "webtoon";
+  const orderDirective = isWebtoon
+    ? `READING ORDER DIRECTIVE (WEBTOON / MANHWA):
+- This image is from a WEBTOON / digital manhwa with vertical scroll panel format.
+- You MUST scan speech bubbles strictly in WEBTOON READING ORDER: TOP TO BOTTOM, LEFT TO RIGHT sequentially down the page.
+- NEVER use Japanese right-to-left ordering on this webtoon.`
+    : `READING ORDER DIRECTIVE (MANGA TRADITIONAL):
+- This image is from a traditional MANGA page.
+- You MUST scan speech bubbles strictly in JAPANESE MANGA READING ORDER: TOP TO BOTTOM, RIGHT TO LEFT.
+- Panels on the right are read first, moving leftward, panel by panel down the page.`;
+
   const bubbleRule = `
 BUBBLE BOUNDARY RULE (the single most important rule - read this carefully before anything else):
 - A speech bubble is a single, fully enclosed graphical outline (an oval, a cloud shape, a jagged/spiky outline for shouting, or a rectangular caption/narration box). Any text located INSIDE one such outline belongs to ONE single bubble - no matter if it visually wraps into 2-5 lines because the bubble is narrow, changes font size mid-sentence, or contains ellipses ("...") or gaps.
@@ -178,9 +189,9 @@ If a bubble/box truly has no legible text, skip that line entirely instead of wr
 Return ONLY the scanned text lines. Do not add a title, numbering, or any explanation.`;
 
   if (sourceLang === "ko") {
-    return `This is a page from a Korean comic (manhwa). Your task is to OCR the text from the speech bubbles / text boxes on this page.
+    return `This is a page from a Korean comic (manhwa / webtoon). Your task is to OCR the text from the speech bubbles / text boxes on this page.
 IMPORTANT INSTRUCTIONS:
-1. Scan in true reading order: top to bottom, left to right.
+1. ${orderDirective}
 2. Each separate bubble/box goes on its own output line.
 3. Do NOT translate anything - extract the original Korean text exactly as written.
 4. Preserve every character and punctuation mark from the source text.
@@ -191,9 +202,9 @@ ${outro}`;
   }
 
   if (sourceLang === "zh") {
-    return `This is a page from a Chinese comic (manhua). Your task is to OCR the text from the speech bubbles / text boxes on this page.
+    return `This is a page from a Chinese comic (manhua / webtoon). Your task is to OCR the text from the speech bubbles / text boxes on this page.
 IMPORTANT INSTRUCTIONS:
-1. Scan in true reading order: top to bottom, left to right.
+1. ${orderDirective}
 2. Each separate bubble/box goes on its own output line.
 3. Do NOT translate anything - extract the original Chinese text exactly as written.
 4. Keep the original Han characters as-is - do not convert between Simplified and Traditional.
@@ -204,9 +215,9 @@ ${outro}`;
   }
 
   if (sourceLang === "manga-en") {
-    return `This is a page from an English-language manga (keeping original Japanese manga panel layout right-to-left).
+    return `This is a page from an English-language comic (${isWebtoon ? 'Webtoon' : 'Manga'}).
 IMPORTANT INSTRUCTIONS:
-1. Read panels and bubbles following Japanese manga layout: top to bottom, right to left.
+1. ${orderDirective}
 2. Each separate bubble/box goes on its own single output line.
 3. Do NOT translate anything - extract the original English text exactly as written.
 ${bubbleRule}
@@ -214,12 +225,12 @@ ${sfxInstruction}
 ${outro}`;
   }
 
-  // Default: Japanese Manga (ja)
-  return `This is a page from a Japanese manga. Your task is to OCR the text from the speech bubbles / text boxes on this page.
+  // Default: Japanese Manga / Webtoon (ja)
+  return `This is a page from a Japanese ${isWebtoon ? 'webtoon / vertical strip' : 'manga'}. Your task is to OCR the text from the speech bubbles / text boxes on this page.
 
 IMPORTANT INSTRUCTIONS:
 1. Each separate bubble/box goes on its own single output line, with all wrapped text inside that bubble merged into that one line.
-2. The ORDER in which bubbles are listed on the page MUST always follow standard manga reading order: top to bottom, right to left. This is mandatory.
+2. ${orderDirective}
 3. Do NOT translate anything - extract the original Japanese text of each bubble exactly as written.
 4. If kanji is paired with furigana, scan only the main text (the kanji) and ignore the furigana.
 5. Preserve punctuation marks and special characters from the source text.
@@ -229,26 +240,27 @@ ${sfxInstruction}
 ${outro}`;
 }
 
-function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural") {
+function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural", readingOrder = "manga") {
   const sourceName = LANG_NAMES[sourceLang] || sourceLang;
   const targetName = LANG_NAMES[targetLang] || targetLang;
+  const isWebtoon = readingOrder === "webtoon";
 
   let toneNote = "";
-  if (tone === "shounen") toneNote = `\n- Genre Tone: Shounen manga tone (energetic, dramatic, natural pronouns like tớ/cậu, mày/tao when appropriate).`;
-  if (tone === "romcom") toneNote = `\n- Genre Tone: Rom-Com manga tone (gentle, sweet, romantic, natural pronouns like anh/em, cậu/tớ).`;
+  if (tone === "shounen") toneNote = `\n- Genre Tone: Shounen comic tone (energetic, dramatic, natural pronouns like tớ/cậu, mày/tao when appropriate).`;
+  if (tone === "romcom") toneNote = `\n- Genre Tone: Rom-Com comic tone (gentle, sweet, romantic, natural pronouns like anh/em, cậu/tớ).`;
   if (tone === "historical") toneNote = `\n- Genre Tone: Historical / martial arts tone (honorifics like huynh đệ, tại hạ, các hạ).`;
   if (tone === "raw") toneNote = `\n- Genre Tone: Literal translation to assist editor proofreading.`;
 
-  return `You are a professional translator with 20+ years of experience translating comics from ${sourceName} to ${targetName}.
+  return `You are a professional comic localization translator with 20+ years of experience translating ${isWebtoon ? 'Webtoons/Manhwa' : 'Manga'} from ${sourceName} to ${targetName}.
 
-Below is the OCR text scanned from a comic page, along with the image of that same page. EACH LINE is a separate speech bubble / text box.
+Below is the OCR text scanned from a ${isWebtoon ? 'Webtoon (vertical scroll, read top-to-bottom)' : 'traditional Manga (read top-to-bottom, right-to-left)'} page, along with the image of that same page. EACH LINE is a separate speech bubble / text box in reading sequence.
 
 OCR text:
 ${text}
 
 TRANSLATION INSTRUCTIONS:
 1. Translate the OCR content into ${targetName} accurately.
-2. IMPORTANT: use the IMAGE and the page's CONTEXT to translate with the correct meaning.
+2. IMPORTANT: use the IMAGE and the ${isWebtoon ? 'Webtoon vertical flow' : 'Manga right-to-left flow'} CONTEXT to translate with the correct meaning and conversational flow.
 3. The number of lines in your translation MUST exactly match the number of lines in the source text.
 4. EVERY line in the source text must correspond to EXACTLY ONE line in the translation - never merge or split lines.
 5. Use NATURAL phrasing suited to the comic genre, with modern, easy-to-understand wording.${toneNote}

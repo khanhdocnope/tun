@@ -47,6 +47,18 @@
           </div>
         </div>
 
+        <!-- Manga vs Webtoon Reading Order Switcher -->
+        <div class="comic-mode-switcher" id="comicModeSwitcher" title="Thứ tự đọc bóng thoại theo thể loại truyện">
+          <button type="button" class="btn-comic-mode active" id="btnModeManga" data-mode="manga" title="Manga truyền thống: Đọc từ Phải sang Trái, Trên xuống Dưới">
+            <span class="mode-dot"></span>
+            <span class="mode-text">Manga</span>
+          </button>
+          <button type="button" class="btn-comic-mode" id="btnModeWebtoon" data-mode="webtoon" title="Webtoon / Manhwa dọc: Đọc từ Trên xuống Dưới, Trái sang Phải">
+            <span class="mode-dot"></span>
+            <span class="mode-text">Webtoon</span>
+          </button>
+        </div>
+
         <!-- Skip SFX Toggle -->
         <label class="toggle-switch-wrapper" title="Bỏ qua từ tượng thanh, âm thanh nền để tập trung vào lời thoại nhân vật">
           <input type="checkbox" id="toggleSkipSFX" checked>
@@ -140,6 +152,17 @@
       </div>
 
       <div class="batch-stats">
+        <!-- Global Image Size Slider (Synced with individual card sliders) -->
+        <div class="image-size-widget toolbar-size-widget" id="toolbarSizeWidget" title="Kéo để phóng to / thu nhỏ ảnh Manga">
+          <span class="size-label">Image size</span>
+          <input type="range" class="size-slider" id="globalSizeSlider" min="140" max="550" value="200" step="10">
+          <button type="button" class="btn-reset-size" id="btnResetGlobalSize" title="Khôi phục kích thước ban đầu (200px)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+            </svg>
+          </button>
+        </div>
         <span class="stat-badge" id="statBadge">0 trang trong danh sách</span>
         <span class="model-badge" id="currentModelBadge">gemini-3.1-flash-lite (15 RPM)</span>
       </div>
@@ -281,6 +304,15 @@
               <option value="historical">Cổ trang / Kiếm hiệp (Huynh đệ, tại hạ, các hạ)</option>
               <option value="raw">Sát nghĩa thô (Dễ biên tập)</option>
             </select>
+          </div>
+
+          <div class="form-group">
+            <label for="selectReadingOrder">Định dạng & Thứ tự đọc (Manga / Webtoon)</label>
+            <select id="selectReadingOrder" class="form-control">
+              <option value="manga" selected>Manga truyền thống (Phải sang Trái, Trên xuống Dưới)</option>
+              <option value="webtoon">Webtoon / Manhwa dọc (Trên xuống Dưới tuần tự)</option>
+            </select>
+            <small class="form-hint">Manga đọc từ phải qua trái. Webtoon/Manhwa đọc dọc theo dải tranh dài.</small>
           </div>
 
           <div class="quota-info-card" id="quotaInfoCard">

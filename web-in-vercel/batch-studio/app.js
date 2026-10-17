@@ -17,15 +17,36 @@
       apiKey: localStorage.getItem('manga_api_key') || '',
       apiKey2: localStorage.getItem('manga_api_key_2') || '',
       tone: localStorage.getItem('manga_tone') || 'natural',
+      readingOrder: localStorage.getItem('manga_reading_order') || 'manga',
       skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false'
     }
   };
+
+  // Thumbnail Size Controller
+  let currentThumbWidth = parseInt(localStorage.getItem('manga_thumb_width') || '200', 10);
+
+  function applyThumbSize(width) {
+    const clamped = Math.max(140, Math.min(550, parseInt(width, 10) || 200));
+    currentThumbWidth = clamped;
+    const height = Math.round(clamped * 1.35);
+    document.documentElement.style.setProperty('--thumb-width', clamped + 'px');
+    document.documentElement.style.setProperty('--thumb-height', height + 'px');
+    localStorage.setItem('manga_thumb_width', clamped);
+
+    // Sync all sliders on page
+    document.querySelectorAll('.size-slider').forEach(s => {
+      if (parseInt(s.value, 10) !== clamped) s.value = clamped;
+    });
+  }
 
   // DOM Elements
   const el = {
     // Top Bar
     fileInputMultiple: document.getElementById('fileInputMultiple'),
     toggleSkipSFX: document.getElementById('toggleSkipSFX'),
+    btnModeManga: document.getElementById('btnModeManga'),
+    btnModeWebtoon: document.getElementById('btnModeWebtoon'),
+    selectReadingOrder: document.getElementById('selectReadingOrder'),
     btnSettings: document.getElementById('btnSettings'),
     btnExportChapter: document.getElementById('btnExportChapter'),
     btnQuickDownloadTxt: document.getElementById('btnQuickDownloadTxt'),
@@ -50,6 +71,8 @@
     btnClearAll: document.getElementById('btnClearAll'),
     statBadge: document.getElementById('statBadge'),
     currentModelBadge: document.getElementById('currentModelBadge'),
+    globalSizeSlider: document.getElementById('globalSizeSlider'),
+    btnResetGlobalSize: document.getElementById('btnResetGlobalSize'),
 
     // Queue Progress Bar
     queueProgressBar: document.getElementById('queueProgressBar'),
@@ -126,6 +149,12 @@
     if (el.inputGeminiApiKey2) el.inputGeminiApiKey2.value = state.settings.apiKey2;
     el.selectTone.value = state.settings.tone;
     el.toggleSkipSFX.checked = state.settings.skipSFX;
+    if (el.selectReadingOrder) el.selectReadingOrder.value = state.settings.readingOrder;
+
+    if (el.btnModeManga && el.btnModeWebtoon) {
+      el.btnModeManga.classList.toggle('active', state.settings.readingOrder === 'manga');
+      el.btnModeWebtoon.classList.toggle('active', state.settings.readingOrder === 'webtoon');
+    }
 
     const activeKeys = getActiveKeys();
     const isDual = activeKeys.length >= 2;
@@ -161,6 +190,51 @@
       state.settings.skipSFX = el.toggleSkipSFX.checked;
       localStorage.setItem('manga_skip_sfx', state.settings.skipSFX);
       showToast(state.settings.skipSFX ? 'Đã bật: Bỏ qua từ tượng thanh (SFX)' : 'Đã tắt: Nhận diện cả SFX');
+    });
+
+    // Manga vs Webtoon Reading Order Mode
+    function setReadingOrder(order) {
+      state.settings.readingOrder = order === 'webtoon' ? 'webtoon' : 'manga';
+      localStorage.setItem('manga_reading_order', state.settings.readingOrder);
+      if (el.btnModeManga && el.btnModeWebtoon) {
+        el.btnModeManga.classList.toggle('active', state.settings.readingOrder === 'manga');
+        el.btnModeWebtoon.classList.toggle('active', state.settings.readingOrder === 'webtoon');
+      }
+      if (el.selectReadingOrder) {
+        el.selectReadingOrder.value = state.settings.readingOrder;
+      }
+      showToast(state.settings.readingOrder === 'webtoon'
+        ? 'Đã chọn chế độ Webtoon: Quét dọc từ trên xuống dưới'
+        : 'Đã chọn chế độ Manga: Quét từ phải sang trái');
+    }
+
+    if (el.btnModeManga) {
+      el.btnModeManga.addEventListener('click', () => setReadingOrder('manga'));
+    }
+    if (el.btnModeWebtoon) {
+      el.btnModeWebtoon.addEventListener('click', () => setReadingOrder('webtoon'));
+    }
+    if (el.selectReadingOrder) {
+      el.selectReadingOrder.addEventListener('change', () => setReadingOrder(el.selectReadingOrder.value));
+    }
+
+    // Apply saved Image Size
+    applyThumbSize(currentThumbWidth);
+
+    if (el.globalSizeSlider) {
+      el.globalSizeSlider.value = currentThumbWidth;
+      el.globalSizeSlider.addEventListener('input', (e) => applyThumbSize(e.target.value));
+    }
+    if (el.btnResetGlobalSize) {
+      el.btnResetGlobalSize.addEventListener('click', () => applyThumbSize(200));
+    }
+
+    // Close floating image size widget on outside click
+    window.addEventListener('click', (e) => {
+      if (!e.target.closest('.card-size-widget') && !e.target.closest('.btn-zoom-preview')) {
+        document.querySelectorAll('.card-size-widget.show').forEach(w => w.classList.remove('show'));
+        document.querySelectorAll('.btn-zoom-preview.active').forEach(b => b.classList.remove('active'));
+      }
     });
 
     // Global Paste (Ctrl+V)
@@ -480,7 +554,7 @@
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
-          <button class="btn-zoom-preview" title="Xem ảnh lớn">
+          <button class="btn-zoom-preview" title="Chỉnh kích cỡ ảnh (Image size)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
@@ -488,6 +562,18 @@
           <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
           <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
+
+          <!-- Floating Image Size Widget -->
+          <div class="image-size-widget card-size-widget">
+            <span class="size-label">Image size</span>
+            <input type="range" class="size-slider card-slider" min="140" max="550" value="${currentThumbWidth}" step="10">
+            <button type="button" class="btn-reset-size card-reset-size" title="Khôi phục kích thước ban đầu (200px)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                <path d="M3 3v5h5"></path>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="row-header-right">
           <button class="btn-row-action btn-row-ocr">OCR</button>
@@ -527,12 +613,37 @@
     // Bind item events
     const thumbCol = card.querySelector('.col-thumb');
     const btnZoom = card.querySelector('.btn-zoom-preview');
+    const cardSizeWidget = card.querySelector('.card-size-widget');
+    const cardSlider = card.querySelector('.card-slider');
+    const cardReset = card.querySelector('.card-reset-size');
+
+    // Toggle Image Size popup when clicking [⤢] button
+    btnZoom.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willShow = !cardSizeWidget.classList.contains('show');
+      document.querySelectorAll('.card-size-widget.show').forEach(w => w.classList.remove('show'));
+      document.querySelectorAll('.btn-zoom-preview.active').forEach(b => b.classList.remove('active'));
+
+      if (willShow) {
+        cardSizeWidget.classList.add('show');
+        btnZoom.classList.add('active');
+      }
+    });
+
+    cardSlider.addEventListener('input', (e) => {
+      applyThumbSize(e.target.value);
+    });
+
+    cardReset.addEventListener('click', (e) => {
+      e.stopPropagation();
+      applyThumbSize(200);
+    });
+
     const openLightbox = () => {
       el.lightboxImg.src = item.base64;
       el.lightboxModal.style.display = 'flex';
     };
     thumbCol.addEventListener('click', openLightbox);
-    btnZoom.addEventListener('click', openLightbox);
 
     // Text inputs
     const textareaJp = card.querySelector('.textarea-jp');
@@ -608,6 +719,7 @@
         preferredKey: preferredKey,
         tone: state.settings.tone,
         skipSFX: state.settings.skipSFX,
+        readingOrder: state.settings.readingOrder,
         sourceLang: 'ja',
         targetLang: 'vi'
       };
@@ -668,6 +780,7 @@
           apiKey2: state.settings.apiKey2,
           preferredKey: preferredKey,
           tone: state.settings.tone,
+          readingOrder: state.settings.readingOrder,
           sourceLang: 'ja',
           targetLang: 'vi'
         })
@@ -955,6 +1068,10 @@
       state.settings.apiKey2 = el.inputGeminiApiKey2.value.trim();
     }
     state.settings.tone = el.selectTone.value;
+    if (el.selectReadingOrder) {
+      state.settings.readingOrder = el.selectReadingOrder.value;
+      localStorage.setItem('manga_reading_order', state.settings.readingOrder);
+    }
 
     localStorage.setItem('manga_model', state.settings.model);
     localStorage.setItem('manga_api_key', state.settings.apiKey);

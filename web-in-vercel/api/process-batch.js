@@ -61,6 +61,7 @@ module.exports = async (req, res) => {
     const tone = (req.body && req.body.tone) || "natural";
     const skipSFX = req.body && (req.body.skipSFX === true || req.body.skipSFX === "true");
     const mode = (req.body && req.body.mode) || "all"; // 'all', 'ocr_only', 'translate_only'
+    const readingOrder = (req.body && (req.body.readingOrder || req.body.comicType)) || "manga";
 
     let ocrTextBlock = (req.body && req.body.existingOcr) || "";
     let viTextBlock = "";
@@ -70,7 +71,7 @@ module.exports = async (req, res) => {
 
     // STEP 1: Run OCR if needed
     if (mode === "all" || mode === "ocr_only") {
-      const ocrPrompt = buildOcrPrompt(sourceLang, skipSFX);
+      const ocrPrompt = buildOcrPrompt(sourceLang, skipSFX, readingOrder);
       const ocrPayload = {
         contents: [
           {
@@ -101,7 +102,7 @@ module.exports = async (req, res) => {
 
     // STEP 2: Run Translate if needed
     if ((mode === "all" || mode === "translate_only") && ocrTextBlock) {
-      const transPrompt = buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone);
+      const transPrompt = buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone, readingOrder);
       const transPayload = {
         contents: [
           {

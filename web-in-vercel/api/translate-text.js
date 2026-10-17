@@ -27,6 +27,8 @@ module.exports = async (req, res) => {
       preferredKey,
       model,
       tone = "natural",
+      readingOrder = "manga",
+      comicType,
       sourceLang = "ja",
       targetLang = "vi",
       imageBase64
@@ -49,7 +51,8 @@ module.exports = async (req, res) => {
     }
 
     const modelName = model || "gemini-3.1-flash-lite";
-    const prompt = buildTranslatePrompt(text_jp.trim(), sourceLang, targetLang, tone);
+    const order = readingOrder || comicType || "manga";
+    const prompt = buildTranslatePrompt(text_jp.trim(), sourceLang, targetLang, tone, order);
 
     const parts = [{ text: prompt }];
 
