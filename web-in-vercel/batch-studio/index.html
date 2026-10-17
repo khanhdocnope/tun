@@ -1188,6 +1188,405 @@ kbd {
 }
 
 
+
+/* ==========================================================================
+   RESPONSIVE DESIGN SYSTEM (Tất cả tỉ lệ: Desktop, Tablet, Mobile)
+   ========================================================================== */
+
+.btn-back-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-back-home:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--primary);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.studio-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* Responsive Text Variants */
+.toggle-text-full { display: inline; }
+.toggle-text-med  { display: none; }
+.toggle-text-short { display: none; }
+
+.btn-text-full  { display: inline; }
+.btn-text-short { display: none; }
+
+/* --------------------------------------------------------------------------
+   1. LAPTOP NHỎ & TABLET NGANG (769px - 1180px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 1180px) {
+  .studio-header {
+    height: auto;
+    min-height: 58px;
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .toggle-text-full { display: none; }
+  .toggle-text-med  { display: inline; font-size: 0.78rem; font-weight: 600; }
+  .toggle-text-short { display: none; }
+
+  .studio-left {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .studio-right {
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .studio-right .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-add-images {
+    min-width: 155px;
+  }
+
+  .action-subbar {
+    height: auto;
+    padding: 8px 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .batch-buttons {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .batch-stats {
+    margin-left: auto;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. TABLET DỌC & MOBILE LỚN (481px - 768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .studio-header {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .studio-left {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toggle-text-full { display: none; }
+  .toggle-text-med  { display: none; }
+  .toggle-text-short { display: inline; font-size: 0.76rem; font-weight: 700; }
+
+  .btn-text-full { display: none; }
+  .btn-text-short { display: inline; }
+
+  .studio-right {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .studio-right .btn-add-images,
+  .studio-right .btn-icon-text,
+  .studio-right .dropdown-wrapper {
+    width: 100%;
+    flex: none;
+  }
+
+  .studio-right .btn {
+    width: 100%;
+    padding: 8px 6px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .dropdown-menu {
+    right: 0;
+    min-width: 220px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .action-subbar {
+    height: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px;
+    gap: 10px;
+  }
+
+  .batch-buttons {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .btn-sub {
+    padding: 8px 6px;
+    font-size: 0.76rem;
+    text-align: center;
+    justify-content: center;
+    white-space: nowrap;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-ocr-all { order: 1; }
+  .btn-trans-all { order: 2; }
+  .btn-clear-all { order: 3; }
+
+  .btn-primary-highlight {
+    grid-column: span 3;
+    order: 4;
+    padding: 11px 8px;
+    font-size: 0.88rem;
+    font-weight: 700;
+  }
+
+  .batch-stats {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stat-badge {
+    font-size: 0.74rem;
+  }
+
+  .model-badge {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+    white-space: nowrap;
+  }
+
+  /* Manga Row Card (Chuyển sang 1 cột xếp chồng) */
+  .manga-row-card {
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+  }
+
+  .row-header {
+    height: auto;
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .row-title {
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .row-body {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .col-thumb {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 10px;
+    max-height: 240px;
+    text-align: center;
+  }
+
+  .col-thumb img {
+    max-height: 200px;
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+    display: block;
+  }
+
+  .col-text {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .col-text:last-child {
+    border-bottom: none;
+  }
+
+  .text-panel-editor {
+    min-height: 130px;
+    padding: 10px;
+    font-size: 0.85rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. MOBILE DỌC CHUẨN (Dưới 480px, đặc biệt 360px - 430px iPhone / Android)
+   -------------------------------------------------------------------------- */
+@media (max-width: 480px) {
+  .studio-header {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .studio-left {
+    gap: 4px;
+  }
+
+  .btn-back-home {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+    gap: 4px;
+  }
+
+  .studio-divider {
+    display: none;
+  }
+
+  .lang-selector-group {
+    padding: 2px 6px;
+    gap: 3px;
+    border-radius: 6px;
+  }
+
+  .lang-label {
+    font-size: 0.54rem;
+  }
+
+  .lang-select {
+    font-size: 0.72rem;
+  }
+
+  .lang-arrow {
+    font-size: 0.68rem;
+    padding: 0 1px;
+  }
+
+  .toggle-switch-wrapper {
+    gap: 5px;
+    flex-shrink: 0;
+  }
+
+  .toggle-slider {
+    width: 32px;
+    height: 18px;
+  }
+
+  .toggle-slider:before {
+    width: 12px;
+    height: 12px;
+    left: 2px;
+    top: 2px;
+  }
+
+  .toggle-switch-wrapper input:checked + .toggle-slider:before {
+    transform: translateX(14px);
+  }
+
+  .studio-right {
+    gap: 6px;
+  }
+
+  .studio-right .btn {
+    padding: 7px 4px;
+    font-size: 0.72rem;
+  }
+
+  .action-subbar {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .batch-buttons {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .btn-sub {
+    padding: 7px 3px;
+    font-size: 0.72rem;
+  }
+
+  .btn-primary-highlight {
+    padding: 9px 6px;
+    font-size: 0.82rem;
+  }
+
+  .batch-stats {
+    font-size: 0.7rem;
+  }
+
+  .stat-badge {
+    font-size: 0.7rem;
+  }
+
+  .model-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  .empty-dropzone {
+    padding: 24px 10px;
+    margin: 12px auto;
+  }
+
+  .empty-dropzone h2 {
+    font-size: 0.98rem;
+  }
+
+  .features-pill {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. MÀN HÌNH SIÊU NHỎ (< 360px - iPhone SE cũ, Galaxy Fold ngoài...)
+   -------------------------------------------------------------------------- */
+@media (max-width: 360px) {
+  .btn-back-home span {
+    display: none;
+  }
+
+  .lang-box:first-child .lang-label {
+    display: none;
+  }
+
+  .studio-right .btn {
+    font-size: 0.67rem;
+    padding: 6px 2px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1226,7 +1625,8 @@ kbd {
           <span class="toggle-slider"></span>
           <span class="toggle-text">
             <span class="toggle-text-full">Skip SFX (sound effects, onomatopoeia...)</span>
-            <span class="toggle-text-short">Skip SFX</span>
+            <span class="toggle-text-med">Skip SFX</span>
+            <span class="toggle-text-short">SFX</span>
           </span>
         </label>
       </div>
@@ -1238,7 +1638,8 @@ kbd {
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>+ Add images (max 100)</span>
+          <span class="btn-text-full">+ Add images (max 100)</span>
+          <span class="btn-text-short">+ Thêm ảnh</span>
         </label>
         <input type="file" id="fileInputMultiple" accept="image/*" multiple style="display:none;">
 
@@ -1248,7 +1649,8 @@ kbd {
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
-          <span>Settings</span>
+          <span class="btn-text-full">Settings</span>
+          <span class="btn-text-short">Cài đặt</span>
         </button>
 
         <div class="dropdown-wrapper" style="position:relative;">
@@ -1258,7 +1660,8 @@ kbd {
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span>Xuất Kịch Bản ▾</span>
+            <span class="btn-text-full">Xuất Kịch Bản ▾</span>
+            <span class="btn-text-short">Xuất file ▾</span>
           </button>
           <div class="dropdown-menu" id="exportMenu" style="display:none;">
             <button class="dropdown-item" id="btnExportTxt">📄 Tải file .txt (Notepad UTF-8)</button>
@@ -1274,13 +1677,13 @@ kbd {
       <div class="batch-buttons">
         <button class="btn btn-sub btn-ocr-all" id="btnOcrAll" disabled>OCR all</button>
         <button class="btn btn-sub btn-trans-all" id="btnTranslateAll" disabled>Translate all</button>
+        <button class="btn btn-sub btn-clear-all" id="btnClearAll" disabled>Clear all</button>
         <button class="btn btn-sub btn-primary-highlight" id="btnProcessAll" disabled>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
           </svg>
           <span>OCR + Translate all</span>
         </button>
-        <button class="btn btn-sub btn-clear-all" id="btnClearAll" disabled>Clear all</button>
       </div>
 
       <div class="batch-stats">
