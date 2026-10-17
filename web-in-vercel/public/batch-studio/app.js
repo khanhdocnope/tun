@@ -23,7 +23,12 @@
       cleanDilation: parseInt(localStorage.getItem('manga_clean_dilation') || '4', 10),
       cleanThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.20'),
       cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true'
-    }
+    },
+    // Giai Đoạn 2: Mobile UI State
+    currentFilter: 'all',
+    isAllCollapsed: false,
+    proofreadIndex: 0,
+    proofreadZoom: 100
   };
 
   // Thumbnail Size & Zoom Controller (0 -> 100)
@@ -114,7 +119,65 @@
     envKeyBadge: document.getElementById('envKeyBadge'),
     envKeyBadge2: document.getElementById('envKeyBadge2'),
     quotaSpeedText: document.getElementById('quotaSpeedText'),
-    quotaDailyText: document.getElementById('quotaDailyText')
+    quotaDailyText: document.getElementById('quotaDailyText'),
+
+    // Giai Đoạn 2: Collapse All & Proofread Button
+    btnToggleCollapseAll: document.getElementById('btnToggleCollapseAll'),
+    textToggleCollapse: document.getElementById('textToggleCollapse'),
+    btnOpenProofread: document.getElementById('btnOpenProofread'),
+
+    // Filter Chips Bar
+    filterAll: document.getElementById('filterAll'),
+    filterDone: document.getElementById('filterDone'),
+    filterPending: document.getElementById('filterPending'),
+    filterError: document.getElementById('filterError'),
+    countAll: document.getElementById('countAll'),
+    countDone: document.getElementById('countDone'),
+    countPending: document.getElementById('countPending'),
+    countError: document.getElementById('countError'),
+    btnJumpPending: document.getElementById('btnJumpPending'),
+
+    // Bottom Action Bar
+    btnOpenBottomSheet: document.getElementById('btnOpenBottomSheet'),
+    btnBottomProcessAll: document.getElementById('btnBottomProcessAll'),
+    btnBottomCleanAll: document.getElementById('btnBottomCleanAll'),
+    btnBottomQuickTxt: document.getElementById('btnBottomQuickTxt'),
+
+    // Bottom Sheet Menu
+    bottomSheetBackdrop: document.getElementById('bottomSheetBackdrop'),
+    bottomSheetCard: document.getElementById('bottomSheetCard'),
+    btnCloseBottomSheet: document.getElementById('btnCloseBottomSheet'),
+    sheetBtnOcrAll: document.getElementById('sheetBtnOcrAll'),
+    sheetBtnTransAll: document.getElementById('sheetBtnTransAll'),
+    sheetBtnCleanAll: document.getElementById('sheetBtnCleanAll'),
+    sheetBtnDownloadTxt: document.getElementById('sheetBtnDownloadTxt'),
+    sheetBtnCleanZip: document.getElementById('sheetBtnCleanZip'),
+    sheetBtnBundleZip: document.getElementById('sheetBtnBundleZip'),
+    sheetBtnDownloadDoc: document.getElementById('sheetBtnDownloadDoc'),
+    sheetBtnCopyAll: document.getElementById('sheetBtnCopyAll'),
+    sheetBtnOpenExport: document.getElementById('sheetBtnOpenExport'),
+    sheetBtnClearAll: document.getElementById('sheetBtnClearAll'),
+
+    // Proofreading Fullscreen Overlay
+    proofreadOverlay: document.getElementById('proofreadOverlay'),
+    btnCloseProofread: document.getElementById('btnCloseProofread'),
+    proofreadTitle: document.getElementById('proofreadTitle'),
+    proofreadSubtitle: document.getElementById('proofreadSubtitle'),
+    proofreadStatusBadge: document.getElementById('proofreadStatusBadge'),
+    btnProofreadCleanSingle: document.getElementById('btnProofreadCleanSingle'),
+    btnProofreadTransSingle: document.getElementById('btnProofreadTransSingle'),
+    proofreadImg: document.getElementById('proofreadImg'),
+    proofreadJpText: document.getElementById('proofreadJpText'),
+    proofreadViText: document.getElementById('proofreadViText'),
+    btnProofreadPrev: document.getElementById('btnProofreadPrev'),
+    btnProofreadNext: document.getElementById('btnProofreadNext'),
+    proofreadPageCounter: document.getElementById('proofreadPageCounter'),
+    btnProofreadZoomIn: document.getElementById('btnProofreadZoomIn'),
+    btnProofreadZoomOut: document.getElementById('btnProofreadZoomOut'),
+    btnProofreadZoomReset: document.getElementById('btnProofreadZoomReset'),
+    proofreadZoomText: document.getElementById('proofreadZoomText'),
+    btnProofreadCopyJp: document.getElementById('btnProofreadCopyJp'),
+    btnProofreadCopyVi: document.getElementById('btnProofreadCopyVi')
   };
 
   function getActiveKeys() {
@@ -631,6 +694,218 @@
     el.btnCloseSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnCancelSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnSaveSettings.addEventListener('click', saveSettings);
+
+    // =========================================================================
+    // GIAI ĐOẠN 2: EVENT LISTENERS
+    // =========================================================================
+
+    // 1. Thu gọn tất cả & Soát bản dịch
+    if (el.btnToggleCollapseAll) {
+      el.btnToggleCollapseAll.addEventListener('click', toggleCollapseAll);
+    }
+    if (el.btnOpenProofread) {
+      el.btnOpenProofread.addEventListener('click', () => openProofread(0));
+    }
+
+    // 2. Bộ lọc tiến độ
+    if (el.filterAll) el.filterAll.addEventListener('click', () => setFilter('all'));
+    if (el.filterDone) el.filterDone.addEventListener('click', () => setFilter('done'));
+    if (el.filterPending) el.filterPending.addEventListener('click', () => setFilter('pending'));
+    if (el.filterError) el.filterError.addEventListener('click', () => setFilter('error'));
+    if (el.btnJumpPending) el.btnJumpPending.addEventListener('click', jumpToFirstPending);
+
+    // 3. Bottom Action Bar
+    if (el.btnOpenBottomSheet) {
+      el.btnOpenBottomSheet.addEventListener('click', openBottomSheet);
+    }
+    if (el.btnCloseBottomSheet) {
+      el.btnCloseBottomSheet.addEventListener('click', closeBottomSheet);
+    }
+    if (el.bottomSheetBackdrop) {
+      el.bottomSheetBackdrop.addEventListener('click', closeBottomSheet);
+    }
+    if (el.btnBottomProcessAll) {
+      el.btnBottomProcessAll.addEventListener('click', () => {
+        if (state.isQueueRunning) {
+          state.stopQueueRequested = true;
+          if (el.btnStopQueue) el.btnStopQueue.click();
+        } else {
+          runBatchQueue('all');
+        }
+      });
+    }
+    if (el.btnBottomCleanAll) {
+      el.btnBottomCleanAll.addEventListener('click', runCleanQueue);
+    }
+    if (el.btnBottomQuickTxt) {
+      el.btnBottomQuickTxt.addEventListener('click', () => exportFullChapter('txt'));
+    }
+
+    // 4. Bottom Sheet Menu Items
+    if (el.sheetBtnOcrAll) {
+      el.sheetBtnOcrAll.addEventListener('click', () => {
+        closeBottomSheet();
+        runBatchQueue('ocr_only');
+      });
+    }
+    if (el.sheetBtnTransAll) {
+      el.sheetBtnTransAll.addEventListener('click', () => {
+        closeBottomSheet();
+        runBatchQueue('translate_only');
+      });
+    }
+    if (el.sheetBtnCleanAll) {
+      el.sheetBtnCleanAll.addEventListener('click', () => {
+        closeBottomSheet();
+        runCleanQueue();
+      });
+    }
+    if (el.sheetBtnDownloadTxt) {
+      el.sheetBtnDownloadTxt.addEventListener('click', () => {
+        closeBottomSheet();
+        exportFullChapter('txt');
+      });
+    }
+    if (el.sheetBtnCleanZip) {
+      el.sheetBtnCleanZip.addEventListener('click', () => {
+        closeBottomSheet();
+        exportCleanedImagesZip();
+      });
+    }
+    if (el.sheetBtnBundleZip) {
+      el.sheetBtnBundleZip.addEventListener('click', () => {
+        closeBottomSheet();
+        exportBundleZip();
+      });
+    }
+    if (el.sheetBtnDownloadDoc) {
+      el.sheetBtnDownloadDoc.addEventListener('click', () => {
+        closeBottomSheet();
+        exportFullChapter('doc');
+      });
+    }
+    if (el.sheetBtnCopyAll) {
+      el.sheetBtnCopyAll.addEventListener('click', () => {
+        closeBottomSheet();
+        copyChapterToClipboard();
+      });
+    }
+    if (el.sheetBtnOpenExport) {
+      el.sheetBtnOpenExport.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnOpenExportModal) el.btnOpenExportModal.click();
+      });
+    }
+    if (el.sheetBtnClearAll) {
+      el.sheetBtnClearAll.addEventListener('click', () => {
+        closeBottomSheet();
+        clearAllBatch();
+      });
+    }
+
+    // 5. Proofreading Overlay Events
+    if (el.btnCloseProofread) {
+      el.btnCloseProofread.addEventListener('click', closeProofread);
+    }
+    if (el.btnProofreadPrev) {
+      el.btnProofreadPrev.addEventListener('click', () => navigateProofread(-1));
+    }
+    if (el.btnProofreadNext) {
+      el.btnProofreadNext.addEventListener('click', () => navigateProofread(1));
+    }
+    if (el.btnProofreadZoomIn) {
+      el.btnProofreadZoomIn.addEventListener('click', () => zoomProofread(25));
+    }
+    if (el.btnProofreadZoomOut) {
+      el.btnProofreadZoomOut.addEventListener('click', () => zoomProofread(-25));
+    }
+    if (el.btnProofreadZoomReset) {
+      el.btnProofreadZoomReset.addEventListener('click', () => {
+        state.proofreadZoom = 100;
+        renderProofreadCurrentPage();
+      });
+    }
+    if (el.btnProofreadCopyJp) {
+      el.btnProofreadCopyJp.addEventListener('click', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) copyToClipboard(item.ocrText, 'Đã copy tiếng Nhật!');
+      });
+    }
+    if (el.btnProofreadCopyVi) {
+      el.btnProofreadCopyVi.addEventListener('click', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) copyToClipboard(item.viText, 'Đã copy bản dịch!');
+      });
+    }
+    if (el.proofreadViText) {
+      el.proofreadViText.addEventListener('input', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) {
+          item.viText = el.proofreadViText.value;
+          scheduleSave(item);
+          updateCardDOM(item);
+        }
+      });
+    }
+    if (el.proofreadJpText) {
+      el.proofreadJpText.addEventListener('input', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) {
+          item.ocrText = el.proofreadJpText.value;
+          scheduleSave(item);
+          updateCardDOM(item);
+        }
+      });
+    }
+    if (el.btnProofreadCleanSingle) {
+      el.btnProofreadCleanSingle.addEventListener('click', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) cleanSingleImage(item);
+      });
+    }
+    if (el.btnProofreadTransSingle) {
+      el.btnProofreadTransSingle.addEventListener('click', () => {
+        const item = state.images[state.proofreadIndex];
+        if (item) translateSingleText(item);
+      });
+    }
+
+    // Touch Swipe trên Proofreading Overlay (Dành riêng cho màn hình cảm ứng di động)
+    let touchStartX = 0;
+    let touchEndX = 0;
+    if (el.proofreadImg) {
+      el.proofreadImg.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      }, { passive: true });
+
+      el.proofreadImg.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        const diff = touchEndX - touchStartX;
+        if (Math.abs(diff) > 50) {
+          if (diff > 0) navigateProofread(-1); // Vuốt sang phải -> về trang trước
+          else navigateProofread(1); // Vuốt sang trái -> sang trang sau
+        }
+      }, { passive: true });
+    }
+
+    // Keyboard Shortcuts khi Soát Bản Dịch (ArrowLeft, ArrowRight, Escape)
+    window.addEventListener('keydown', (e) => {
+      if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
+        if (document.activeElement === el.proofreadViText || document.activeElement === el.proofreadJpText) {
+          return; // Đang gõ văn bản thì không bắt phím mũi tên
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          navigateProofread(-1);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          navigateProofread(1);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          closeProofread();
+        }
+      }
+    });
   }
 
   // Format File Size
@@ -784,15 +1059,10 @@
     el.mangaRowsList.style.display = hasImages ? 'flex' : 'none';
 
     // Toolbar states
-    if (el.btnCleanAll) el.btnCleanAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnProcessAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnOcrAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnClearAll.disabled = !hasImages || state.isQueueRunning;
-    el.btnExportChapter.disabled = !hasImages;
-    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = !hasImages;
+    updateToolbarStates(state.isQueueRunning);
 
     el.statBadge.textContent = `${state.images.length} trang trong danh sách`;
+    updateFilterCounts();
 
     if (!hasImages) {
       el.mangaRowsList.innerHTML = '';
@@ -805,35 +1075,45 @@
       const row = createRowElement(item, index + 1);
       el.mangaRowsList.appendChild(row);
     });
+
+    // Áp dụng bộ lọc hiện tại
+    applyCurrentFilterToDOM();
   }
 
   // Create Single Row Element
   function createRowElement(item, displayIndex) {
     const card = document.createElement('div');
-    card.className = `manga-row-card ${item.status}`;
+    card.className = `manga-row-card ${item.status}${state.isAllCollapsed ? ' is-collapsed' : ''}`;
     card.id = `row-${item.id}`;
 
     const cleanLabel = item.cleanStatus === 'done'
       ? 'TẨY: XONG'
       : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
 
+    const summaryText = (item.viText || item.ocrText || '').trim().replace(/\s+/g, ' ').slice(0, 45);
+
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
+          <button type="button" class="btn-row-collapse-toggle" title="Thu gọn / Mở rộng thẻ này">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
           <button class="btn-zoom-preview" title="Chỉnh kích thước ảnh (Phóng to / Thu nhỏ)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
           </button>
-          <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
+          <span class="row-title">Trang ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
           <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
           <span class="badge-clean ${item.cleanStatus || 'idle'}">${cleanLabel}</span>
+          <span class="row-collapsed-summary">${escapeHtml(summaryText || 'Chưa dịch')}</span>
         </div>
         <div class="row-header-right">
+          <button class="btn-row-action btn-row-proofread" title="Soát bản dịch toàn màn hình cho trang này">Soát</button>
           <button class="btn-row-action btn-row-clean">Tẩy chữ</button>
           <button class="btn-row-action btn-row-ocr">OCR</button>
-          <button class="btn-row-action btn-row-trans">Translate</button>
+          <button class="btn-row-action btn-row-trans">Dịch</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
           <button class="btn-row-delete" title="Xóa trang này">&times;</button>
         </div>
@@ -871,8 +1151,12 @@
         <!-- Col 3: Translation Vietnamese -->
         <div class="col-text trans">
           <div class="text-panel-header">
-            <span class="text-panel-title">Translation (Tiếng Việt)</span>
-            <button class="btn-panel-copy btn-copy-vi">Copy VI</button>
+            <span class="text-panel-title">Bản dịch (VI)</span>
+            <div class="text-panel-actions" style="display:flex; align-items:center; gap:4px;">
+              <button type="button" class="btn-panel-copy btn-mini-clean" title="Tẩy chữ riêng trang này">✨ Tẩy</button>
+              <button type="button" class="btn-panel-copy btn-mini-trans" title="Dịch lại riêng trang này">⚡ Dịch</button>
+              <button type="button" class="btn-panel-copy btn-copy-vi" title="Copy bản dịch">Copy</button>
+            </div>
           </div>
           <textarea class="text-panel-editor textarea-vi" placeholder="Chưa có bản dịch...">${escapeHtml(item.viText)}</textarea>
         </div>
@@ -1049,10 +1333,50 @@
       renderBatchView();
     });
 
-    card.querySelector('.btn-row-clean').addEventListener('click', () => cleanSingleImage(item));
-    card.querySelector('.btn-row-ocr').addEventListener('click', () => processSingleImage(item, 'ocr_only'));
-    card.querySelector('.btn-row-trans').addEventListener('click', () => translateSingleText(item));
-    card.querySelector('.btn-row-all').addEventListener('click', () => processSingleImage(item, 'all'));
+    // Giai Đoạn 2: Nút thu gọn thẻ và Soát bản dịch
+    const btnCollapse = card.querySelector('.btn-row-collapse-toggle');
+    if (btnCollapse) {
+      btnCollapse.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.classList.toggle('is-collapsed');
+      });
+    }
+
+    const btnRowProofread = card.querySelector('.btn-row-proofread');
+    if (btnRowProofread) {
+      btnRowProofread.addEventListener('click', () => {
+        const idx = state.images.findIndex(x => x.id === item.id);
+        if (idx !== -1) openProofread(idx);
+      });
+    }
+
+    const btnMiniClean = card.querySelector('.btn-mini-clean');
+    if (btnMiniClean) {
+      btnMiniClean.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cleanSingleImage(item);
+      });
+    }
+
+    const btnMiniTrans = card.querySelector('.btn-mini-trans');
+    if (btnMiniTrans) {
+      btnMiniTrans.addEventListener('click', (e) => {
+        e.stopPropagation();
+        translateSingleText(item);
+      });
+    }
+
+    const btnClean = card.querySelector('.btn-row-clean');
+    if (btnClean) btnClean.addEventListener('click', () => cleanSingleImage(item));
+
+    const btnOcr = card.querySelector('.btn-row-ocr');
+    if (btnOcr) btnOcr.addEventListener('click', () => processSingleImage(item, 'ocr_only'));
+
+    const btnTrans = card.querySelector('.btn-row-trans');
+    if (btnTrans) btnTrans.addEventListener('click', () => translateSingleText(item));
+
+    const btnAll = card.querySelector('.btn-row-all');
+    if (btnAll) btnAll.addEventListener('click', () => processSingleImage(item, 'all'));
 
     return card;
   }
@@ -1062,7 +1386,7 @@
     const card = document.getElementById(`row-${item.id}`);
     if (!card) return;
 
-    card.className = `manga-row-card ${item.status}`;
+    card.className = `manga-row-card ${item.status}${card.classList.contains('is-collapsed') ? ' is-collapsed' : ''}`;
     const badge = card.querySelector('.badge-status');
     if (badge) {
       badge.className = `badge-status ${item.status}`;
@@ -1075,6 +1399,12 @@
       badgeClean.textContent = item.cleanStatus === 'done'
         ? 'TẨY: XONG'
         : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
+    }
+
+    const summaryEl = card.querySelector('.row-collapsed-summary');
+    if (summaryEl) {
+      const summaryText = (item.viText || item.ocrText || '').trim().replace(/\s+/g, ' ').slice(0, 45);
+      summaryEl.textContent = summaryText || 'Chưa dịch';
     }
 
     const switcher = card.querySelector('.thumb-switcher');
@@ -1100,6 +1430,18 @@
 
     el.btnExportChapter.disabled = state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = state.images.length === 0;
+
+    // Cập nhật bộ lọc và tiến độ
+    updateFilterCounts();
+    applyFilterToCardElement(card, item);
+
+    // Cập nhật Proofreading Overlay nếu đang mở đúng trang này
+    if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
+      const curItem = state.images[state.proofreadIndex];
+      if (curItem && curItem.id === item.id) {
+        renderProofreadCurrentPage();
+      }
+    }
   }
 
   // Tẩy chữ cho 1 ảnh đơn lẻ (với cơ chế retry 2 lần khi gặp lỗi kết nối/500/timeout)
@@ -1383,6 +1725,17 @@
         completed++;
         el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
 
+        // Giai Đoạn 2: Hiển thị tiến độ x/N trên nút Dừng lại
+        if (el.btnBottomProcessAll) {
+          const bText = el.btnBottomProcessAll.querySelector('.btn-bottom-process-text');
+          if (bText) bText.textContent = `Dừng lại (${completed}/${total})`;
+        }
+        if (el.btnProcessAll) {
+          const sText = el.btnProcessAll.querySelector('.btn-process-text');
+          if (sText) sText.textContent = `Dừng lại (${completed}/${total})`;
+        }
+        updateFilterCounts();
+
         // Delay 1.8s per worker to strictly maintain < 15 RPM per key
         if (!state.stopQueueRequested && nextIndex < total) {
           await new Promise(r => setTimeout(r, 1800));
@@ -1413,13 +1766,214 @@
   }
 
   function updateToolbarStates(isRunning) {
-    if (el.btnCleanAll) el.btnCleanAll.disabled = isRunning || state.images.length === 0;
-    el.btnProcessAll.disabled = isRunning || state.images.length === 0;
-    el.btnOcrAll.disabled = isRunning || state.images.length === 0;
-    el.btnTranslateAll.disabled = isRunning || state.images.length === 0;
-    el.btnClearAll.disabled = isRunning || state.images.length === 0;
-    if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || state.images.length === 0;
-    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || state.images.length === 0;
+    const hasImages = state.images.length > 0;
+
+    // Subbar buttons
+    if (el.btnCleanAll) el.btnCleanAll.disabled = isRunning || !hasImages;
+    el.btnProcessAll.disabled = !hasImages;
+    el.btnOcrAll.disabled = isRunning || !hasImages;
+    el.btnTranslateAll.disabled = isRunning || !hasImages;
+    el.btnClearAll.disabled = isRunning || !hasImages;
+    if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || !hasImages;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || !hasImages;
+
+    // Bottom Action Bar
+    if (el.btnBottomProcessAll) {
+      el.btnBottomProcessAll.disabled = !hasImages;
+      el.btnBottomProcessAll.classList.toggle('is-running', isRunning);
+      const textEl = el.btnBottomProcessAll.querySelector('.btn-bottom-process-text');
+      if (textEl) {
+        textEl.textContent = isRunning ? 'Dừng lại' : 'OCR + Dịch tất cả';
+      }
+    }
+    if (el.btnBottomCleanAll) el.btnBottomCleanAll.disabled = isRunning || !hasImages;
+    if (el.btnBottomQuickTxt) el.btnBottomQuickTxt.disabled = isRunning || !hasImages;
+    if (el.btnOpenBottomSheet) el.btnOpenBottomSheet.disabled = isRunning;
+
+    const subbarProcessText = el.btnProcessAll ? el.btnProcessAll.querySelector('.btn-process-text') : null;
+    if (subbarProcessText) {
+      subbarProcessText.textContent = isRunning ? 'Dừng lại' : 'OCR + Dịch tất cả';
+    }
+
+    updateFilterCounts();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Giai Đoạn 2: Quản lý Bộ Lọc & Tiến Độ (Filter & Counts)
+  // ---------------------------------------------------------------------------
+  function updateFilterCounts() {
+    const total = state.images.length;
+    let done = 0;
+    let pending = 0;
+    let error = 0;
+
+    state.images.forEach(img => {
+      const isErr = img.status === 'error' || img.cleanStatus === 'error';
+      const isDone = (img.stage || 0) >= 2 && img.status === 'done';
+      if (isErr) error++;
+      if (isDone) done++;
+      if (!isDone && !isErr) pending++;
+    });
+
+    if (el.countAll) el.countAll.textContent = total;
+    if (el.countDone) el.countDone.textContent = done;
+    if (el.countPending) el.countPending.textContent = pending;
+    if (el.countError) el.countError.textContent = error;
+  }
+
+  function applyFilterToCardElement(card, item) {
+    if (!card || !item) return;
+    const filter = state.currentFilter || 'all';
+    if (filter === 'all') {
+      card.style.display = '';
+      return;
+    }
+    const isErr = item.status === 'error' || item.cleanStatus === 'error';
+    const isDone = (item.stage || 0) >= 2 && item.status === 'done';
+
+    let show = true;
+    if (filter === 'done') show = isDone;
+    else if (filter === 'pending') show = !isDone;
+    else if (filter === 'error') show = isErr;
+
+    card.style.display = show ? '' : 'none';
+  }
+
+  function applyCurrentFilterToDOM() {
+    state.images.forEach(item => {
+      const card = document.getElementById(`row-${item.id}`);
+      if (card) applyFilterToCardElement(card, item);
+    });
+  }
+
+  function setFilter(filterType) {
+    state.currentFilter = filterType;
+    [el.filterAll, el.filterDone, el.filterPending, el.filterError].forEach(btn => {
+      if (btn) btn.classList.toggle('active', btn.dataset.filter === filterType);
+    });
+    applyCurrentFilterToDOM();
+  }
+
+  function jumpToFirstPending() {
+    const firstPending = state.images.find(img => (img.stage || 0) < 2);
+    if (!firstPending) {
+      showToast('Tất cả các trang đã hoàn thành!');
+      return;
+    }
+    if (state.currentFilter === 'done') {
+      setFilter('all');
+    }
+    const card = document.getElementById(`row-${firstPending.id}`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.style.outline = '2px solid #f59e0b';
+      card.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.4)';
+      setTimeout(() => {
+        card.style.outline = '';
+        card.style.boxShadow = '';
+      }, 2500);
+      showToast(`Đã cuộn tới trang chưa xong: ${firstPending.name}`);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Giai Đoạn 2: Thu Gọn / Mở Rộng Tất Cả
+  // ---------------------------------------------------------------------------
+  function toggleCollapseAll() {
+    state.isAllCollapsed = !state.isAllCollapsed;
+    document.querySelectorAll('.manga-row-card').forEach(card => {
+      card.classList.toggle('is-collapsed', state.isAllCollapsed);
+    });
+    if (el.textToggleCollapse) {
+      el.textToggleCollapse.textContent = state.isAllCollapsed ? 'Mở rộng' : 'Thu gọn';
+    }
+    showToast(state.isAllCollapsed ? 'Đã thu gọn danh sách trang' : 'Đã mở rộng toàn bộ danh sách');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Giai Đoạn 2: Bottom Sheet Menu
+  // ---------------------------------------------------------------------------
+  function openBottomSheet() {
+    if (el.bottomSheetBackdrop && el.bottomSheetCard) {
+      el.bottomSheetBackdrop.style.display = 'block';
+      el.bottomSheetCard.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeBottomSheet() {
+    if (el.bottomSheetBackdrop && el.bottomSheetCard) {
+      el.bottomSheetBackdrop.style.display = 'none';
+      el.bottomSheetCard.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Giai Đoạn 2: Chế Độ Soát Bản Dịch (Proofreading Mode)
+  // ---------------------------------------------------------------------------
+  function openProofread(index = 0) {
+    if (state.images.length === 0) {
+      showToast('Vui lòng thêm ảnh Manga trước khi soát bản dịch.');
+      return;
+    }
+    state.proofreadIndex = Math.max(0, Math.min(state.images.length - 1, index));
+    state.proofreadZoom = 100;
+    renderProofreadCurrentPage();
+    if (el.proofreadOverlay) {
+      el.proofreadOverlay.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  function closeProofread() {
+    if (el.proofreadOverlay) {
+      el.proofreadOverlay.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  }
+
+  function renderProofreadCurrentPage() {
+    const item = state.images[state.proofreadIndex];
+    if (!item) return;
+
+    if (el.proofreadTitle) el.proofreadTitle.textContent = `Soát bản dịch: ${item.name}`;
+    if (el.proofreadSubtitle) el.proofreadSubtitle.textContent = `Trang ${state.proofreadIndex + 1} / ${state.images.length} (${item.sizeStr})`;
+    if (el.proofreadPageCounter) el.proofreadPageCounter.textContent = `${state.proofreadIndex + 1} / ${state.images.length}`;
+
+    if (el.proofreadStatusBadge) {
+      el.proofreadStatusBadge.className = `badge-status ${item.status}`;
+      el.proofreadStatusBadge.textContent = item.status.toUpperCase();
+    }
+
+    if (el.proofreadImg) {
+      el.proofreadImg.src = (item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64;
+      el.proofreadImg.style.transform = `scale(${state.proofreadZoom / 100})`;
+    }
+    if (el.proofreadZoomText) el.proofreadZoomText.textContent = `${state.proofreadZoom}%`;
+
+    if (el.proofreadJpText) el.proofreadJpText.value = item.ocrText || '';
+    if (el.proofreadViText) el.proofreadViText.value = item.viText || '';
+
+    if (el.btnProofreadPrev) el.btnProofreadPrev.disabled = state.proofreadIndex <= 0;
+    if (el.btnProofreadNext) el.btnProofreadNext.disabled = state.proofreadIndex >= state.images.length - 1;
+  }
+
+  function navigateProofread(step) {
+    const nextIdx = state.proofreadIndex + step;
+    if (nextIdx >= 0 && nextIdx < state.images.length) {
+      state.proofreadIndex = nextIdx;
+      state.proofreadZoom = 100;
+      renderProofreadCurrentPage();
+    }
+  }
+
+  function zoomProofread(delta) {
+    state.proofreadZoom = Math.max(50, Math.min(300, state.proofreadZoom + delta));
+    if (el.proofreadImg) {
+      el.proofreadImg.style.transform = `scale(${state.proofreadZoom / 100})`;
+    }
+    if (el.proofreadZoomText) el.proofreadZoomText.textContent = `${state.proofreadZoom}%`;
   }
 
   // Tải file nhị phân Blob an toàn (không target=_blank)

@@ -20,10 +20,13 @@ console.log('  ✅ Link header "Chương (hàng loạt)" mở ngay trong tab hi�
 assert.ok(!indexHtml.includes('<iframe id="iframe-batch-studio" src="/batch-studio"'), 'Iframe tới /batch-studio phải được loại bỏ để tiết kiệm tài nguyên');
 console.log('  ✅ Iframe nặng 82vh đã được gỡ bỏ.');
 
-// c. Cờ LEGACY_TABS
+// c. Cờ LEGACY_TABS & 3 Tab hoạt động (Xóa chữ, Tẩy ZIP, Dịch script)
 assert.ok(indexHtml.includes('const LEGACY_TABS = false;'), 'Phải có cờ const LEGACY_TABS = false');
 assert.ok(indexHtml.includes('hide-legacy-tabs'), 'Phải có class hide-legacy-tabs');
-console.log('  ✅ Cờ const LEGACY_TABS = false được thiết lập an toàn.');
+assert.ok(!indexHtml.includes('class="tab-btn legacy-tab" data-tab="tab-batch"'), 'tab-batch không được gắn legacy-tab (đã mở lại cho Cleaner/Redrawer)');
+assert.ok(indexHtml.includes('class="tab-btn" data-tab="tab-batch"'), 'Nút tab-batch phải mở sẵn cho người dùng');
+assert.ok(indexHtml.includes('<span class="tab-label-short">Tẩy ZIP</span>'), 'Có nhãn ngắn Tẩy ZIP cho mobile');
+console.log('  ✅ Cờ const LEGACY_TABS = false được thiết lập; mở lại tab "Tẩy ZIP" cho Redrawer.');
 
 // d. Responsive CSS cho mobile 360-480px
 assert.ok(indexHtml.includes('@media (max-width: 480px)'), 'Phải có @media (max-width: 480px)');

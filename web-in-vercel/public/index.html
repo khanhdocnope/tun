@@ -1108,9 +1108,10 @@ body.hide-legacy-tabs .legacy-tab {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
         <span>Dịch Truyện Tranh (Bubble OCR)</span>
       </button>
-      <button class="tab-btn legacy-tab" data-tab="tab-batch">
+      <button class="tab-btn" data-tab="tab-batch">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16.5 9.4L7.55 4.24a1.78 1.78 0 0 0-1.8 0l-4.2 2.42A1.8 1.8 0 0 0 .66 8.2v7.6a1.8 1.8 0 0 0 .89 1.56l4.2 2.4a1.8 1.8 0 0 0 1.8 0l8.95-5.16a1.8 1.8 0 0 0 .9-1.56V11a1.8 1.8 0 0 0-.9-1.6z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg>
-        <span>Xử Lý Hàng Loạt Tệp ZIP (Batch)</span>
+        <span class="tab-label-full">Tẩy Chữ Hàng Loạt (Tệp ZIP)</span>
+        <span class="tab-label-short">Tẩy ZIP</span>
       </button>
       <button class="tab-btn" data-tab="tab-script-retrans">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
@@ -1417,7 +1418,7 @@ body.hide-legacy-tabs .legacy-tab {
     </section>
 
     <!-- ================= TAB 3: BATCH ZIP ================= -->
-    <section id="tab-batch" class="tab-pane legacy-tab">
+    <section id="tab-batch" class="tab-pane">
       <div class="studio-grid">
         <!-- Controls Column -->
         <div class="panel">
@@ -1772,7 +1773,7 @@ Ví dụ:
  * Autonomous Manga Cleaner & Speech Bubble Context Translator
  */
 
-// Chế độ hiển thị: Khi LEGACY_TABS = false, chỉ giữ lại tab "Xóa chữ" và "Dịch lại script".
+// Chế độ hiển thị: Khi LEGACY_TABS = false, hiển thị 3 tab chính: "Xóa chữ" (đơn lẻ), "Tẩy ZIP" (hàng loạt không tốn RAM), và "Dịch script".
 // Dịch chapter / dịch truyện tranh được tập trung toàn diện vào Chapter Workspace (/batch-studio).
 const LEGACY_TABS = false;
 if (!LEGACY_TABS) {
