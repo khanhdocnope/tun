@@ -799,10 +799,7 @@ kbd {
 .col-thumb {
   background: #080b12;
   border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
+  display: block;
   padding: 0;
   overflow-y: auto;
   overflow-x: auto;
@@ -1446,16 +1443,17 @@ kbd {
   .col-thumb {
     border-right: none;
     border-bottom: 1px solid var(--border);
-    padding: 10px;
-    max-height: 240px;
-    text-align: center;
+    padding: 0;
+    max-height: 400px;
+    display: block;
+    overflow: auto;
   }
 
   .col-thumb img {
-    max-height: 200px;
-    width: auto;
-    max-width: 100%;
-    margin: 0 auto;
+    max-height: none;
+    width: var(--thumb-img-width, 100%);
+    max-width: none;
+    margin: 0;
     display: block;
   }
 
