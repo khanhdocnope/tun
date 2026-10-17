@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⚡ MangaStudio AI - Autonomous Cleaner & Speech Bubble Translator</title>
+  <title>MangaStudio AI - Autonomous Cleaner & Speech Bubble Translator</title>
   <meta name="description" content="Nền tảng AI xử lý truyện tranh đỉnh cao: Bóc tách bóng thoại, tẩy chữ giữ nguyên trame nét vẽ, OCR đa ngôn ngữ và dịch thuật ngữ cảnh Manga/Manhwa bằng DeepSeek LLM.">
   
   <!-- Favicon -->
@@ -1011,13 +1011,13 @@ details.modern-details[open] summary::after {
     
     <div class="nav-actions">
       <a href="/batch-studio" target="_blank" class="nav-batch-link" title="Mở Web Con: Batch Studio Pro (Trình OCR & Dịch Nhiều Trang Hàng Loạt)">
-        <span>📚 Batch Studio Pro(test) ↗</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>Batch Studio Pro ↗</span>
       </a>
       <div id="server-status-pill" class="status-pill" title="Nhấn để kiểm tra kết nối API">
         <span class="status-dot"></span>
         <span id="server-status-text">Đang kết nối backend...</span>
       </div>
-      <button id="btn-open-settings" class="btn-icon" title="Cài đặt API Server & Token">⚙️</button>
+      <button id="btn-open-settings" class="btn-icon" title="Cài đặt API Server & Token"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
     </div>
   </header>
 
@@ -1027,19 +1027,19 @@ details.modern-details[open] summary::after {
     <!-- Tab Navigation -->
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="tab-cleaner">
-        <span>🪄</span> AI Manga Cleaner (Xóa Chữ)
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"></path><path d="M19 15l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"></path></svg> AI Manga Cleaner (Xóa Chữ)
       </button>
       <button class="tab-btn" data-tab="tab-translator">
-        <span>🌐</span> Dịch Truyện Tranh (Bubble OCR)
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg> Dịch Truyện Tranh (Bubble OCR)
       </button>
       <button class="tab-btn" data-tab="tab-batch">
-        <span>📦</span> Xử Lý Hàng Loạt Tệp ZIP (Batch)
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16.5 9.4L7.55 4.24a1.78 1.78 0 0 0-1.8 0l-4.2 2.42A1.8 1.8 0 0 0 .66 8.2v7.6a1.8 1.8 0 0 0 .89 1.56l4.2 2.4a1.8 1.8 0 0 0 1.8 0l8.95-5.16a1.8 1.8 0 0 0 .9-1.56V11a1.8 1.8 0 0 0-.9-1.6z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg> Xử Lý Hàng Loạt Tệp ZIP (Batch)
       </button>
       <button class="tab-btn" data-tab="tab-script-retrans">
-        <span>📝</span> Dịch Lại Kịch Bản (.txt)
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> Dịch Lại Kịch Bản (.txt)
       </button>
       <button class="tab-btn" data-tab="tab-batch-studio">
-        <span>📚</span> Batch Studio Pro (test)
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Batch Studio Pro
       </button>
     </nav>
 
@@ -1055,7 +1055,7 @@ details.modern-details[open] summary::after {
 
           <div id="cleaner-dropzone" class="dropzone">
             <input type="file" id="cleaner-file-input" accept="image/*" style="display:none;">
-            <div class="drop-icon">🖼️</div>
+            <div class="drop-icon"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>
             <div class="drop-text">
               <h4>Kéo thả hoặc nhấn để chọn trang truyện</h4>
               <p>Hỗ trợ JPG, PNG, WebP (Tối đa 50MB)</p>
@@ -1070,10 +1070,10 @@ details.modern-details[open] summary::after {
           <div class="form-group">
             <label class="form-label" for="cleaner-model-select">Mô hình Inpainting</label>
             <select id="cleaner-model-select" class="form-select">
-              <option value="anime-lama" selected>🌸 Anime-Manga LaMa (Tốt nhất cho Manga B&W, trame, nét vẽ)</option>
-              <option value="big-lama">🎨 Big-LaMa Standard (Tốt nhất cho Manhwa / Webtoon màu)</option>
-              <option value="opencv-telea">⚡ OpenCV Telea (Siêu tốc độ CPU)</option>
-              <option value="opencv-ns">💧 OpenCV Navier-Stokes (Mượt mà CPU)</option>
+              <option value="anime-lama" selected>Anime-Manga LaMa (Tốt nhất cho Manga B&W, trame, nét vẽ)</option>
+              <option value="big-lama">Big-LaMa Standard (Tốt nhất cho Manhwa / Webtoon màu)</option>
+              <option value="opencv-telea">OpenCV Telea (Siêu tốc độ CPU)</option>
+              <option value="opencv-ns">OpenCV Navier-Stokes (Mượt mà CPU)</option>
             </select>
           </div>
 
@@ -1105,7 +1105,7 @@ details.modern-details[open] summary::after {
           </div>
 
           <button id="btn-run-clean" class="btn-primary" disabled>
-            <span>🚀 AI Bóc Tách & Làm Sạch Nét Vẽ</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg><span>AI Bóc Tách & Làm Sạch Nét Vẽ</span>
           </button>
         </div>
 
@@ -1256,14 +1256,14 @@ details.modern-details[open] summary::after {
               <div class="form-group" style="margin-bottom:0;">
                 <label class="form-label" for="trans-llm-model">🤖 Mô hình AI Dịch</label>
                 <select id="trans-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>⚡ Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">✨ Google Gemini Flash Latest</option>
-              <option value="minimax-m3">✨ MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">📚 Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">🧠 DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">💎 DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">🌏 GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">🌙 Kimi-K2.6 (Ngữ cảnh 256K)</option>
+              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
+              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
+              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
+              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
+              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
+              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
+              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
+              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
             </select>
               </div>
 
@@ -1617,14 +1617,14 @@ Ví dụ:
   <div id="settings-modal" class="modal-overlay">
     <div class="modal-box" style="max-height: 90vh; overflow-y: auto;">
       <div class="modal-header">
-        <h3 style="font-weight:700;">⚙️ Cấu Hình Hệ Thống & Dịch Thuật</h3>
+        <h3 style="font-weight:700; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Cấu Hình Hệ Thống & Dịch Thuật</h3>
         <button id="btn-close-settings" class="modal-close">✕</button>
       </div>
 
       <!-- Phần 1: Backend Vision -->
       <div style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 1rem; margin-bottom: 1rem;">
         <h4 style="font-size:0.95rem; color:var(--cyan); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-          <span>🖼️</span> Backend Tẩy Chữ & OCR (Hugging Face / Local)
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Backend Tẩy Chữ & OCR
         </h4>
         <div class="form-group" style="margin-bottom:0.75rem;">
           <label class="form-label" for="setting-backend-url">Địa chỉ Backend API</label>
@@ -1634,14 +1634,14 @@ Ví dụ:
           </small>
         </div>
         <button id="btn-test-connection" class="btn-primary" style="background:#1e293b; padding:0.5rem 1rem; font-size:0.85rem; width:100%;">
-          🔌 Kiểm Tra Kết Nối Backend
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Kiểm Tra Kết Nối Backend
         </button>
       </div>
 
       <!-- Phần 2: Frontend LLM Translation -->
       <div style="margin-bottom: 1rem;">
         <h4 style="font-size:0.95rem; color:var(--primary); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-          <span>🌐</span> AI Dịch Thuật Trực Tiếp (Frontend Client-Side)
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg> AI Dịch Thuật Trực Tiếp
         </h4>
         <div class="form-group" style="margin-bottom:0.75rem;">
           <label class="form-label" for="setting-llm-base-url">OpenAI-Compatible Base URL</label>
@@ -1674,13 +1674,13 @@ Ví dụ:
         </div>
 
         <button id="btn-test-llm" class="btn-primary" style="background:#1e293b; padding:0.5rem 1rem; font-size:0.85rem; width:100%;">
-          🤖 Kiểm Tra Kết Nối AI Dịch (Ping LLM)
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line></svg> Kiểm Tra Kết Nối AI Dịch
         </button>
       </div>
 
       <div style="display:flex; gap:0.75rem; margin-top:1.5rem;">
         <button id="btn-save-settings" class="btn-primary" style="flex:1;">
-          💾 Lưu Cấu Hình
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Lưu Cấu Hình
         </button>
       </div>
     </div>

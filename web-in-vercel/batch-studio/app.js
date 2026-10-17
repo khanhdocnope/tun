@@ -28,7 +28,9 @@
     toggleSkipSFX: document.getElementById('toggleSkipSFX'),
     btnSettings: document.getElementById('btnSettings'),
     btnExportChapter: document.getElementById('btnExportChapter'),
+    btnQuickDownloadTxt: document.getElementById('btnQuickDownloadTxt'),
     exportMenu: document.getElementById('exportMenu'),
+    btnOpenExportModal: document.getElementById('btnOpenExportModal'),
     btnExportTxt: document.getElementById('btnExportTxt'),
     btnExportDoc: document.getElementById('btnExportDoc'),
     btnCopyChapter: document.getElementById('btnCopyChapter'),
@@ -129,11 +131,11 @@
     const isDual = activeKeys.length >= 2;
 
     if (isDual) {
-      el.currentModelBadge.textContent = `${state.settings.model} (30 RPM ⚡ 2 Keys)`;
+      el.currentModelBadge.textContent = `${state.settings.model} (30 RPM - Dual Keys)`;
       el.currentModelBadge.style.background = 'rgba(99, 102, 241, 0.2)';
       el.currentModelBadge.style.color = '#a5b4fc';
       el.currentModelBadge.style.borderColor = 'rgba(99, 102, 241, 0.4)';
-      if (el.quotaSpeedText) el.quotaSpeedText.innerHTML = '<span style="color:#38bdf8; font-weight:700;">30 lượt / phút (⚡ Song song 2 luồng - Tốc độ X2)</span>';
+      if (el.quotaSpeedText) el.quotaSpeedText.innerHTML = '<span style="color:#38bdf8; font-weight:700;">30 lượt / phút (Song song 2 luồng - Tốc độ X2)</span>';
       if (el.quotaDailyText) el.quotaDailyText.innerHTML = '<span style="color:#10b981; font-weight:700;">1.000 trang truyện / ngày (500 x 2)</span>';
     } else {
       el.currentModelBadge.textContent = `${state.settings.model} (15 RPM)`;
@@ -227,6 +229,26 @@
       el.exportMenu.style.display = 'none';
       copyChapterToClipboard();
     });
+
+    if (el.btnOpenExportModal) {
+      el.btnOpenExportModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.exportMenu.style.display = 'none';
+        if (state.images.length === 0) {
+          showToast('Vui lòng thêm ảnh Manga trước.');
+          return;
+        }
+        const content = generateChapterContent();
+        openExportModal(content);
+      });
+    }
+
+    if (el.btnQuickDownloadTxt) {
+      el.btnQuickDownloadTxt.addEventListener('click', (e) => {
+        e.preventDefault();
+        exportFullChapter('txt');
+      });
+    }
 
     window.addEventListener('click', (e) => {
       if (!e.target.closest('.dropdown-wrapper')) {
@@ -357,7 +379,7 @@
 
         resolve({
           base64: webpDataUrl,
-          sizeStr: `${compressedStr} (⚡ đã nén từ ${originalStr} WebP)`,
+          sizeStr: `${compressedStr} (WebP nén từ ${originalStr})`,
           compressed: true,
           originalSize: file.size,
           compressedSize: estBytes
@@ -407,7 +429,7 @@
 
     renderBatchView();
     if (compressedCount > 0) {
-      showToast(`Đã thêm ${totalFiles} ảnh (⚡ đã nén ${compressedCount} ảnh > 1MB sang WebP siêu nhẹ)!`);
+      showToast(`Đã thêm ${totalFiles} ảnh (đã tối ưu ${compressedCount} ảnh sang WebP)!`);
     } else {
       showToast(`Đã thêm ${totalFiles} ảnh vào danh sách!`);
     }
@@ -432,6 +454,7 @@
     el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
     el.btnClearAll.disabled = !hasImages || state.isQueueRunning;
     el.btnExportChapter.disabled = !hasImages;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = !hasImages;
 
     el.statBadge.textContent = `${state.images.length} trang trong danh sách`;
 
@@ -478,7 +501,7 @@
         <!-- Col 1: Thumbnail -->
         <div class="col-thumb">
           <img src="${item.base64}" alt="${escapeHtml(item.name)}">
-          <div class="col-thumb-overlay">🔍 Bấm để phóng to</div>
+          <div class="col-thumb-overlay"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>Bấm để phóng to</div>
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -564,6 +587,7 @@
     if (textareaVi) textareaVi.value = item.viText;
 
     el.btnExportChapter.disabled = state.images.length === 0;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = state.images.length === 0;
   }
 
   // Process a Single Image via API
@@ -745,6 +769,8 @@
     el.btnOcrAll.disabled = isRunning;
     el.btnTranslateAll.disabled = isRunning;
     el.btnClearAll.disabled = isRunning;
+    if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || state.images.length === 0;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || state.images.length === 0;
   }
 
   // Clear All
@@ -771,7 +797,7 @@
   // Thực hiện tải file với đa cơ chế (Blob link không target blank, Fallback Form POST/GET, Data URL)
   function executeFileDownload(filename, text, format = 'txt') {
     if (!text || !text.trim()) {
-      showToast('⚠️ Nội dung trống, không thể tải.');
+      showToast('Nội dung trống, không thể tải.');
       return;
     }
 
@@ -886,12 +912,12 @@
   // Export Full Chapter Script
   function exportFullChapter(format = 'txt') {
     if (state.images.length === 0) {
-      showToast('⚠️ Vui lòng thêm ảnh Manga trước khi xuất kịch bản.');
+      showToast('Vui lòng thêm ảnh Manga trước khi xuất kịch bản.');
       return;
     }
     const hasText = state.images.some(img => (img.ocrText && img.ocrText.trim()) || (img.viText && img.viText.trim()));
     if (!hasText) {
-      showToast('⚠️ Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
+      showToast('Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
       return;
     }
     const content = generateChapterContent();
@@ -903,12 +929,12 @@
   // Copy full chapter to clipboard
   function copyChapterToClipboard() {
     if (state.images.length === 0) {
-      showToast('⚠️ Vui lòng thêm ảnh Manga trước.');
+      showToast('Vui lòng thêm ảnh Manga trước.');
       return;
     }
     const hasText = state.images.some(img => (img.ocrText && img.ocrText.trim()) || (img.viText && img.viText.trim()));
     if (!hasText) {
-      showToast('⚠️ Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
+      showToast('Chưa có nội dung kịch bản! Vui lòng bấm "OCR + Translate all" trước.');
       return;
     }
     const content = generateChapterContent();
@@ -934,28 +960,67 @@
     showToast('Đã lưu cấu hình thành công!');
   }
 
-  // Copy Helper
+  // Copy Helper (Hỗ trợ 100% PC, Mobile Safari, Chrome & In-App Webview)
   function copyToClipboard(text, msg) {
     if (!text) {
       showToast('Nội dung trống, không thể copy.');
       return;
     }
-    navigator.clipboard.writeText(text).then(() => {
-      showToast(msg);
-    }).catch(() => {
-      showToast('Không thể sao chép vào bộ nhớ tạm.');
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(msg);
+      }).catch(() => {
+        fallbackCopyText(text, msg);
+      });
+    } else {
+      fallbackCopyText(text, msg);
+    }
   }
 
-  // Toast Helper
-  function showToast(msg) {
+  function fallbackCopyText(text, msg) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.width = '2em';
+      ta.style.height = '2em';
+      ta.style.padding = '0';
+      ta.style.border = 'none';
+      ta.style.outline = 'none';
+      ta.style.boxShadow = 'none';
+      ta.style.background = 'transparent';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) {
+        showToast(msg);
+      } else {
+        showToast('Vui lòng sao chép thủ công từ khung xem trước.');
+      }
+    } catch (err) {
+      showToast('Không thể sao chép tự động: ' + err.message);
+    }
+  }
+
+  // Toast Helper với icon SVG chuyên nghiệp
+  function showToast(msg, type = 'info') {
     let toast = document.querySelector('.toast-notice');
     if (!toast) {
       toast = document.createElement('div');
       toast.className = 'toast-notice';
       document.body.appendChild(toast);
     }
-    toast.textContent = msg;
+    const cleanMsg = msg.replace(/^[⚠️❌ℹ️✔️]s*/, '');
+    const isError = /lỗi|thất bại|không thể|chưa có|vui lòng/i.test(cleanMsg);
+    const iconSvg = isError
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" style="flex-shrink:0;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+
+    toast.innerHTML = `<div style="display:inline-flex; align-items:center; gap:8px;">${iconSvg}<span>${cleanMsg}</span></div>`;
     toast.classList.add('show');
     clearTimeout(toast._timeout);
     toast._timeout = setTimeout(() => {
