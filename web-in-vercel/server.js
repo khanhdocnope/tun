@@ -43,12 +43,13 @@ app.get(["/batch-studio", "/batch-studio/"], (req, res) => {
   res.sendFile(path.join(__dirname, "batch-studio", "index.html"));
 });
 
-// Phục vụ tĩnh chuẩn Single-Source-of-Truth
+// Phục vụ tĩnh từ public/ (chuẩn Vercel) và thư mục gốc
+app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(__dirname));
 
 // Fallback to index.html for SPA
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(PORT, () => {

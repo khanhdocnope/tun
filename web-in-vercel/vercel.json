@@ -3,20 +3,20 @@
   "name": "mangastudio-ai",
   "cleanUrls": true,
   "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/batch-studio",
+      "destination": "/batch-studio.html"
+    },
+    {
+      "source": "/batch-studio/",
+      "destination": "/batch-studio.html"
+    }
+  ],
   "functions": {
     "api/*.js": {
       "maxDuration": 60,
       "memory": 1024
     }
-  },
-  "rewrites": [
-    {
-      "source": "/batch-studio",
-      "destination": "/batch-studio/index"
-    },
-    {
-      "source": "/batch-studio/:match*",
-      "destination": "/batch-studio/:match*"
-    }
-  ]
+  }
 }
