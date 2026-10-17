@@ -15,7 +15,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/batch-studio/style.css">
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>window.JSZip || document.write('<script src="/js/jszip.min.js"><\/script>')</script>
 </head>
 <body>
   <div class="app-layout">
@@ -116,6 +117,10 @@
             <span class="btn-text-short">Xuất file ▾</span>
           </button>
           <div class="dropdown-menu" id="exportMenu" style="display:none;">
+            <button class="dropdown-item" id="btnExportCleanZip">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <span>Tải ZIP ảnh đã tẩy chữ (Cleaned)</span>
+            </button>
             <button class="dropdown-item" id="btnExportTxt">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
               <span>Tải file .txt (Notepad UTF-8)</span>
@@ -123,6 +128,10 @@
             <button class="dropdown-item" id="btnExportDoc">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="14" y1="12" x2="18" y2="12"></line><line x1="14" y1="16" x2="18" y2="16"></line></svg>
               <span>Tải file .doc (Microsoft Word)</span>
+            </button>
+            <button class="dropdown-item" id="btnExportBundleZip">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v1"></path><path d="M18 8h4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4"></path><circle cx="8" cy="12" r="2"></circle></svg>
+              <span>Tải gói đầy đủ (Ảnh sạch + Script .txt)</span>
             </button>
             <button class="dropdown-item" id="btnCopyChapter">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -140,6 +149,10 @@
     <!-- Batch Action Buttons Subbar -->
     <div class="action-subbar">
       <div class="batch-buttons">
+        <button class="btn btn-sub btn-clean-all" id="btnCleanAll" disabled title="Tẩy chữ AI hàng loạt cho tất cả các trang">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"></path></svg>
+          <span>Tẩy chữ</span>
+        </button>
         <button class="btn btn-sub btn-ocr-all" id="btnOcrAll" disabled>OCR all</button>
         <button class="btn btn-sub btn-trans-all" id="btnTranslateAll" disabled>Translate all</button>
         <button class="btn btn-sub btn-clear-all" id="btnClearAll" disabled>Clear all</button>
@@ -302,6 +315,41 @@
               <option value="webtoon">Webtoon / Manhwa dọc (Trên xuống Dưới tuần tự)</option>
             </select>
             <small class="form-hint">Manga đọc từ phải qua trái. Webtoon/Manhwa đọc dọc theo dải tranh dài.</small>
+          </div>
+
+          <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px;">
+            <label style="color: #c4b5fd; font-weight: 700; display:flex; align-items:center; gap:6px; margin-bottom: 8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"></path></svg>
+              Cấu hình AI Tẩy Chữ (Inpainting)
+            </label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+              <div>
+                <label for="selectCleanModel" style="font-size: 0.78rem; color: #94a3b8; display:block; margin-bottom:4px;">Mô hình Inpaint</label>
+                <select id="selectCleanModel" class="form-control" style="font-size: 0.8rem;">
+                  <option value="anime-lama" selected>Anime-Manga LaMa (Tốt nhất)</option>
+                  <option value="big-lama">Big-LaMa</option>
+                  <option value="telea">OpenCV Telea (Nhanh)</option>
+                  <option value="ns">OpenCV Navier-Stokes</option>
+                </select>
+              </div>
+              <div>
+                <label for="inputCleanDilation" style="font-size: 0.78rem; color: #94a3b8; display:block; margin-bottom:4px;">Mở rộng viền (Dilation Px)</label>
+                <input type="number" id="inputCleanDilation" class="form-control" min="1" max="20" value="4" style="font-size: 0.8rem;">
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <label for="inputCleanThreshold" style="font-size: 0.78rem; color: #94a3b8; display:block; margin-bottom:4px;">Ngưỡng bóng thoại (0.05 - 0.5)</label>
+                <input type="number" id="inputCleanThreshold" class="form-control" step="0.05" min="0.05" max="0.5" value="0.20" style="font-size: 0.8rem;">
+              </div>
+              <div style="display:flex; align-items:flex-end; padding-bottom: 6px;">
+                <label class="toggle-switch-wrapper" style="font-size:0.8rem; cursor:pointer;">
+                  <input type="checkbox" id="toggleCleanSFX">
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-text" style="font-size:0.78rem; color:#cbd5e1;">Tẩy cả SFX vẽ tay</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="quota-info-card" id="quotaInfoCard">

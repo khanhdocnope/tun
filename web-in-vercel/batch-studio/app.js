@@ -18,7 +18,11 @@
       apiKey2: localStorage.getItem('manga_api_key_2') || '',
       tone: localStorage.getItem('manga_tone') || 'natural',
       readingOrder: localStorage.getItem('manga_reading_order') || 'manga',
-      skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false'
+      skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false',
+      cleanModel: localStorage.getItem('manga_clean_model') || 'anime-lama',
+      cleanDilation: parseInt(localStorage.getItem('manga_clean_dilation') || '4', 10),
+      cleanThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.20'),
+      cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true'
     }
   };
 
@@ -56,8 +60,10 @@
     btnQuickDownloadTxt: document.getElementById('btnQuickDownloadTxt'),
     exportMenu: document.getElementById('exportMenu'),
     btnOpenExportModal: document.getElementById('btnOpenExportModal'),
+    btnExportCleanZip: document.getElementById('btnExportCleanZip'),
     btnExportTxt: document.getElementById('btnExportTxt'),
     btnExportDoc: document.getElementById('btnExportDoc'),
+    btnExportBundleZip: document.getElementById('btnExportBundleZip'),
     btnCopyChapter: document.getElementById('btnCopyChapter'),
     exportModal: document.getElementById('exportModal'),
     btnCloseExportModal: document.getElementById('btnCloseExportModal'),
@@ -69,6 +75,7 @@
     exportTextLengthBadge: document.getElementById('exportTextLengthBadge'),
 
     // Batch Actions
+    btnCleanAll: document.getElementById('btnCleanAll'),
     btnOcrAll: document.getElementById('btnOcrAll'),
     btnTranslateAll: document.getElementById('btnTranslateAll'),
     btnProcessAll: document.getElementById('btnProcessAll'),
@@ -100,6 +107,10 @@
     inputGeminiApiKey: document.getElementById('inputGeminiApiKey'),
     inputGeminiApiKey2: document.getElementById('inputGeminiApiKey2'),
     selectTone: document.getElementById('selectTone'),
+    selectCleanModel: document.getElementById('selectCleanModel'),
+    inputCleanDilation: document.getElementById('inputCleanDilation'),
+    inputCleanThreshold: document.getElementById('inputCleanThreshold'),
+    toggleCleanSFX: document.getElementById('toggleCleanSFX'),
     envKeyBadge: document.getElementById('envKeyBadge'),
     envKeyBadge2: document.getElementById('envKeyBadge2'),
     quotaSpeedText: document.getElementById('quotaSpeedText'),
@@ -118,15 +129,17 @@
   }
 
   // ---------------------------------------------------------------------------
-  // LƯU TIẾN TRÌNH (IndexedDB): tải lại trang / mất tab vẫn giữ ảnh, OCR, bản dịch
-  //  - kho "pages": ảnh (nặng, chỉ ghi 1 lần khi thêm trang)
+  // LƯU TIẾN TRÌNH (IndexedDB v2): tải lại trang / mất tab vẫn giữ ảnh, ảnh đã tẩy, OCR, bản dịch
+  //  - kho "pages": ảnh gốc (nặng, chỉ ghi 1 lần khi thêm trang)
   //  - kho "state": trạng thái + văn bản (nhẹ, ghi mỗi khi có thay đổi)
+  //  - kho "cleaned": ảnh đã tẩy chữ (lưu khi tẩy xong, tăng version lên 2 kèm migrate)
   // ---------------------------------------------------------------------------
   const store = (function () {
     const DB_NAME = 'manga_studio_batch';
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
     const PAGES = 'pages';
     const STATE = 'state';
+    const CLEANED = 'cleaned';
     let dbPromise = null;
     let dbHandle = null;
 
@@ -136,10 +149,11 @@
         if (!('indexedDB' in window) || !window.indexedDB) return resolve(null);
         let req;
         try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { return resolve(null); }
-        req.onupgradeneeded = () => {
+        req.onupgradeneeded = (e) => {
           const db = req.result;
           if (!db.objectStoreNames.contains(PAGES)) db.createObjectStore(PAGES, { keyPath: 'id' });
           if (!db.objectStoreNames.contains(STATE)) db.createObjectStore(STATE, { keyPath: 'id' });
+          if (!db.objectStoreNames.contains(CLEANED)) db.createObjectStore(CLEANED, { keyPath: 'id' });
         };
         req.onsuccess = () => { dbHandle = req.result; resolve(dbHandle); };
         req.onerror = () => resolve(null);
@@ -167,34 +181,49 @@
 
     return {
       async loadAll() {
-        const r = await run('readonly', [PAGES, STATE], (tx) => ({
+        const r = await run('readonly', [PAGES, STATE, CLEANED], (tx) => ({
           pages: tx.objectStore(PAGES).getAll(),
-          states: tx.objectStore(STATE).getAll()
+          states: tx.objectStore(STATE).getAll(),
+          cleaned: tx.objectStore(CLEANED).getAll()
         }));
         if (!r.ok) return [];
         const pages = r.result.pages.result || [];
-        const byId = new Map((r.result.states.result || []).map((x) => [x.id, x]));
+        const statesById = new Map((r.result.states.result || []).map((x) => [x.id, x]));
+        const cleanedById = new Map((r.result.cleaned.result || []).map((x) => [x.id, x]));
         return pages
           .sort((x, y) => (x.seq || 0) - (y.seq || 0))
-          .map((pg) => Object.assign({}, pg, byId.get(pg.id) || {}));
+          .map((pg) => {
+            const st = statesById.get(pg.id) || {};
+            const cl = cleanedById.get(pg.id) || {};
+            return Object.assign({}, pg, st, {
+              cleanedBase64: cl.cleanedBase64 || ''
+            });
+          });
       },
       async putPage(rec) { return (await run('readwrite', [PAGES], (tx) => { tx.objectStore(PAGES).put(rec); })).ok; },
       async putState(rec) { return (await run('readwrite', [STATE], (tx) => { tx.objectStore(STATE).put(rec); })).ok; },
+      async putCleaned(rec) { return (await run('readwrite', [CLEANED], (tx) => { tx.objectStore(CLEANED).put(rec); })).ok; },
+      async getCleaned(id) {
+        const r = await run('readonly', [CLEANED], (tx) => tx.objectStore(CLEANED).get(id));
+        return r.ok ? r.result.result : null;
+      },
       // Dùng khi tab sắp đóng: không có await nào giữa chừng nên giao dịch được tạo ngay trong sự kiện
       putStateSync(rec) {
         if (!dbHandle) return;
         try { dbHandle.transaction([STATE], 'readwrite').objectStore(STATE).put(rec); } catch (e) { /* bỏ qua */ }
       },
       async remove(id) {
-        return (await run('readwrite', [PAGES, STATE], (tx) => {
+        return (await run('readwrite', [PAGES, STATE, CLEANED], (tx) => {
           tx.objectStore(PAGES).delete(id);
           tx.objectStore(STATE).delete(id);
+          tx.objectStore(CLEANED).delete(id);
         })).ok;
       },
       async clear() {
-        return (await run('readwrite', [PAGES, STATE], (tx) => {
+        return (await run('readwrite', [PAGES, STATE, CLEANED], (tx) => {
           tx.objectStore(PAGES).clear();
           tx.objectStore(STATE).clear();
+          tx.objectStore(CLEANED).clear();
         })).ok;
       },
       open
@@ -219,6 +248,7 @@
       id: item.id,
       // 'processing' không phải trạng thái bền vững: nếu bị ngắt giữa chừng thì quay về 'idle'
       status: item.status === 'processing' ? 'idle' : item.status,
+      cleanStatus: item.cleanStatus === 'processing' ? 'idle' : (item.cleanStatus || 'idle'),
       stage: item.stage || 0, // 0: chưa làm gì | 1: đã OCR | 2: đã dịch
       ocrText: item.ocrText || '',
       viText: item.viText || '',
@@ -281,6 +311,7 @@
 
     state.images = rows.map((r) => {
       const status = r.status === 'done' ? 'done' : (r.status === 'error' ? 'error' : 'idle');
+      const cleanStatus = r.cleanStatus === 'done' ? 'done' : (r.cleanStatus === 'error' ? 'error' : (r.cleanedBase64 ? 'done' : 'idle'));
       return {
         id: r.id,
         seq: r.seq || nextSeq(),
@@ -288,6 +319,9 @@
         sizeStr: r.sizeStr || '',
         base64: r.base64,
         status,
+        cleanStatus,
+        cleanedBase64: r.cleanedBase64 || '',
+        currentView: r.cleanedBase64 ? 'cleaned' : 'original',
         stage: typeof r.stage === 'number' ? r.stage : (status === 'done' ? 2 : 0),
         dialogues: [],
         ocrText: r.ocrText || '',
@@ -297,11 +331,12 @@
     });
 
     const finished = state.images.filter((i) => i.stage >= 2).length;
+    const cleaned = state.images.filter((i) => !!i.cleanedBase64).length;
     const remaining = state.images.length - finished;
     showToast(
       remaining > 0
-        ? `Đã khôi phục ${state.images.length} trang (${finished} đã xong, ${remaining} còn lại). Bấm "OCR + Dịch" để làm tiếp phần còn lại.`
-        : `Đã khôi phục ${state.images.length} trang, tất cả đã xong. Bạn có thể xuất .txt.`
+        ? `Đã khôi phục ${state.images.length} trang (${finished} đã dịch, ${cleaned} đã tẩy chữ, ${remaining} chưa dịch). Bấm "Tẩy chữ" hoặc "OCR + Dịch" để làm tiếp phần còn lại.`
+        : `Đã khôi phục ${state.images.length} trang (${cleaned} đã tẩy chữ, tất cả đã dịch xong). Bạn có thể xuất ZIP ảnh sạch hoặc script.`
     );
   }
 
@@ -362,6 +397,11 @@
     el.selectTone.value = state.settings.tone;
     el.toggleSkipSFX.checked = state.settings.skipSFX;
     if (el.selectReadingOrder) el.selectReadingOrder.value = state.settings.readingOrder;
+
+    if (el.selectCleanModel) el.selectCleanModel.value = state.settings.cleanModel;
+    if (el.inputCleanDilation) el.inputCleanDilation.value = state.settings.cleanDilation;
+    if (el.inputCleanThreshold) el.inputCleanThreshold.value = state.settings.cleanThreshold;
+    if (el.toggleCleanSFX) el.toggleCleanSFX.checked = state.settings.cleanSFX;
 
     if (el.btnModeManga && el.btnModeWebtoon) {
       el.btnModeManga.classList.toggle('active', state.settings.readingOrder === 'manga');
@@ -472,6 +512,7 @@
     });
 
     // Batch Actions
+    if (el.btnCleanAll) el.btnCleanAll.addEventListener('click', runCleanQueue);
     el.btnProcessAll.addEventListener('click', () => runBatchQueue('all'));
     el.btnClearAll.addEventListener('click', clearAllBatch);
     el.btnOcrAll.addEventListener('click', () => runBatchQueue('ocr_only'));
@@ -482,6 +523,14 @@
       const isVisible = el.exportMenu.style.display === 'flex';
       el.exportMenu.style.display = isVisible ? 'none' : 'flex';
     });
+
+    if (el.btnExportCleanZip) {
+      el.btnExportCleanZip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.exportMenu.style.display = 'none';
+        exportCleanedImagesZip();
+      });
+    }
 
     el.btnExportTxt.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -494,6 +543,14 @@
       el.exportMenu.style.display = 'none';
       exportFullChapter('doc');
     });
+
+    if (el.btnExportBundleZip) {
+      el.btnExportBundleZip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.exportMenu.style.display = 'none';
+        exportBundleZip();
+      });
+    }
 
     el.btnCopyChapter.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -689,6 +746,9 @@
         sizeStr: sizeStr,
         base64: base64,
         status: 'idle',
+        cleanStatus: 'idle',
+        cleanedBase64: '',
+        currentView: 'original',
         dialogues: [],
         ocrText: '',
         viText: '',
@@ -724,6 +784,7 @@
     el.mangaRowsList.style.display = hasImages ? 'flex' : 'none';
 
     // Toolbar states
+    if (el.btnCleanAll) el.btnCleanAll.disabled = !hasImages || state.isQueueRunning;
     el.btnProcessAll.disabled = !hasImages || state.isQueueRunning;
     el.btnOcrAll.disabled = !hasImages || state.isQueueRunning;
     el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
@@ -752,6 +813,10 @@
     card.className = `manga-row-card ${item.status}`;
     card.id = `row-${item.id}`;
 
+    const cleanLabel = item.cleanStatus === 'done'
+      ? 'TẨY: XONG'
+      : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
+
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
@@ -763,8 +828,10 @@
           <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
           <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
+          <span class="badge-clean ${item.cleanStatus || 'idle'}">${cleanLabel}</span>
         </div>
         <div class="row-header-right">
+          <button class="btn-row-action btn-row-clean">Tẩy chữ</button>
           <button class="btn-row-action btn-row-ocr">OCR</button>
           <button class="btn-row-action btn-row-trans">Translate</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
@@ -785,7 +852,11 @@
               </svg>
             </button>
           </div>
-          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
+          <div class="thumb-switcher" style="${item.cleanedBase64 ? 'display:flex;' : 'display:none;'}">
+            <button type="button" class="thumb-switch-btn btn-view-orig ${item.currentView !== 'cleaned' ? 'active' : ''}">Gốc</button>
+            <button type="button" class="thumb-switch-btn cleaned btn-view-clean ${item.currentView === 'cleaned' ? 'active' : ''}">Đã tẩy</button>
+          </div>
+          <img src="${(item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -815,6 +886,27 @@
     const cardSlider = card.querySelector('.card-slider');
     const cardReset = card.querySelector('.card-reset-size');
     const imgEl = card.querySelector('.col-thumb img');
+
+    // Switcher Gốc vs Đã tẩy
+    const btnViewOrig = card.querySelector('.btn-view-orig');
+    const btnViewClean = card.querySelector('.btn-view-clean');
+    if (btnViewOrig && btnViewClean) {
+      btnViewOrig.addEventListener('click', (e) => {
+        e.stopPropagation();
+        item.currentView = 'original';
+        imgEl.src = item.base64;
+        btnViewOrig.classList.add('active');
+        btnViewClean.classList.remove('active');
+      });
+      btnViewClean.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!item.cleanedBase64) return;
+        item.currentView = 'cleaned';
+        imgEl.src = item.cleanedBase64;
+        btnViewClean.classList.add('active');
+        btnViewOrig.classList.remove('active');
+      });
+    }
 
     // 1. Chỉ hiện thanh trượt khi ấn vào nút [⤢] (toggle bật/tắt)
     btnZoom.addEventListener('click', (e) => {
@@ -864,7 +956,7 @@
     imgEl.addEventListener('dragstart', (e) => e.preventDefault());
 
     thumbCol.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.card-size-widget')) return;
+      if (e.target.closest('.card-size-widget') || e.target.closest('.thumb-switcher')) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return; // Chỉ nhận click chuột trái hoặc chạm ngón tay
       isPointerDown = true;
       hasDragged = false;
@@ -918,7 +1010,7 @@
         e.stopPropagation();
         return;
       }
-      el.lightboxImg.src = item.base64;
+      el.lightboxImg.src = imgEl.src;
       el.lightboxModal.style.display = 'flex';
     });
 
@@ -957,6 +1049,7 @@
       renderBatchView();
     });
 
+    card.querySelector('.btn-row-clean').addEventListener('click', () => cleanSingleImage(item));
     card.querySelector('.btn-row-ocr').addEventListener('click', () => processSingleImage(item, 'ocr_only'));
     card.querySelector('.btn-row-trans').addEventListener('click', () => translateSingleText(item));
     card.querySelector('.btn-row-all').addEventListener('click', () => processSingleImage(item, 'all'));
@@ -976,6 +1069,29 @@
       badge.textContent = item.status.toUpperCase();
     }
 
+    const badgeClean = card.querySelector('.badge-clean');
+    if (badgeClean) {
+      badgeClean.className = `badge-clean ${item.cleanStatus || 'idle'}`;
+      badgeClean.textContent = item.cleanStatus === 'done'
+        ? 'TẨY: XONG'
+        : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
+    }
+
+    const switcher = card.querySelector('.thumb-switcher');
+    if (switcher) switcher.style.display = item.cleanedBase64 ? 'flex' : 'none';
+
+    const btnViewOrig = card.querySelector('.btn-view-orig');
+    const btnViewClean = card.querySelector('.btn-view-clean');
+    if (btnViewOrig && btnViewClean) {
+      btnViewOrig.classList.toggle('active', item.currentView !== 'cleaned');
+      btnViewClean.classList.toggle('active', item.currentView === 'cleaned');
+    }
+
+    const imgEl = card.querySelector('.col-thumb img');
+    if (imgEl) {
+      imgEl.src = (item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64;
+    }
+
     const textareaJp = card.querySelector('.textarea-jp');
     if (textareaJp) textareaJp.value = item.ocrText;
 
@@ -984,6 +1100,127 @@
 
     el.btnExportChapter.disabled = state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = state.images.length === 0;
+  }
+
+  // Tẩy chữ cho 1 ảnh đơn lẻ (với cơ chế retry 2 lần khi gặp lỗi kết nối/500/timeout)
+  async function cleanSingleImage(item, maxRetries = 2) {
+    if (item.cleanStatus === 'processing') return false;
+    item.cleanStatus = 'processing';
+    updateCardDOM(item);
+
+    const payload = {
+      imageBase64: item.base64,
+      cleanSFX: Boolean(state.settings.cleanSFX),
+      dilationPx: Number(state.settings.cleanDilation || 4),
+      detThreshold: Number(state.settings.cleanThreshold || 0.20),
+      inpaintModel: String(state.settings.cleanModel || 'anime-lama')
+    };
+
+    let attempt = 0;
+    let lastError = null;
+
+    while (attempt <= maxRetries) {
+      try {
+        const res = await fetch('/api/clean', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.cleanedImageBase64) {
+          throw new Error(data.error || `Server lỗi mã ${res.status}`);
+        }
+
+        let cleanB64 = data.cleanedImageBase64;
+        if (!cleanB64.startsWith('data:image/')) {
+          cleanB64 = 'data:image/png;base64,' + cleanB64;
+        }
+
+        item.cleanedBase64 = cleanB64;
+        item.cleanStatus = 'done';
+        item.currentView = 'cleaned'; // Tự động hiển thị bản đã tẩy trên thumbnail
+
+        await store.putCleaned({ id: item.id, cleanedBase64: item.cleanedBase64 });
+        scheduleSave(item, 0);
+        updateCardDOM(item);
+        showToast(`Đã tẩy chữ thành công trang: ${item.name}`);
+        return true;
+      } catch (err) {
+        lastError = err;
+        attempt++;
+        if (attempt <= maxRetries) {
+          console.warn(`[Clean Retry] Trang ${item.name} lỗi lần ${attempt}, đang thử lại sau 1.5s...`);
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    }
+
+    item.cleanStatus = 'error';
+    updateCardDOM(item);
+    scheduleSave(item, 0);
+    showToast(`Lỗi tẩy chữ trang ${item.name}: ${lastError ? lastError.message : 'Thất bại'}`);
+    return false;
+  }
+
+  // Tẩy chữ hàng loạt cho Chapter (Giới hạn 2 request đồng thời, có retry)
+  async function runCleanQueue() {
+    if (state.isQueueRunning) return;
+
+    const queueItems = state.images.filter(img => !img.cleanedBase64 || img.cleanStatus !== 'done');
+    if (queueItems.length === 0) {
+      showToast('Tất cả các trang trong danh sách đã được tẩy chữ xong!');
+      return;
+    }
+
+    state.isQueueRunning = true;
+    state.stopQueueRequested = false;
+    el.queueProgressBar.style.display = 'flex';
+    el.btnStopQueue.textContent = 'Dừng lại';
+
+    updateToolbarStates(true);
+
+    let completed = 0;
+    const total = queueItems.length;
+    let nextIndex = 0;
+    const concurrency = 2; // Giới hạn 2 request đồng thời
+
+    async function cleanWorker(workerId) {
+      while (nextIndex < total && !state.stopQueueRequested) {
+        const itemIdx = nextIndex++;
+        if (itemIdx >= total) break;
+
+        const currentItem = queueItems[itemIdx];
+        if (!currentItem) break;
+
+        el.queueProgressText.textContent = `[Luồng ${workerId + 1}] Đang tẩy chữ: ${currentItem.name} (${completed + 1}/${total})...`;
+        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+
+        await cleanSingleImage(currentItem);
+
+        completed++;
+        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+
+        if (!state.stopQueueRequested && nextIndex < total) {
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+    }
+
+    await Promise.all([
+      cleanWorker(0),
+      cleanWorker(1)
+    ]);
+
+    el.queueProgressFill.style.width = '100%';
+    el.queueProgressText.textContent = `Hoàn thành tẩy chữ ${completed} / ${total} trang!`;
+
+    setTimeout(() => {
+      el.queueProgressBar.style.display = 'none';
+      state.isQueueRunning = false;
+      updateToolbarStates(false);
+      renderBatchView();
+    }, 1500);
   }
 
   // Process a Single Image via API
@@ -1176,12 +1413,101 @@
   }
 
   function updateToolbarStates(isRunning) {
-    el.btnProcessAll.disabled = isRunning;
-    el.btnOcrAll.disabled = isRunning;
-    el.btnTranslateAll.disabled = isRunning;
-    el.btnClearAll.disabled = isRunning;
+    if (el.btnCleanAll) el.btnCleanAll.disabled = isRunning || state.images.length === 0;
+    el.btnProcessAll.disabled = isRunning || state.images.length === 0;
+    el.btnOcrAll.disabled = isRunning || state.images.length === 0;
+    el.btnTranslateAll.disabled = isRunning || state.images.length === 0;
+    el.btnClearAll.disabled = isRunning || state.images.length === 0;
     if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || state.images.length === 0;
+  }
+
+  // Tải file nhị phân Blob an toàn (không target=_blank)
+  function executeBlobDownload(filename, blob) {
+    try {
+      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveOrOpenBlob(blob, filename);
+        showToast('Đã lưu file: ' + filename);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 2000);
+      showToast('Đang tải file: ' + filename);
+    } catch (err) {
+      showToast('Lỗi khi tải file ZIP: ' + err.message);
+    }
+  }
+
+  // Xuất ZIP ảnh đã tẩy chữ (giữ nguyên tên file gốc)
+  async function exportCleanedImagesZip() {
+    if (typeof JSZip === 'undefined') {
+      showToast('Thư viện nén ZIP chưa tải xong, vui lòng thử lại sau giây lát.');
+      return;
+    }
+    const cleanedItems = state.images.filter(img => !!img.cleanedBase64);
+    if (cleanedItems.length === 0) {
+      showToast('Chưa có ảnh nào được tẩy chữ! Vui lòng bấm "Tẩy chữ" trước khi xuất.');
+      return;
+    }
+
+    showToast(`Đang đóng gói ${cleanedItems.length} ảnh đã tẩy vào file ZIP...`);
+    const zip = new JSZip();
+
+    cleanedItems.forEach((img) => {
+      const b64 = img.cleanedBase64.includes(';base64,')
+        ? img.cleanedBase64.split(';base64,').pop()
+        : img.cleanedBase64;
+      zip.file(img.name, b64, { base64: true });
+    });
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const filename = `Manga_Cleaned_Pages_${Date.now()}.zip`;
+    executeBlobDownload(filename, blob);
+  }
+
+  // Xuất gói ZIP đầy đủ: Ảnh sạch (cleaned_images/) + Kịch bản dịch (.txt)
+  async function exportBundleZip() {
+    if (typeof JSZip === 'undefined') {
+      showToast('Thư viện nén ZIP chưa tải xong, vui lòng thử lại sau giây lát.');
+      return;
+    }
+    const cleanedItems = state.images.filter(img => !!img.cleanedBase64);
+    const scriptContent = generateChapterContent();
+
+    if (cleanedItems.length === 0 && (!scriptContent || !scriptContent.trim())) {
+      showToast('Chưa có ảnh đã tẩy hoặc bản dịch để xuất gói.');
+      return;
+    }
+
+    showToast('Đang đóng gói ảnh sạch và kịch bản vào file ZIP...');
+    const zip = new JSZip();
+
+    if (cleanedItems.length > 0) {
+      const imgFolder = zip.folder('cleaned_images');
+      cleanedItems.forEach((img) => {
+        const b64 = img.cleanedBase64.includes(';base64,')
+          ? img.cleanedBase64.split(';base64,').pop()
+          : img.cleanedBase64;
+        imgFolder.file(img.name, b64, { base64: true });
+      });
+    }
+
+    if (scriptContent && scriptContent.trim()) {
+      zip.file('chapter_script.txt', '\uFEFF' + scriptContent);
+    }
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const filename = `Manga_Chapter_Cleaned_Bundle_${Date.now()}.zip`;
+    executeBlobDownload(filename, blob);
   }
 
   // Clear All
@@ -1378,6 +1704,23 @@
     localStorage.setItem('manga_api_key', state.settings.apiKey);
     localStorage.setItem('manga_api_key_2', state.settings.apiKey2);
     localStorage.setItem('manga_tone', state.settings.tone);
+
+    if (el.selectCleanModel) {
+      state.settings.cleanModel = el.selectCleanModel.value;
+      localStorage.setItem('manga_clean_model', state.settings.cleanModel);
+    }
+    if (el.inputCleanDilation) {
+      state.settings.cleanDilation = parseInt(el.inputCleanDilation.value, 10) || 4;
+      localStorage.setItem('manga_clean_dilation', state.settings.cleanDilation);
+    }
+    if (el.inputCleanThreshold) {
+      state.settings.cleanThreshold = parseFloat(el.inputCleanThreshold.value) || 0.20;
+      localStorage.setItem('manga_clean_threshold', state.settings.cleanThreshold);
+    }
+    if (el.toggleCleanSFX) {
+      state.settings.cleanSFX = el.toggleCleanSFX.checked;
+      localStorage.setItem('manga_clean_sfx', state.settings.cleanSFX);
+    }
 
     applySettingsToUI();
     el.settingsModal.style.display = 'none';

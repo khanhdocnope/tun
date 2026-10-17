@@ -1631,3 +1631,86 @@ kbd {
     padding: 6px 2px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   5. BATCH CLEAN & THUMBNAIL SWITCHER STYLES (GIAI ĐOẠN 1)
+   -------------------------------------------------------------------------- */
+.btn-clean-all {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(139, 92, 246, 0.25));
+  border-color: rgba(168, 85, 247, 0.5);
+  color: #d8b4fe;
+}
+.btn-clean-all:hover:not(:disabled) {
+  background: linear-gradient(135deg, #a855f7, #8b5cf6);
+  color: #fff;
+  border-color: #a855f7;
+}
+
+.btn-row-clean {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #c4b5fd;
+}
+.btn-row-clean:hover:not(:disabled) {
+  background: #a855f7;
+  color: #fff;
+  border-color: #a855f7;
+}
+
+.thumb-switcher {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  background: rgba(11, 16, 27, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 2px;
+  z-index: 50;
+  gap: 2px;
+}
+.thumb-switch-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.thumb-switch-btn.active {
+  background: #6366f1;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+}
+.thumb-switch-btn.cleaned.active {
+  background: #a855f7;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+
+.badge-clean {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.badge-clean.done {
+  background: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+.badge-clean.processing {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+.badge-clean.error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
