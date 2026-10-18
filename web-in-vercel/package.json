@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "build": "node sync-public.js",
-    "prestart": "node sync-public.js"
+    "test:unit": "node --test ../tests/unit/batch_helper.test.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

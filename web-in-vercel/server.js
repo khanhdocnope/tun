@@ -38,14 +38,13 @@ app.all("/api/process-batch", (req, res) => processBatchHandler(req, res));
 app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
-// Batch Studio Pro route (hỗ trợ cả có và không có dấu gạch chéo)
-app.get(["/batch-studio", "/batch-studio/"], (req, res) => {
-  res.sendFile(path.join(__dirname, "batch-studio", "index.html"));
+// Batch Studio Pro route (hỗ trợ cả có và không có dấu gạch chéo, và alias .html)
+app.get(["/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
 });
 
-// Phục vụ tĩnh từ public/ (chuẩn Vercel) và thư mục gốc
+// Phục vụ tĩnh độc quyền từ public/ (chuẩn Vercel)
 app.use(express.static(path.join(__dirname, "public")));
-app.use(express.static(__dirname));
 
 // Fallback to index.html for SPA
 app.get("*", (req, res) => {

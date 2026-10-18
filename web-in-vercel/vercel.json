@@ -6,11 +6,11 @@
   "rewrites": [
     {
       "source": "/batch-studio",
-      "destination": "/batch-studio.html"
+      "destination": "/batch-studio/index.html"
     },
     {
       "source": "/batch-studio/",
-      "destination": "/batch-studio.html"
+      "destination": "/batch-studio/index.html"
     }
   ],
   "functions": {
