@@ -215,11 +215,18 @@
     let dbHandle = null;
 
     function open() {
+      if (dbHandle) return Promise.resolve(dbHandle);
       if (dbPromise) return dbPromise;
       dbPromise = new Promise((resolve) => {
-        if (!('indexedDB' in window) || !window.indexedDB) return resolve(null);
+        if (!('indexedDB' in window) || !window.indexedDB) {
+          dbPromise = null;
+          return resolve(null);
+        }
         let req;
-        try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { return resolve(null); }
+        try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) {
+          dbPromise = null;
+          return resolve(null);
+        }
         // Migrate v1 -> v2: chỉ TẠO kho mới, không đụng tới dữ liệu cũ (pages, state giữ nguyên)
         req.onupgradeneeded = () => {
           const db = req.result;
@@ -230,12 +237,20 @@
         req.onsuccess = () => {
           dbHandle = req.result;
           // Nếu tab khác nâng cấp DB sau này, đóng kết nối để không chặn họ
-          dbHandle.onversionchange = () => { try { dbHandle.close(); } catch (e) { /* bỏ qua */ } dbHandle = null; dbPromise = null; };
+          dbHandle.onversionchange = () => {
+            try { dbHandle.close(); } catch (e) { /* bỏ qua */ }
+            dbHandle = null;
+            dbPromise = null;
+          };
           resolve(dbHandle);
         };
-        req.onerror = () => resolve(null);
+        req.onerror = () => {
+          dbPromise = null;
+          resolve(null);
+        };
         req.onblocked = () => {
           // Một tab Batch Studio bản cũ đang mở giữ DB v1 -> không nâng cấp được
+          dbPromise = null;
           try { showToast('Lỗi: hãy đóng các tab Batch Studio khác rồi tải lại trang để nâng cấp bộ nhớ.'); } catch (e) { /* bỏ qua */ }
           resolve(null);
         };
@@ -247,10 +262,12 @@
     async function run(mode, names, fn) {
       const db = await open();
       if (!db) return { ok: false, result: null };
+      const validNames = names.filter((n) => db.objectStoreNames.contains(n));
+      if (!validNames.length) return { ok: false, result: null };
       return new Promise((resolve) => {
         try {
-          const tx = db.transaction(names, mode);
-          const out = fn(tx);
+          const tx = db.transaction(validNames, mode);
+          const out = fn(tx, validNames);
           tx.oncomplete = () => resolve({ ok: true, result: out });
           tx.onerror = () => resolve({ ok: false, result: null });
           tx.onabort = () => resolve({ ok: false, result: null });
@@ -285,20 +302,24 @@
         const r = await run('readonly', [ORIGINALS], (tx) => tx.objectStore(ORIGINALS).get(id));
         return r.ok ? (r.result.result || null) : null;
       },
-      async deleteCleaned(id) { return (await run('readwrite', [CLEANED], (tx) => { tx.objectStore(CLEANED).delete(id); })).ok; },
+      async deleteCleaned(id) { return (await run('readwrite', [CLEANED], (tx, validNames) => { validNames.forEach((n) => tx.objectStore(n).delete(id)); })).ok; },
       // Dùng khi tab sắp đóng: không có await nào giữa chừng nên giao dịch được tạo ngay trong sự kiện
       putStateSync(rec) {
         if (!dbHandle) return;
-        try { dbHandle.transaction([STATE], 'readwrite').objectStore(STATE).put(rec); } catch (e) { /* bỏ qua */ }
+        try {
+          if (dbHandle.objectStoreNames.contains(STATE)) {
+            dbHandle.transaction([STATE], 'readwrite').objectStore(STATE).put(rec);
+          }
+        } catch (e) { /* bỏ qua */ }
       },
       async remove(id) {
-        return (await run('readwrite', ALL, (tx) => {
-          ALL.forEach((name) => tx.objectStore(name).delete(id));
+        return (await run('readwrite', ALL, (tx, validNames) => {
+          validNames.forEach((name) => tx.objectStore(name).delete(id));
         })).ok;
       },
       async clear() {
-        return (await run('readwrite', ALL, (tx) => {
-          ALL.forEach((name) => tx.objectStore(name).clear());
+        return (await run('readwrite', ALL, (tx, validNames) => {
+          validNames.forEach((name) => tx.objectStore(name).clear());
         })).ok;
       },
       open
@@ -342,14 +363,28 @@
 
   // Thêm trang mới: ghi ảnh (1 lần) + trạng thái
   async function persistNewPage(item) {
+    if (!state.images.some(x => x.id === item.id)) return;
     const okPage = await store.putPage(serializePage(item));
+    if (!state.images.some(x => x.id === item.id)) {
+      await store.remove(item.id);
+      return;
+    }
     const okState = await store.putState(serializeState(item));
+    if (!state.images.some(x => x.id === item.id)) {
+      await store.remove(item.id);
+      return;
+    }
     if (!okPage || !okState) reportSaveFailure();
   }
 
   async function persistNow(item) {
-    if (!state.images.includes(item)) return; // trang đã bị xóa
-    if (!(await store.putState(serializeState(item)))) reportSaveFailure();
+    if (!state.images.some(x => x.id === item.id)) return; // trang đã bị xóa
+    const ok = await store.putState(serializeState(item));
+    if (!state.images.some(x => x.id === item.id)) {
+      await store.remove(item.id);
+      return;
+    }
+    if (!ok) reportSaveFailure();
   }
 
   function scheduleSave(item, delay = 300) {
@@ -1135,10 +1170,20 @@
     });
 
     // Individual Action buttons
-    card.querySelector('.btn-row-delete').addEventListener('click', () => {
-      state.images = state.images.filter(x => x.id !== item.id);
-      dropPendingSave(item.id);
-      store.remove(item.id);
+    card.querySelector('.btn-row-delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const targetId = item.id;
+      state.images = state.images.filter(x => x.id !== targetId);
+      dropPendingSave(targetId);
+      await store.remove(targetId);
+      if (state.proofreadIndex >= state.images.length) {
+        state.proofreadIndex = Math.max(0, state.images.length - 1);
+      }
+      if (state.images.length === 0) {
+        closeProofread();
+      } else if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
+        renderProofreadView();
+      }
       renderBatchView();
     });
 
@@ -1765,14 +1810,19 @@
   }
 
   // Clear All
-  function clearAllBatch() {
+  async function clearAllBatch() {
     if (state.images.length === 0) return;
     if (confirm('Bạn có chắc muốn xóa toàn bộ danh sách trang hiện tại?')) {
+      if (state.isQueueRunning) {
+        state.stopQueueRequested = true;
+      }
       state.images = [];
       pendingSaves.forEach(({ timer }) => clearTimeout(timer));
       pendingSaves.clear();
-      store.clear();
+      closeProofread();
+      await store.clear();
       renderBatchView();
+      showToast('Đã xóa toàn bộ danh sách trang.');
     }
   }
 
