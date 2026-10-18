@@ -30,7 +30,7 @@ import torch
 from fastapi import FastAPI, APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, HTMLResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from PIL import Image, ImageOps
@@ -40,6 +40,12 @@ from core.ocr_engine import process_page_ocr
 from core.translator import MangaTranslator
 from download_models import ensure_models
 from manga_cleaner import cleaner_pipeline
+
+try:
+    from bench_clean import run_benchmark_suite, run_self_tests
+except Exception:
+    run_benchmark_suite = None
+    run_self_tests = None
 
 # Ensure SSR mode disabled for Gradio stability
 os.environ["GRADIO_SSR_MODE"] = "false"
@@ -558,6 +564,215 @@ async def get_open_api_endpoint():
         description="Backend API đa chế độ cho Manga/Manhwa: OCR, Comic-Text-Detection, Inpainting & DeepSeek Translation.",
         routes=api_router.routes,
     )
+
+
+# --------------------------------------------------------------------------------------
+# Benchmark Web Page & API
+# --------------------------------------------------------------------------------------
+BENCHMARK_PAGE_HTML = """<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⚡ Manga Cleaner Benchmark & Baseline</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 2rem 1rem; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 2rem; }
+    .header h1 { font-size: 1.8rem; font-weight: 700; color: var(--primary); margin-bottom: 0.5rem; }
+    .header p { color: var(--muted); font-size: 0.95rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
+    .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+    .field { display: flex; flex-direction: column; gap: 0.4rem; min-width: 140px; }
+    label { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    select, button {
+      background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.6rem 1rem; font-size: 0.95rem; outline: none; transition: all 0.2s;
+    }
+    select:focus { border-color: var(--primary); }
+    button.btn-primary {
+      background: var(--primary); color: #0f172a; font-weight: 600; border: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center;
+    }
+    button.btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+    button.btn-copy {
+      background: var(--success); color: #0f172a; font-weight: 600; border: none; cursor: pointer;
+      padding: 0.5rem 1.2rem; font-size: 0.9rem; border-radius: 6px;
+    }
+    button.btn-copy:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .badge-info { background: rgba(56,189,248,0.15); color: var(--primary); border: 1px solid var(--primary); }
+    .badge-success { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid var(--success); }
+    .status-box { padding: 1rem; border-radius: 8px; background: #0f172a; border: 1px solid var(--border); margin-bottom: 1rem; font-family: monospace; font-size: 0.9rem; min-height: 48px; display: flex; align-items: center; justify-content: space-between; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--muted); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    textarea {
+      width: 100%; min-height: 280px; background: #090d16; color: #38bdf8; border: 1px solid var(--border);
+      border-radius: 8px; padding: 1rem; font-family: "Fira Code", monospace, Consolas, sans-serif;
+      font-size: 0.88rem; resize: vertical; outline: none; line-height: 1.4;
+    }
+    .test-box { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
+    .test-item { display: flex; gap: 0.5rem; margin-top: 0.2rem; }
+    .copy-toast { display: none; color: var(--success); font-size: 0.85rem; font-weight: 600; margin-left: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚡ Manga Cleaner Performance Benchmark</h1>
+      <p>Tự động đo thời gian từng giai đoạn (decode, detect, seg, masks, inpaint) và tạo bảng Markdown chuẩn cho <code>PERF-BASELINE.md</code>.</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div class="field">
+          <label>Chế độ chạy</label>
+          <select id="modeSelect">
+            <option value="cpu" selected>CPU (anime-lama)</option>
+            <option value="gpu">ZeroGPU (Nvidia A100)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Số lượt chạy (runs)</label>
+          <select id="runsSelect">
+            <option value="3" selected>3 lượt (Nhanh ~15s)</option>
+            <option value="5">5 lượt (Chuẩn Baseline ~25s)</option>
+          </select>
+        </div>
+        <div class="field" style="flex: 1; align-self: flex-end;">
+          <button id="runBtn" class="btn-primary" onclick="runBenchmark()">
+            <span>🚀 Chạy Benchmark Ngay</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="status-box" id="statusBox">
+        <span id="statusText">Sẵn sàng chạy. Bấm nút phía trên để bắt đầu.</span>
+        <span class="badge badge-info" id="envBadge">HF Space Ready</span>
+      </div>
+
+      <div id="resultSection" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+          <label style="color: var(--text);">Kết quả Markdown (Copy trực tiếp vào PERF-BASELINE.md):</label>
+          <div>
+            <button class="btn-copy" onclick="copyResult()">📋 Sao chép Markdown</button>
+            <span class="copy-toast" id="copyToast">✓ Đã sao chép!</span>
+          </div>
+        </div>
+        <textarea id="markdownOutput" readonly spellcheck="false"></textarea>
+
+        <div class="test-box" id="testBox"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function runBenchmark() {
+      const mode = document.getElementById('modeSelect').value;
+      const runs = document.getElementById('runsSelect').value;
+      const forceCpu = mode === 'cpu';
+      const runBtn = document.getElementById('runBtn');
+      const statusText = document.getElementById('statusText');
+      const resultSection = document.getElementById('resultSection');
+      const mdOutput = document.getElementById('markdownOutput');
+      const testBox = document.getElementById('testBox');
+
+      runBtn.disabled = true;
+      statusText.innerHTML = '<span class="spinner"></span> Đang chạy benchmark ' + runs + ' lượt trên ' + (forceCpu ? 'CPU' : 'GPU') + '... Vui lòng đợi trong giây lát.';
+
+      try {
+        const res = await fetch('/api/benchmark?runs=' + runs + '&force_cpu=' + forceCpu);
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          statusText.innerHTML = '✅ Hoàn tất benchmark (' + data.device + ')! Kết quả đã sẵn sàng bên dưới.';
+          mdOutput.value = data.markdown_table;
+          resultSection.style.display = 'block';
+
+          if (data.tests && data.tests.checks) {
+            let html = '<strong>Kiểm tra xác thực tính đồng nhất (Zero-regression):</strong>';
+            data.tests.checks.forEach(c => {
+              const color = c.status === 'PASS' ? 'var(--success)' : (c.status === 'SKIP' ? 'var(--warning)' : '#ef4444');
+              html += '<div class="test-item"><span style="color:' + color + '">[' + c.status + ']</span> ' + c.name + '</div>';
+            });
+            testBox.innerHTML = html;
+          }
+        } else {
+          statusText.innerHTML = '❌ Lỗi: ' + (data.error || 'Không thể chạy benchmark.');
+        }
+      } catch (err) {
+        statusText.innerHTML = '❌ Lỗi kết nối: ' + err.message;
+      } finally {
+        runBtn.disabled = false;
+      }
+    }
+
+    function copyResult() {
+      const textarea = document.getElementById('markdownOutput');
+      textarea.select();
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        const toast = document.getElementById('copyToast');
+        toast.style.display = 'inline';
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+      });
+    }
+
+    // Auto-run if query param ?autorun=1 exists
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autorun') === '1' || urlParams.get('autorun') === 'true') {
+      window.addEventListener('DOMContentLoaded', () => { runBenchmark(); });
+    }
+  </script>
+</body>
+</html>
+"""
+
+
+@api_router.get("/benchmark", response_class=HTMLResponse)
+async def benchmark_page():
+    return HTMLResponse(content=BENCHMARK_PAGE_HTML)
+
+
+@api_router.get("/api/benchmark")
+@api_router.post("/api/benchmark")
+async def api_run_benchmark(runs: int = 3, force_cpu: bool = True, inpaint_model: str = "anime-lama"):
+    if run_benchmark_suite is None:
+        raise HTTPException(status_code=500, detail="bench_clean module is not loaded.")
+    try:
+        # Run benchmark in threadpool using cleaner_pipeline already in memory
+        bench_res = await run_in_threadpool(
+            run_benchmark_suite,
+            pipeline=cleaner_pipeline,
+            runs=max(1, min(runs, 10)),
+            force_cpu=force_cpu,
+            inpaint_model=inpaint_model,
+        )
+        # Also run verification self-tests
+        tests_res = {}
+        if run_self_tests is not None:
+            try:
+                tests_res = await run_in_threadpool(run_self_tests, pipeline=cleaner_pipeline)
+            except Exception as test_err:
+                tests_res = {"error": str(test_err)}
+
+        bench_res["tests"] = tests_res
+        return bench_res
+    except Exception as exc:
+        logger.error("Benchmark error: %s", exc)
+        return {"status": "error", "error": str(exc)}
 
 
 @api_router.post("/clean_page")
