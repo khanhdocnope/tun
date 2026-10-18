@@ -53,8 +53,52 @@ BIG_LAMA_PT_PATH = MODEL_DIR / "big-lama.pt"
 
 _LAMA_CPU_MODELS: Dict[str, Any] = {}
 
+def _detect_cpu_threads() -> int:
+    env_threads = os.getenv("CPU_THREADS")
+    if env_threads:
+        try:
+            return max(1, int(env_threads))
+        except ValueError:
+            pass
+
+    # Detect container cgroup CPU quota (HF Spaces, Docker, Kubernetes)
+    # CFS quota = quota_us / period_us gives actual assigned vCPUs
+    for q_path, p_path in [
+        ("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu/cpu.cfs_period_us"),
+        ("/sys/fs/cgroup/cpu.cfs_quota_us", "/sys/fs/cgroup/cpu.cfs_period_us"),
+    ]:
+        try:
+            qp, pp = Path(q_path), Path(p_path)
+            if qp.is_file() and pp.is_file():
+                q = int(qp.read_text().strip())
+                p = int(pp.read_text().strip())
+                if q > 0 and p > 0:
+                    return min(max(1, q // p), 4)
+        except Exception:
+            pass
+
+    # cgroup v2: cpu.max has "quota period" (e.g. "200000 100000")
+    for max_path in ["/sys/fs/cgroup/cpu.max", "/sys/fs/cgroup/cpu/cpu.max"]:
+        try:
+            mp = Path(max_path)
+            if mp.is_file():
+                parts = mp.read_text().strip().split()
+                if len(parts) == 2 and parts[0] != "max":
+                    return min(max(1, int(parts[0]) // int(parts[1])), 4)
+        except Exception:
+            pass
+
+    try:
+        if hasattr(os, "sched_getaffinity"):
+            return max(1, min(len(os.sched_getaffinity(0)), 4))
+    except Exception:
+        pass
+
+    return max(1, min(os.cpu_count() or 2, 4))
+
+
 # ------------------------------------------------------------------ tuning knobs (env overridable)
-CPU_THREADS = max(1, min(os.cpu_count() or 4, 8))
+CPU_THREADS = _detect_cpu_threads()
 torch.set_num_threads(CPU_THREADS)
 INPAINT_CTX_PX = int(os.getenv("INPAINT_CONTEXT_PX", "96"))      # context kept around every erased region
 INPAINT_MOD = 32                                                  # pad crops to a multiple of 32 (fewer distinct shapes)
@@ -242,6 +286,9 @@ class ComicTextDetectorEngine:
         self.net = None
         self.session = None
         self.ready = False
+        self._input_name = None
+        self._output_names = None
+
         if not self.model_path.is_file():
             alt = BASE_DIR / "weights" / "comic-text-detector.onnx"
             if alt.is_file():
@@ -251,15 +298,24 @@ class ComicTextDetectorEngine:
             ensure_models()
         if not self.model_path.is_file():
             return
-        # ONNX Runtime is usually much faster than cv2.dnn on CPU
+        # ONNX Runtime is usually much faster than cv2.dnn on CPU when threads are properly tuned
         try:
             import onnxruntime as ort
 
             so = ort.SessionOptions()
             so.intra_op_num_threads = CPU_THREADS
             so.inter_op_num_threads = 1
+            so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
             so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            so.enable_cpu_mem_arena = True
+            so.enable_mem_pattern = True
+
             self.session = ort.InferenceSession(str(self.model_path), sess_options=so, providers=["CPUExecutionProvider"])
+            self._input_name = self.session.get_inputs()[0].name
+            all_out = [o.name for o in self.session.get_outputs()]
+            needed = [name for name in all_out if "blk" not in name.lower()]
+            self._output_names = needed if needed else None
+
             self.ready = True
             logger.info("ComicTextDetector (seg) ready: ONNX Runtime, %d threads", CPU_THREADS)
             return
@@ -282,8 +338,10 @@ class ComicTextDetectorEngine:
         im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR)
         im = cv2.copyMakeBorder(im, 0, size - nh, 0, size - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
         if self.session is not None:
-            blob = np.ascontiguousarray((im.astype(np.float32) / 255.0).transpose(2, 0, 1)[None])
-            outputs = self.session.run(None, {self.session.get_inputs()[0].name: blob})
+            blob = np.ascontiguousarray(im.transpose(2, 0, 1)[None], dtype=np.float32)
+            blob *= (1.0 / 255.0)
+            in_name = self._input_name or self.session.get_inputs()[0].name
+            outputs = self.session.run(self._output_names, {in_name: blob})
         else:
             self.net.setInput(cv2.dnn.blobFromImage(im, 1.0 / 255.0, (size, size), swapRB=False, crop=False))
             outputs = self.net.forward(self.net.getUnconnectedOutLayersNames())
@@ -302,7 +360,7 @@ class ComicTextDetectorEngine:
             comb = det_prob
         else:
             return np.zeros((h, w), np.float32)
-        return cv2.resize(comb[:nh, :nw], (w, h), interpolation=cv2.INTER_LINEAR).astype(np.float32)
+        return cv2.resize(comb[:nh, :nw], (w, h), interpolation=cv2.INTER_LINEAR)
 
 
 # ----------------------------------------------------------------------------- pipeline
