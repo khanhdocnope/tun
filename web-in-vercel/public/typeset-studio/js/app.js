@@ -206,6 +206,37 @@ async function openDB() {
   });
 }
 
+async function getPageImageBlob(pageId) {
+  const db = await openDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(['cleaned', 'pages'], 'readonly');
+      const cleanReq = tx.objectStore('cleaned').get(pageId);
+      cleanReq.onsuccess = () => {
+        if (cleanReq.result && cleanReq.result.blob) {
+          resolve(cleanReq.result.blob);
+        } else {
+          const pageReq = tx.objectStore('pages').get(pageId);
+          pageReq.onsuccess = () => {
+            resolve((pageReq.result && pageReq.result.base64) || null);
+          };
+          pageReq.onerror = () => resolve(null);
+        }
+      };
+      cleanReq.onerror = () => {
+        const pageReq = tx.objectStore('pages').get(pageId);
+        pageReq.onsuccess = () => {
+          resolve((pageReq.result && pageReq.result.base64) || null);
+        };
+        pageReq.onerror = () => resolve(null);
+      };
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
 async function loadDataFromIndexedDB() {
   const db = await openDB();
   if (!db) return [];
@@ -215,29 +246,21 @@ async function loadDataFromIndexedDB() {
       const tx = db.transaction(['pages', 'state', 'cleaned', 'typeset'], 'readonly');
       const pagesReq = tx.objectStore('pages').getAll();
       const stateReq = tx.objectStore('state').getAll();
-      const cleanedReq = tx.objectStore('cleaned').getAll();
+      const cleanedKeysReq = tx.objectStore('cleaned').getAllKeys();
       const typesetReq = tx.objectStore('typeset').getAll();
 
       tx.oncomplete = () => {
         const pages = pagesReq.result || [];
         const stateMap = new Map((stateReq.result || []).map(s => [s.id, s]));
-        const cleanedMap = new Map((cleanedReq.result || []).map(c => [c.id, c]));
+        const cleanedKeySet = new Set(cleanedKeysReq.result || []);
         const typesetMap = new Map((typesetReq.result || []).map(t => [t.id, t]));
 
         const combined = pages
           .sort((a, b) => (a.seq || 0) - (b.seq || 0))
           .map((page) => {
             const st = stateMap.get(page.id) || {};
-            const cl = cleanedMap.get(page.id) || null;
             const ts = typesetMap.get(page.id) || null;
-
-            // Ưu tiên ảnh đã tẩy sạch bong bóng chat
-            let displayBlob = null;
-            if (cl && cl.blob) {
-              displayBlob = cl.blob;
-            } else if (page.base64) {
-              displayBlob = page.base64;
-            }
+            const hasCleaned = cleanedKeySet.has(page.id);
 
             // Danh sách bóng thoại đã lưu hoặc tạo từ text dịch
             let bubbles = [];
@@ -284,9 +307,8 @@ async function loadDataFromIndexedDB() {
             return {
               id: page.id,
               name: page.name || `Trang ${page.seq || 1}`,
-              base64: page.base64 || (typeof displayBlob === 'string' ? displayBlob : null),
-              displayBlob,
-              hasCleaned: !!cl,
+              seq: page.seq,
+              hasCleaned: hasCleaned,
               hasTranslated: !!st.viText,
               viText: st.viText || '',
               bubbles,
@@ -377,8 +399,6 @@ async function handleFilesAdded(files) {
       id: 'ts_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '_' + i,
       seq: startIndex + i + 1,
       name: p.name,
-      base64: p.base64,
-      displayBlob: p.displayBlob,
       bubbles: [],
       hasCleaned: false,
       hasTranslated: false
@@ -391,7 +411,7 @@ async function handleFilesAdded(files) {
           id: item.id,
           seq: item.seq,
           name: item.name,
-          base64: item.base64,
+          base64: p.base64,
           sizeStr: 'Mới'
         });
         tx.objectStore('state').put({
@@ -716,6 +736,14 @@ async function runBackendCleanAndBox(pageIndex) {
       base64 = await blobToBase64(page.displayBlob);
     }
     if (!base64) {
+      const blobOrB64 = await getPageImageBlob(page.id);
+      if (blobOrB64 instanceof Blob) {
+        base64 = await blobToBase64(blobOrB64);
+      } else {
+        base64 = blobOrB64;
+      }
+    }
+    if (!base64) {
       throw new Error('Không tìm thấy dữ liệu ảnh gốc để xử lý.');
     }
 
@@ -723,7 +751,6 @@ async function runBackendCleanAndBox(pageIndex) {
     const cleanPromise = callCleanApi(base64, appState.aiSettings).then(async (cleanRes) => {
       updateAiCleanStepStatus(cleanRes);
       if (cleanRes.ok && cleanRes.data && cleanRes.data.cleanedImageBase64) {
-        page.displayBlob = cleanRes.data.cleanedImageBase64;
         page.hasCleaned = true;
         const db = await openDB();
         if (db) {
@@ -733,13 +760,16 @@ async function runBackendCleanAndBox(pageIndex) {
           } catch (e) {}
         }
         if (appState.activePageIndex === pageIndex) {
-          const img = await loadImageElement(page.displayBlob);
+          const img = await loadImageElement(cleanRes.data.cleanedImageBase64);
           if (img) {
+            if (appState.currentImageElement && appState.currentImageElement._objectUrl) {
+              URL.revokeObjectURL(appState.currentImageElement._objectUrl);
+            }
             appState.currentImageElement = img;
             renderCanvas();
           }
         }
-        renderSidebar();
+        updateSidebarCard(pageIndex);
       }
       return cleanRes;
     });
@@ -839,16 +869,26 @@ async function runBackendCleanAndBox(pageIndex) {
 function loadImageElement(blobOrBase64) {
   return new Promise((resolve) => {
     const img = new Image();
+    img.decoding = 'async';
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
 
     if (blobOrBase64 instanceof Blob) {
-      img.src = URL.createObjectURL(blobOrBase64);
+      const url = URL.createObjectURL(blobOrBase64);
+      img._objectUrl = url;
+      img.src = url;
     } else if (typeof blobOrBase64 === 'string') {
       img.src = blobOrBase64;
     } else {
       resolve(null);
     }
+  });
+}
+
+function updateSidebarActiveCard() {
+  const cards = el.pagesList.querySelectorAll('.page-thumb-card');
+  cards.forEach((card, idx) => {
+    card.classList.toggle('active', idx === appState.activePageIndex);
   });
 }
 
@@ -860,12 +900,18 @@ async function switchPage(index, preserveBubble = false) {
   }
 
   updateNavigationUI();
-  renderSidebar();
+  updateSidebarActiveCard();
 
   const page = appState.pages[index];
   if (!page) return;
 
-  const img = await loadImageElement(page.displayBlob);
+  if (appState.currentImageElement && appState.currentImageElement._objectUrl) {
+    URL.revokeObjectURL(appState.currentImageElement._objectUrl);
+    appState.currentImageElement._objectUrl = null;
+  }
+
+  const blobOrBase64 = await getPageImageBlob(page.id);
+  const img = await loadImageElement(blobOrBase64);
   appState.currentImageElement = img;
 
   if (img) {
@@ -1755,19 +1801,80 @@ async function deletePage(idx) {
   await switchPage(nextIndex);
 }
 
+const sidebarObjectUrls = new Set();
+let sidebarObserver = null;
+
+function clearSidebarObjectUrls() {
+  sidebarObjectUrls.forEach(url => URL.revokeObjectURL(url));
+  sidebarObjectUrls.clear();
+}
+
+function getSidebarObserver() {
+  if (sidebarObserver) return sidebarObserver;
+  if (typeof IntersectionObserver === 'undefined') return null;
+
+  sidebarObserver = new IntersectionObserver((entries) => {
+    entries.forEach(async (entry) => {
+      if (entry.isIntersecting) {
+        const card = entry.target;
+        const img = card.querySelector('.page-thumb-img');
+        const pageId = card.dataset.id;
+        if (img && pageId && !img.dataset.loaded) {
+          img.dataset.loaded = 'true';
+          const blobOrB64 = await getPageImageBlob(pageId);
+          if (blobOrB64 instanceof Blob) {
+            const url = URL.createObjectURL(blobOrB64);
+            sidebarObjectUrls.add(url);
+            img.src = url;
+          } else if (typeof blobOrB64 === 'string') {
+            img.src = blobOrB64;
+          }
+        }
+      }
+    });
+  }, {
+    root: el.pagesList,
+    rootMargin: '150px 0px 150px 0px',
+    threshold: 0
+  });
+
+  return sidebarObserver;
+}
+
+function updateSidebarCard(pageIndex) {
+  const cards = el.pagesList.querySelectorAll('.page-thumb-card');
+  const card = cards[pageIndex];
+  if (!card) return;
+  const page = appState.pages[pageIndex];
+  if (!page) return;
+
+  const badgesEl = card.querySelector('.page-thumb-badges');
+  if (badgesEl) {
+    badgesEl.innerHTML = `
+      ${page.hasCleaned ? '<span class="mini-badge mini-badge-cleaned">Đã tẩy</span>' : ''}
+      ${page.hasTranslated ? '<span class="mini-badge mini-badge-translated">Đã dịch</span>' : ''}
+      ${page.bubbles && page.bubbles.length ? `<span class="mini-badge mini-badge-typeset">${page.bubbles.length} thoại</span>` : ''}
+    `;
+  }
+}
+
 function renderSidebar() {
+  clearSidebarObjectUrls();
+  const obs = getSidebarObserver();
+  if (obs) obs.disconnect();
+
   el.pagesList.innerHTML = '';
   appState.pages.forEach((page, idx) => {
     const card = document.createElement('div');
     card.className = `page-thumb-card ${idx === appState.activePageIndex ? 'active' : ''}`;
+    card.dataset.id = page.id;
+    card.dataset.index = idx;
 
     const img = document.createElement('img');
     img.className = 'page-thumb-img';
-    if (page.displayBlob instanceof Blob) {
-      img.src = URL.createObjectURL(page.displayBlob);
-    } else if (page.displayBlob) {
-      img.src = page.displayBlob;
-    }
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = 'data:image/svg+xml;charset=utf-8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
 
     const info = document.createElement('div');
     info.className = 'page-thumb-info';
@@ -1801,6 +1908,20 @@ function renderSidebar() {
 
     card.addEventListener('click', () => switchPage(idx));
     el.pagesList.appendChild(card);
+
+    if (obs) {
+      obs.observe(card);
+    } else {
+      getPageImageBlob(page.id).then(blobOrB64 => {
+        if (blobOrB64 instanceof Blob) {
+          const url = URL.createObjectURL(blobOrB64);
+          sidebarObjectUrls.add(url);
+          img.src = url;
+        } else if (blobOrB64) {
+          img.src = blobOrB64;
+        }
+      });
+    }
   });
 }
 
@@ -1869,7 +1990,8 @@ async function exportFullChapterZIP() {
       const page = appState.pages[i];
       showToast(`Đang kết xuất trang ${i + 1} / ${appState.pages.length}...`, 1000);
 
-      const img = await loadImageElement(page.displayBlob);
+      const blobOrB64 = await getPageImageBlob(page.id);
+      const img = await loadImageElement(blobOrB64);
 
       const offscreen = document.createElement('canvas');
       offscreen.width = (img && img.naturalWidth) || 1000;
@@ -1893,6 +2015,10 @@ async function exportFullChapterZIP() {
         const paddedIndex = String(i + 1).padStart(3, '0');
         const filename = `${paddedIndex}_${page.name || 'page'}.png`;
         zip.file(filename, blob);
+      }
+
+      if (img && img._objectUrl) {
+        URL.revokeObjectURL(img._objectUrl);
       }
     }
 
@@ -2159,16 +2285,19 @@ async function initApp() {
   el.btnSyncFromBatch.addEventListener('click', async () => {
     showToast('Đang nạp dữ liệu từ Batch Studio...');
     appState.pages = await loadDataFromIndexedDB();
+    renderSidebar();
     if (appState.pages.length) {
       await switchPage(0);
       showToast(`Đã đồng bộ ${appState.pages.length} trang từ Batch Studio!`);
     } else {
+      updateNavigationUI();
       showToast('Chưa có trang nào trong Batch Studio.');
     }
   });
 
   // Load Initial Data
   appState.pages = await loadDataFromIndexedDB();
+  renderSidebar();
   if (appState.pages.length) {
     await switchPage(0);
   } else {

@@ -21,6 +21,71 @@ import { store, scheduleSave, dropPendingSave } from './storage.js';
 import { processSingleImage, translateSingleText, cleanSingleImage } from './api.js';
 import { updateStatBadge, updateProcessAllLabel } from './queue.js';
 
+export const TRANSPARENT_PLACEHOLDER = 'data:image/svg+xml;charset=utf-8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"%3E%3C/svg%3E';
+
+let cardObserver = null;
+
+export function getCardObserver() {
+  if (cardObserver) return cardObserver;
+  if (typeof IntersectionObserver === 'undefined') return null;
+
+  cardObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const card = entry.target;
+      const img = card.querySelector('.col-thumb img');
+      if (!img) return;
+
+      if (entry.isIntersecting) {
+        // Cuộn tới gần (trong phạm vi 300px): Nạp ảnh
+        const targetSrc = img.dataset.src;
+        if (targetSrc && img.getAttribute('src') !== targetSrc) {
+          img.setAttribute('src', targetSrc);
+          img.setAttribute('decoding', 'async');
+        }
+      } else {
+        // Cuộn ra rất xa (> 1200px): Giải phóng texture GPU khỏi VRAM
+        const rect = entry.boundingClientRect;
+        const vh = (typeof window !== 'undefined' && window.innerHeight) || 800;
+        const isFar = rect.bottom < -1200 || rect.top > vh + 1200;
+        if (isFar && img.dataset.src && img.getAttribute('src') !== TRANSPARENT_PLACEHOLDER) {
+          img.setAttribute('src', TRANSPARENT_PLACEHOLDER);
+        }
+      }
+    });
+  }, {
+    root: null,
+    rootMargin: '300px 0px 300px 0px',
+    threshold: 0
+  });
+
+  return cardObserver;
+}
+
+export function observeCard(card) {
+  const obs = getCardObserver();
+  if (obs && card) {
+    obs.observe(card);
+  } else if (card) {
+    const img = card.querySelector('.col-thumb img');
+    if (img && img.dataset.src) img.src = img.dataset.src;
+  }
+}
+
+export function unobserveCard(card) {
+  const obs = getCardObserver();
+  if (obs && card) {
+    obs.unobserve(card);
+  }
+}
+
+export function unloadCardImage(card) {
+  if (!card) return;
+  const img = card.querySelector('.col-thumb img');
+  if (img && img.dataset.src) {
+    img.setAttribute('src', TRANSPARENT_PLACEHOLDER);
+  }
+}
+
   export function applySettingsToUI() {
     el.selectEngine.value = state.settings.model;
     el.inputGeminiApiKey.value = state.settings.apiKey;
@@ -148,6 +213,9 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
     state.images.forEach((item, index) => {
       const row = createRowElement(item, index + 1);
       el.mangaRowsList.appendChild(row);
+      if (!item.isCollapsed) {
+        observeCard(row);
+      }
     });
   }
 
@@ -207,7 +275,7 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
               </svg>
             </button>
           </div>
-          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
+          <img src="${TRANSPARENT_PLACEHOLDER}" data-src="${item.base64}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -374,6 +442,7 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
     // Individual Action buttons
     card.querySelector('.btn-row-delete').addEventListener('click', async (e) => {
       e.stopPropagation();
+      unobserveCard(card);
       const targetId = item.id;
       state.images = state.images.filter(x => x.id !== targetId);
       dropPendingSave(targetId);
@@ -401,6 +470,11 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
         e.stopPropagation();
         item.isCollapsed = !item.isCollapsed;
         card.classList.toggle('is-collapsed', item.isCollapsed);
+        if (item.isCollapsed) {
+          unloadCardImage(card);
+        } else {
+          observeCard(card);
+        }
       });
     }
 
@@ -436,6 +510,14 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
     }
     const btnViewClean = card.querySelector('.btn-row-view-clean');
     if (btnViewClean) btnViewClean.style.display = item.hasCleaned ? '' : 'none';
+
+    const img = card.querySelector('.col-thumb img');
+    if (img && item.base64) {
+      img.dataset.src = item.base64;
+      if (!item.isCollapsed && img.getAttribute('src') !== TRANSPARENT_PLACEHOLDER) {
+        img.src = item.base64;
+      }
+    }
 
     const textareaJp = card.querySelector('.textarea-jp');
     if (textareaJp) textareaJp.value = item.ocrText;
@@ -522,7 +604,14 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
     state.images.forEach(img => {
       img.isCollapsed = state.isAllCollapsed;
       const card = document.getElementById(`row-${img.id}`);
-      if (card) card.classList.toggle('is-collapsed', state.isAllCollapsed);
+      if (card) {
+        card.classList.toggle('is-collapsed', state.isAllCollapsed);
+        if (state.isAllCollapsed) {
+          unloadCardImage(card);
+        } else {
+          observeCard(card);
+        }
+      }
     });
     if (el.btnToggleCollapseAllLabel) {
       el.btnToggleCollapseAllLabel.textContent = state.isAllCollapsed ? 'Mở rộng' : 'Thu gọn';

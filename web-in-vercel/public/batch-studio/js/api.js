@@ -115,48 +115,54 @@ import { getPrevContext } from './queue.js';
     });
   }
 
+  // Thêm từng ảnh đơn lẻ vào state và IndexedDB (hỗ trợ giải phóng bộ nhớ ngay sau khi nén)
+  export async function addSingleFileItem(file) {
+    const { base64, sizeStr, compressed } = await compressAndLoadFile(file);
+
+    const item = {
+      id: 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      name: file.name || `image_${state.images.length + 1}.jpg`,
+      sizeStr: sizeStr,
+      base64: base64,
+      status: 'idle',
+      dialogues: [],
+      ocrText: '',
+      viText: '',
+      tokens: 0,
+      seq: nextSeq(),
+      stage: 0,
+      // Bước tẩy chữ: trạng thái riêng, ảnh sạch nằm trong IndexedDB (kho "cleaned")
+      cleanStatus: 'idle',
+      hasCleaned: false,
+      cleanedMime: '',
+      hasOriginal: false
+    };
+
+    // Bản hiển thị đã bị nén (<=1400px) -> giữ thêm ảnh gốc để tẩy chữ ở độ phân giải gốc
+    if (compressed) {
+      try {
+        const buffer = await readFileAsArrayBuffer(file);
+        const okOrig = await store.putOriginal({ id: item.id, mime: file.type || 'image/jpeg', data: buffer });
+        item.hasOriginal = !!okOrig;
+        if (!okOrig) reportSaveFailure();
+      } catch (e) {
+        item.hasOriginal = false;
+      }
+    }
+
+    state.images.push(item);
+    persistNewPage(item);
+    return { item, compressed };
+  }
+
   // Add Files to State (hỗ trợ nén tức thì không gây đơ web)
   export async function addFilesToBatch(fileList) {
     const totalFiles = fileList.length;
     let compressedCount = 0;
 
     for (const file of fileList) {
-      const { base64, sizeStr, compressed } = await compressAndLoadFile(file);
-      if (compressed) compressedCount++;
-
-      const item = {
-        id: 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-        name: file.name || `image_${state.images.length + 1}.jpg`,
-        sizeStr: sizeStr,
-        base64: base64,
-        status: 'idle',
-        dialogues: [],
-        ocrText: '',
-        viText: '',
-        tokens: 0,
-        seq: nextSeq(),
-        stage: 0,
-        // Bước tẩy chữ: trạng thái riêng, ảnh sạch nằm trong IndexedDB (kho "cleaned")
-        cleanStatus: 'idle',
-        hasCleaned: false,
-        cleanedMime: '',
-        hasOriginal: false
-      };
-
-      // Bản hiển thị đã bị nén (<=1400px) -> giữ thêm ảnh gốc để tẩy chữ ở độ phân giải gốc
-      if (compressed) {
-        try {
-          const buffer = await readFileAsArrayBuffer(file);
-          const okOrig = await store.putOriginal({ id: item.id, mime: file.type || 'image/jpeg', data: buffer });
-          item.hasOriginal = !!okOrig;
-          if (!okOrig) reportSaveFailure();
-        } catch (e) {
-          item.hasOriginal = false;
-        }
-      }
-
-      state.images.push(item);
-      persistNewPage(item);
+      const res = await addSingleFileItem(file);
+      if (res && res.compressed) compressedCount++;
     }
 
     renderBatchView();
@@ -423,18 +429,66 @@ import { getPrevContext } from './queue.js';
   }
 
   export async function addInputFiles(list) {
-    const all = [];
+    let totalAdded = 0;
+    let compressedCount = 0;
+
     for (const f of list) {
-      if (!isZipFile(f)) { all.push(f); continue; }
-      if (typeof JSZip === 'undefined') { showToast('Lỗi: chưa tải được thư viện ZIP, không đọc được tệp ZIP.'); continue; }
+      if (!isZipFile(f)) {
+        const res = await addSingleFileItem(f);
+        if (res) {
+          totalAdded++;
+          if (res.compressed) compressedCount++;
+        }
+        continue;
+      }
+
+      if (typeof JSZip === 'undefined') {
+        showToast('Lỗi: chưa tải được thư viện ZIP, không đọc được tệp ZIP.');
+        continue;
+      }
+
       try {
-        const inner = await expandZipToFiles(f);
-        if (!inner.length) showToast(`Tệp ZIP "${f.name}" không chứa ảnh nào.`);
-        all.push(...inner);
+        const zip = await JSZip.loadAsync(f);
+        const entries = [];
+        zip.forEach((path, entry) => {
+          if (entry.dir) return;
+          const base = path.split('/').pop();
+          if (!base || base.charAt(0) === '.' || /(^|\/)__MACOSX\//.test(path)) return;
+          if (!IMG_EXT_RE.test(base)) return;
+          entries.push({ path, base, entry });
+        });
+        entries.sort((x, y) => x.path.localeCompare(y.path, undefined, { numeric: true, sensitivity: 'base' }));
+
+        if (!entries.length) {
+          showToast(`Tệp ZIP "${f.name}" không chứa ảnh nào.`);
+          continue;
+        }
+
+        showToast(`Đang giải nén ${entries.length} ảnh từ "${f.name}"...`, 1500);
+        for (const e of entries) {
+          const blob = await e.entry.async('blob');
+          const file = new File([blob], e.base, { type: mimeFromName(e.base) });
+          const res = await addSingleFileItem(file);
+          if (res) {
+            totalAdded++;
+            if (res.compressed) compressedCount++;
+          }
+          // Giải phóng event loop cho Garbage Collector dọn dẹp bộ nhớ đệm
+          await new Promise(r => setTimeout(r, 0));
+        }
       } catch (err) {
         console.error(err);
         showToast(`Lỗi: không đọc được tệp ZIP "${f.name}".`);
       }
     }
-    if (all.length) await addFilesToBatch(all);
+
+    if (totalAdded > 0) {
+      renderBatchView();
+      if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
+      if (compressedCount > 0) {
+        showToast(`Đã thêm ${totalAdded} ảnh (đã tối ưu ${compressedCount} ảnh sang WebP)!`);
+      } else {
+        showToast(`Đã thêm ${totalAdded} ảnh vào danh sách!`);
+      }
+    }
   }
