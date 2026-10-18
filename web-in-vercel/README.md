@@ -21,27 +21,6 @@
   * Dễ dàng đổi sang server local `http://localhost:7860` khi test.
   * Lưu API Key DeepSeek / OpenAI an toàn trong `localStorage` trình duyệt.
 
-## 🏛️ Kiến Trúc Hệ Thống & Ghi Chú API Legacy (Giai Đoạn 1)
-
-### Chapter Workspace (/batch-studio)
-Batch Studio (`/batch-studio`) hiện là **Workspace duy nhất** cho việc xử lý dịch truyện tranh và chapter hàng loạt:
-- **Tẩy chữ AI hàng loạt**: Gọi `/api/clean`, giới hạn 2 concurrent requests có retry, lưu ảnh sạch vào IndexedDB v2 (kho `cleaned`).
-- **OCR & Dịch ngữ cảnh Gemini**: Gọi `/api/process-batch` (Gemini 3.1 flash-lite / 3.5), hỗ trợ ngữ cảnh 12 dòng lùi 3 trang (`prevContext`), dual-worker song song 30 RPM.
-- **Xuất dữ liệu**: Xuất ZIP ảnh đã tẩy chữ (giữ nguyên tên gốc), xuất script `.txt`, `.doc`, hoặc tải gói trọn bộ ZIP.
-
-### Danh Sách API Legacy & Vị Trí UI Gọi
-Các API sau được giữ nguyên nhằm đảm bảo tương thích ngược, không bị xóa nhưng được phân loại là **Legacy** (các tab UI tương ứng đã được ẩn sau cờ `const LEGACY_TABS = false` trong `index.html`):
-
-| API | Trạng thái | Mục đích | Nơi UI còn gọi (Ẩn sau LEGACY_TABS) |
-|---|---|---|---|
-| `/api/vision.js` | **Legacy** | Bóc tách bong bóng thoại (YOLO / Gemini 2.5 Flash) | `index.html`: `runVisionOcr()`, `runQuickTranslate()` trong `tab-translator` |
-| `/api/ocr.js` | **Legacy** | Quét OCR crop từng bóng thoại bằng Manga-OCR | `index.html`: `runCropOcr()` trong `tab-translator` |
-| `/api/translate.js` | **Legacy** | Dịch mảng bong bóng thoại bằng DeepSeek / OpenAI | `index.html`: `runVisionTranslate()` trong `tab-translator` |
-| `/api/batch-zip.js` | **Legacy** | Giải nén ZIP server-side và xử lý batch bằng DeepSeek | `index.html`: `runBatchProcessing()` trong `tab-batch` |
-
-> [!NOTE]
-> Trang chính hiện chỉ hiển thị 2 tab tinh gọn: **"Xóa chữ"** (`tab-cleaner`) và **"Dịch lại script"** (`tab-script-retrans`). Mọi tác vụ dịch truyện tranh đều mở trực tiếp sang `/batch-studio` qua liên kết header "Chương (hàng loạt)".
-
 ## 📦 Cách Triển Khai Lên Vercel
 
 ### Cách 1: Sử dụng Vercel CLI (Nhanh nhất)
@@ -60,3 +39,8 @@ Các API sau được giữ nguyên nhằm đảm bảo tương thích ngược,
 1. Đẩy thư mục `web-in-vercel` lên kho lưu trữ GitHub của bạn.
 2. Truy cập [vercel.com](https://vercel.com) $\rightarrow$ bấm **Add New Project** $\rightarrow$ chọn repository.
 3. Trong mục **Root Directory**, chọn thư mục `web-in-vercel` và bấm **Deploy**!
+
+
+## Legacy (Giai đoạn 1)
+
+Batch Studio (`/batch-studio`) là "Chapter workspace" duy nhất cho dịch và tẩy chữ cả chapter. Hai tab cũ của trang chính (Dịch Bubble OCR, ZIP Batch) bị ẩn bởi `LEGACY_TABS = false`. Các file `api/vision.js`, `api/ocr.js`, `api/translate.js`, `api/batch-zip.js` là legacy (chỉ tab ẩn gọi). Xem `MIGRATION-CHAPTER-WORKSPACE.md`.

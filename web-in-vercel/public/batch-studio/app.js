@@ -19,16 +19,15 @@
       tone: localStorage.getItem('manga_tone') || 'natural',
       readingOrder: localStorage.getItem('manga_reading_order') || 'manga',
       skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false',
+      // Bước tẩy chữ (khóa mới; manga_backend_url dùng chung với trang chính)
+      stepClean: localStorage.getItem('manga_step_clean') === 'true',
+      stepTranslate: localStorage.getItem('manga_step_translate') !== 'false',
       cleanModel: localStorage.getItem('manga_clean_model') || 'anime-lama',
+      cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true',
       cleanDilation: parseInt(localStorage.getItem('manga_clean_dilation') || '4', 10),
       cleanThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.20'),
-      cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true'
-    },
-    // Giai Đoạn 2: Mobile UI State
-    currentFilter: 'all',
-    isAllCollapsed: false,
-    proofreadIndex: 0,
-    proofreadZoom: 100
+      backendUrl: localStorage.getItem('manga_backend_url') || 'https://dobietdc-backe-manga-remove.hf.space'
+    }
   };
 
   // Thumbnail Size & Zoom Controller (0 -> 100)
@@ -65,10 +64,8 @@
     btnQuickDownloadTxt: document.getElementById('btnQuickDownloadTxt'),
     exportMenu: document.getElementById('exportMenu'),
     btnOpenExportModal: document.getElementById('btnOpenExportModal'),
-    btnExportCleanZip: document.getElementById('btnExportCleanZip'),
     btnExportTxt: document.getElementById('btnExportTxt'),
     btnExportDoc: document.getElementById('btnExportDoc'),
-    btnExportBundleZip: document.getElementById('btnExportBundleZip'),
     btnCopyChapter: document.getElementById('btnCopyChapter'),
     exportModal: document.getElementById('exportModal'),
     btnCloseExportModal: document.getElementById('btnCloseExportModal'),
@@ -80,11 +77,23 @@
     exportTextLengthBadge: document.getElementById('exportTextLengthBadge'),
 
     // Batch Actions
-    btnCleanAll: document.getElementById('btnCleanAll'),
     btnOcrAll: document.getElementById('btnOcrAll'),
     btnTranslateAll: document.getElementById('btnTranslateAll'),
     btnProcessAll: document.getElementById('btnProcessAll'),
     btnClearAll: document.getElementById('btnClearAll'),
+    btnCleanAll: document.getElementById('btnCleanAll'),
+    toggleStepClean: document.getElementById('toggleStepClean'),
+    toggleStepTranslate: document.getElementById('toggleStepTranslate'),
+    btnProcessAllLabel: document.getElementById('btnProcessAllLabel'),
+    btnExportZipClean: document.getElementById('btnExportZipClean'),
+    btnExportZipBoth: document.getElementById('btnExportZipBoth'),
+    selectCleanModel: document.getElementById('selectCleanModel'),
+    checkCleanSFX: document.getElementById('checkCleanSFX'),
+    rangeCleanDilation: document.getElementById('rangeCleanDilation'),
+    rangeCleanThreshold: document.getElementById('rangeCleanThreshold'),
+    cleanDilationVal: document.getElementById('cleanDilationVal'),
+    cleanThresholdVal: document.getElementById('cleanThresholdVal'),
+    inputBackendUrl: document.getElementById('inputBackendUrl'),
     statBadge: document.getElementById('statBadge'),
     currentModelBadge: document.getElementById('currentModelBadge'),
 
@@ -112,72 +121,10 @@
     inputGeminiApiKey: document.getElementById('inputGeminiApiKey'),
     inputGeminiApiKey2: document.getElementById('inputGeminiApiKey2'),
     selectTone: document.getElementById('selectTone'),
-    selectCleanModel: document.getElementById('selectCleanModel'),
-    inputCleanDilation: document.getElementById('inputCleanDilation'),
-    inputCleanThreshold: document.getElementById('inputCleanThreshold'),
-    toggleCleanSFX: document.getElementById('toggleCleanSFX'),
     envKeyBadge: document.getElementById('envKeyBadge'),
     envKeyBadge2: document.getElementById('envKeyBadge2'),
     quotaSpeedText: document.getElementById('quotaSpeedText'),
-    quotaDailyText: document.getElementById('quotaDailyText'),
-
-    // Giai Đoạn 2: Collapse All & Proofread Button
-    btnToggleCollapseAll: document.getElementById('btnToggleCollapseAll'),
-    textToggleCollapse: document.getElementById('textToggleCollapse'),
-    btnOpenProofread: document.getElementById('btnOpenProofread'),
-
-    // Filter Chips Bar
-    filterAll: document.getElementById('filterAll'),
-    filterDone: document.getElementById('filterDone'),
-    filterPending: document.getElementById('filterPending'),
-    filterError: document.getElementById('filterError'),
-    countAll: document.getElementById('countAll'),
-    countDone: document.getElementById('countDone'),
-    countPending: document.getElementById('countPending'),
-    countError: document.getElementById('countError'),
-    btnJumpPending: document.getElementById('btnJumpPending'),
-
-    // Bottom Action Bar
-    btnOpenBottomSheet: document.getElementById('btnOpenBottomSheet'),
-    btnBottomProcessAll: document.getElementById('btnBottomProcessAll'),
-    btnBottomCleanAll: document.getElementById('btnBottomCleanAll'),
-    btnBottomQuickTxt: document.getElementById('btnBottomQuickTxt'),
-
-    // Bottom Sheet Menu
-    bottomSheetBackdrop: document.getElementById('bottomSheetBackdrop'),
-    bottomSheetCard: document.getElementById('bottomSheetCard'),
-    btnCloseBottomSheet: document.getElementById('btnCloseBottomSheet'),
-    sheetBtnOcrAll: document.getElementById('sheetBtnOcrAll'),
-    sheetBtnTransAll: document.getElementById('sheetBtnTransAll'),
-    sheetBtnCleanAll: document.getElementById('sheetBtnCleanAll'),
-    sheetBtnDownloadTxt: document.getElementById('sheetBtnDownloadTxt'),
-    sheetBtnCleanZip: document.getElementById('sheetBtnCleanZip'),
-    sheetBtnBundleZip: document.getElementById('sheetBtnBundleZip'),
-    sheetBtnDownloadDoc: document.getElementById('sheetBtnDownloadDoc'),
-    sheetBtnCopyAll: document.getElementById('sheetBtnCopyAll'),
-    sheetBtnOpenExport: document.getElementById('sheetBtnOpenExport'),
-    sheetBtnClearAll: document.getElementById('sheetBtnClearAll'),
-
-    // Proofreading Fullscreen Overlay
-    proofreadOverlay: document.getElementById('proofreadOverlay'),
-    btnCloseProofread: document.getElementById('btnCloseProofread'),
-    proofreadTitle: document.getElementById('proofreadTitle'),
-    proofreadSubtitle: document.getElementById('proofreadSubtitle'),
-    proofreadStatusBadge: document.getElementById('proofreadStatusBadge'),
-    btnProofreadCleanSingle: document.getElementById('btnProofreadCleanSingle'),
-    btnProofreadTransSingle: document.getElementById('btnProofreadTransSingle'),
-    proofreadImg: document.getElementById('proofreadImg'),
-    proofreadJpText: document.getElementById('proofreadJpText'),
-    proofreadViText: document.getElementById('proofreadViText'),
-    btnProofreadPrev: document.getElementById('btnProofreadPrev'),
-    btnProofreadNext: document.getElementById('btnProofreadNext'),
-    proofreadPageCounter: document.getElementById('proofreadPageCounter'),
-    btnProofreadZoomIn: document.getElementById('btnProofreadZoomIn'),
-    btnProofreadZoomOut: document.getElementById('btnProofreadZoomOut'),
-    btnProofreadZoomReset: document.getElementById('btnProofreadZoomReset'),
-    proofreadZoomText: document.getElementById('proofreadZoomText'),
-    btnProofreadCopyJp: document.getElementById('btnProofreadCopyJp'),
-    btnProofreadCopyVi: document.getElementById('btnProofreadCopyVi')
+    quotaDailyText: document.getElementById('quotaDailyText')
   };
 
   function getActiveKeys() {
@@ -192,17 +139,18 @@
   }
 
   // ---------------------------------------------------------------------------
-  // LƯU TIẾN TRÌNH (IndexedDB v2): tải lại trang / mất tab vẫn giữ ảnh, ảnh đã tẩy, OCR, bản dịch
-  //  - kho "pages": ảnh gốc (nặng, chỉ ghi 1 lần khi thêm trang)
+  // LƯU TIẾN TRÌNH (IndexedDB): tải lại trang / mất tab vẫn giữ ảnh, OCR, bản dịch
+  //  - kho "pages": ảnh (nặng, chỉ ghi 1 lần khi thêm trang)
   //  - kho "state": trạng thái + văn bản (nhẹ, ghi mỗi khi có thay đổi)
-  //  - kho "cleaned": ảnh đã tẩy chữ (lưu khi tẩy xong, tăng version lên 2 kèm migrate)
   // ---------------------------------------------------------------------------
   const store = (function () {
     const DB_NAME = 'manga_studio_batch';
-    const DB_VERSION = 2;
+    const DB_VERSION = 2; // v2: thêm kho "cleaned" (ảnh đã tẩy) và "originals" (ảnh gốc khi bản hiển thị đã bị nén)
     const PAGES = 'pages';
     const STATE = 'state';
     const CLEANED = 'cleaned';
+    const ORIGINALS = 'originals';
+    const ALL = [PAGES, STATE, CLEANED, ORIGINALS];
     let dbPromise = null;
     let dbHandle = null;
 
@@ -212,15 +160,25 @@
         if (!('indexedDB' in window) || !window.indexedDB) return resolve(null);
         let req;
         try { req = indexedDB.open(DB_NAME, DB_VERSION); } catch (e) { return resolve(null); }
-        req.onupgradeneeded = (e) => {
+        // Migrate v1 -> v2: chỉ TẠO kho mới, không đụng tới dữ liệu cũ (pages, state giữ nguyên)
+        req.onupgradeneeded = () => {
           const db = req.result;
-          if (!db.objectStoreNames.contains(PAGES)) db.createObjectStore(PAGES, { keyPath: 'id' });
-          if (!db.objectStoreNames.contains(STATE)) db.createObjectStore(STATE, { keyPath: 'id' });
-          if (!db.objectStoreNames.contains(CLEANED)) db.createObjectStore(CLEANED, { keyPath: 'id' });
+          ALL.forEach((name) => {
+            if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
+          });
         };
-        req.onsuccess = () => { dbHandle = req.result; resolve(dbHandle); };
+        req.onsuccess = () => {
+          dbHandle = req.result;
+          // Nếu tab khác nâng cấp DB sau này, đóng kết nối để không chặn họ
+          dbHandle.onversionchange = () => { try { dbHandle.close(); } catch (e) { /* bỏ qua */ } dbHandle = null; dbPromise = null; };
+          resolve(dbHandle);
+        };
         req.onerror = () => resolve(null);
-        req.onblocked = () => resolve(null);
+        req.onblocked = () => {
+          // Một tab Batch Studio bản cũ đang mở giữ DB v1 -> không nâng cấp được
+          try { showToast('Lỗi: hãy đóng các tab Batch Studio khác rồi tải lại trang để nâng cấp bộ nhớ.'); } catch (e) { /* bỏ qua */ }
+          resolve(null);
+        };
       });
       return dbPromise;
     }
@@ -244,49 +202,43 @@
 
     return {
       async loadAll() {
-        const r = await run('readonly', [PAGES, STATE, CLEANED], (tx) => ({
+        const r = await run('readonly', [PAGES, STATE], (tx) => ({
           pages: tx.objectStore(PAGES).getAll(),
-          states: tx.objectStore(STATE).getAll(),
-          cleaned: tx.objectStore(CLEANED).getAll()
+          states: tx.objectStore(STATE).getAll()
         }));
         if (!r.ok) return [];
         const pages = r.result.pages.result || [];
-        const statesById = new Map((r.result.states.result || []).map((x) => [x.id, x]));
-        const cleanedById = new Map((r.result.cleaned.result || []).map((x) => [x.id, x]));
+        const byId = new Map((r.result.states.result || []).map((x) => [x.id, x]));
         return pages
           .sort((x, y) => (x.seq || 0) - (y.seq || 0))
-          .map((pg) => {
-            const st = statesById.get(pg.id) || {};
-            const cl = cleanedById.get(pg.id) || {};
-            return Object.assign({}, pg, st, {
-              cleanedBase64: cl.cleanedBase64 || ''
-            });
-          });
+          .map((pg) => Object.assign({}, pg, byId.get(pg.id) || {}));
       },
       async putPage(rec) { return (await run('readwrite', [PAGES], (tx) => { tx.objectStore(PAGES).put(rec); })).ok; },
       async putState(rec) { return (await run('readwrite', [STATE], (tx) => { tx.objectStore(STATE).put(rec); })).ok; },
       async putCleaned(rec) { return (await run('readwrite', [CLEANED], (tx) => { tx.objectStore(CLEANED).put(rec); })).ok; },
+      async putOriginal(rec) { return (await run('readwrite', [ORIGINALS], (tx) => { tx.objectStore(ORIGINALS).put(rec); })).ok; },
       async getCleaned(id) {
         const r = await run('readonly', [CLEANED], (tx) => tx.objectStore(CLEANED).get(id));
-        return r.ok ? r.result.result : null;
+        return r.ok ? (r.result.result || null) : null;
       },
+      async getOriginal(id) {
+        const r = await run('readonly', [ORIGINALS], (tx) => tx.objectStore(ORIGINALS).get(id));
+        return r.ok ? (r.result.result || null) : null;
+      },
+      async deleteCleaned(id) { return (await run('readwrite', [CLEANED], (tx) => { tx.objectStore(CLEANED).delete(id); })).ok; },
       // Dùng khi tab sắp đóng: không có await nào giữa chừng nên giao dịch được tạo ngay trong sự kiện
       putStateSync(rec) {
         if (!dbHandle) return;
         try { dbHandle.transaction([STATE], 'readwrite').objectStore(STATE).put(rec); } catch (e) { /* bỏ qua */ }
       },
       async remove(id) {
-        return (await run('readwrite', [PAGES, STATE, CLEANED], (tx) => {
-          tx.objectStore(PAGES).delete(id);
-          tx.objectStore(STATE).delete(id);
-          tx.objectStore(CLEANED).delete(id);
+        return (await run('readwrite', ALL, (tx) => {
+          ALL.forEach((name) => tx.objectStore(name).delete(id));
         })).ok;
       },
       async clear() {
-        return (await run('readwrite', [PAGES, STATE, CLEANED], (tx) => {
-          tx.objectStore(PAGES).clear();
-          tx.objectStore(STATE).clear();
-          tx.objectStore(CLEANED).clear();
+        return (await run('readwrite', ALL, (tx) => {
+          ALL.forEach((name) => tx.objectStore(name).clear());
         })).ok;
       },
       open
@@ -303,7 +255,7 @@
   }
 
   function serializePage(item) {
-    return { id: item.id, seq: item.seq, name: item.name, sizeStr: item.sizeStr, base64: item.base64 };
+    return { id: item.id, seq: item.seq, name: item.name, sizeStr: item.sizeStr, base64: item.base64, hasOriginal: !!item.hasOriginal };
   }
 
   function serializeState(item) {
@@ -311,10 +263,13 @@
       id: item.id,
       // 'processing' không phải trạng thái bền vững: nếu bị ngắt giữa chừng thì quay về 'idle'
       status: item.status === 'processing' ? 'idle' : item.status,
-      cleanStatus: item.cleanStatus === 'processing' ? 'idle' : (item.cleanStatus || 'idle'),
       stage: item.stage || 0, // 0: chưa làm gì | 1: đã OCR | 2: đã dịch
       ocrText: item.ocrText || '',
       viText: item.viText || '',
+      // Bước tẩy chữ có trạng thái riêng (độc lập với stage OCR/dịch)
+      cleanStatus: item.cleanStatus === 'processing' ? (item.hasCleaned ? 'done' : 'idle') : (item.cleanStatus || 'idle'),
+      hasCleaned: !!item.hasCleaned,
+      cleanedMime: item.cleanedMime || '',
       updatedAt: Date.now()
     };
   }
@@ -374,7 +329,6 @@
 
     state.images = rows.map((r) => {
       const status = r.status === 'done' ? 'done' : (r.status === 'error' ? 'error' : 'idle');
-      const cleanStatus = r.cleanStatus === 'done' ? 'done' : (r.cleanStatus === 'error' ? 'error' : (r.cleanedBase64 ? 'done' : 'idle'));
       return {
         id: r.id,
         seq: r.seq || nextSeq(),
@@ -382,24 +336,24 @@
         sizeStr: r.sizeStr || '',
         base64: r.base64,
         status,
-        cleanStatus,
-        cleanedBase64: r.cleanedBase64 || '',
-        currentView: r.cleanedBase64 ? 'cleaned' : 'original',
         stage: typeof r.stage === 'number' ? r.stage : (status === 'done' ? 2 : 0),
         dialogues: [],
         ocrText: r.ocrText || '',
         viText: r.viText || '',
-        tokens: 0
+        tokens: 0,
+        hasOriginal: !!r.hasOriginal,
+        hasCleaned: !!r.hasCleaned,
+        cleanedMime: r.cleanedMime || '',
+        cleanStatus: r.hasCleaned ? 'done' : (r.cleanStatus === 'error' ? 'error' : 'idle')
       };
     });
 
     const finished = state.images.filter((i) => i.stage >= 2).length;
-    const cleaned = state.images.filter((i) => !!i.cleanedBase64).length;
     const remaining = state.images.length - finished;
     showToast(
       remaining > 0
-        ? `Đã khôi phục ${state.images.length} trang (${finished} đã dịch, ${cleaned} đã tẩy chữ, ${remaining} chưa dịch). Bấm "Tẩy chữ" hoặc "OCR + Dịch" để làm tiếp phần còn lại.`
-        : `Đã khôi phục ${state.images.length} trang (${cleaned} đã tẩy chữ, tất cả đã dịch xong). Bạn có thể xuất ZIP ảnh sạch hoặc script.`
+        ? `Đã khôi phục ${state.images.length} trang (${finished} đã xong, ${remaining} còn lại). Bấm "OCR + Dịch" để làm tiếp phần còn lại.`
+        : `Đã khôi phục ${state.images.length} trang, tất cả đã xong. Bạn có thể xuất .txt.`
     );
   }
 
@@ -461,10 +415,16 @@
     el.toggleSkipSFX.checked = state.settings.skipSFX;
     if (el.selectReadingOrder) el.selectReadingOrder.value = state.settings.readingOrder;
 
-    if (el.selectCleanModel) el.selectCleanModel.value = state.settings.cleanModel;
-    if (el.inputCleanDilation) el.inputCleanDilation.value = state.settings.cleanDilation;
-    if (el.inputCleanThreshold) el.inputCleanThreshold.value = state.settings.cleanThreshold;
-    if (el.toggleCleanSFX) el.toggleCleanSFX.checked = state.settings.cleanSFX;
+    el.toggleStepClean.checked = state.settings.stepClean;
+    el.toggleStepTranslate.checked = state.settings.stepTranslate;
+    el.selectCleanModel.value = state.settings.cleanModel;
+    el.checkCleanSFX.checked = state.settings.cleanSFX;
+    el.rangeCleanDilation.value = state.settings.cleanDilation;
+    el.cleanDilationVal.textContent = state.settings.cleanDilation;
+    el.rangeCleanThreshold.value = state.settings.cleanThreshold;
+    el.cleanThresholdVal.textContent = Number(state.settings.cleanThreshold).toFixed(2);
+    el.inputBackendUrl.value = state.settings.backendUrl;
+    updateProcessAllLabel();
 
     if (el.btnModeManga && el.btnModeWebtoon) {
       el.btnModeManga.classList.toggle('active', state.settings.readingOrder === 'manga');
@@ -496,7 +456,7 @@
     // Add Images via Input
     el.fileInputMultiple.addEventListener('change', (e) => {
       const files = Array.from(e.target.files || []);
-      if (files.length > 0) addFilesToBatch(files);
+      if (files.length > 0) addInputFiles(files);
       e.target.value = '';
     });
 
@@ -568,15 +528,37 @@
     window.addEventListener('drop', (e) => {
       e.preventDefault();
       el.emptyDropzone.classList.remove('dragover');
-      const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+      const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/') || isZipFile(f));
       if (files.length > 0) {
-        addFilesToBatch(files);
+        addInputFiles(files);
       }
     });
 
     // Batch Actions
-    if (el.btnCleanAll) el.btnCleanAll.addEventListener('click', runCleanQueue);
-    el.btnProcessAll.addEventListener('click', () => runBatchQueue('all'));
+    el.btnProcessAll.addEventListener('click', () => runSelectedSteps());
+    el.btnCleanAll.addEventListener('click', () => runCleanQueue());
+    el.toggleStepClean.addEventListener('change', () => {
+      state.settings.stepClean = el.toggleStepClean.checked;
+      localStorage.setItem('manga_step_clean', state.settings.stepClean);
+      updateProcessAllLabel();
+    });
+    el.toggleStepTranslate.addEventListener('change', () => {
+      state.settings.stepTranslate = el.toggleStepTranslate.checked;
+      localStorage.setItem('manga_step_translate', state.settings.stepTranslate);
+      updateProcessAllLabel();
+    });
+    el.btnExportZipClean.addEventListener('click', (e) => {
+      e.stopPropagation();
+      el.exportMenu.style.display = 'none';
+      exportCleanZip(false);
+    });
+    el.btnExportZipBoth.addEventListener('click', (e) => {
+      e.stopPropagation();
+      el.exportMenu.style.display = 'none';
+      exportCleanZip(true);
+    });
+    el.rangeCleanDilation.addEventListener('input', () => { el.cleanDilationVal.textContent = el.rangeCleanDilation.value; });
+    el.rangeCleanThreshold.addEventListener('input', () => { el.cleanThresholdVal.textContent = parseFloat(el.rangeCleanThreshold.value).toFixed(2); });
     el.btnClearAll.addEventListener('click', clearAllBatch);
     el.btnOcrAll.addEventListener('click', () => runBatchQueue('ocr_only'));
     el.btnTranslateAll.addEventListener('click', () => runBatchQueue('translate_only'));
@@ -586,14 +568,6 @@
       const isVisible = el.exportMenu.style.display === 'flex';
       el.exportMenu.style.display = isVisible ? 'none' : 'flex';
     });
-
-    if (el.btnExportCleanZip) {
-      el.btnExportCleanZip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        el.exportMenu.style.display = 'none';
-        exportCleanedImagesZip();
-      });
-    }
 
     el.btnExportTxt.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -606,14 +580,6 @@
       el.exportMenu.style.display = 'none';
       exportFullChapter('doc');
     });
-
-    if (el.btnExportBundleZip) {
-      el.btnExportBundleZip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        el.exportMenu.style.display = 'none';
-        exportBundleZip();
-      });
-    }
 
     el.btnCopyChapter.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -681,9 +647,9 @@
     });
 
     // Lightbox Close
-    el.btnCloseLightbox.addEventListener('click', () => el.lightboxModal.style.display = 'none');
+    el.btnCloseLightbox.addEventListener('click', closeLightbox);
     el.lightboxModal.addEventListener('click', (e) => {
-      if (e.target === el.lightboxModal) el.lightboxModal.style.display = 'none';
+      if (e.target === el.lightboxModal) closeLightbox();
     });
 
     // Settings Modal
@@ -694,218 +660,6 @@
     el.btnCloseSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnCancelSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnSaveSettings.addEventListener('click', saveSettings);
-
-    // =========================================================================
-    // GIAI ĐOẠN 2: EVENT LISTENERS
-    // =========================================================================
-
-    // 1. Thu gọn tất cả & Soát bản dịch
-    if (el.btnToggleCollapseAll) {
-      el.btnToggleCollapseAll.addEventListener('click', toggleCollapseAll);
-    }
-    if (el.btnOpenProofread) {
-      el.btnOpenProofread.addEventListener('click', () => openProofread(0));
-    }
-
-    // 2. Bộ lọc tiến độ
-    if (el.filterAll) el.filterAll.addEventListener('click', () => setFilter('all'));
-    if (el.filterDone) el.filterDone.addEventListener('click', () => setFilter('done'));
-    if (el.filterPending) el.filterPending.addEventListener('click', () => setFilter('pending'));
-    if (el.filterError) el.filterError.addEventListener('click', () => setFilter('error'));
-    if (el.btnJumpPending) el.btnJumpPending.addEventListener('click', jumpToFirstPending);
-
-    // 3. Bottom Action Bar
-    if (el.btnOpenBottomSheet) {
-      el.btnOpenBottomSheet.addEventListener('click', openBottomSheet);
-    }
-    if (el.btnCloseBottomSheet) {
-      el.btnCloseBottomSheet.addEventListener('click', closeBottomSheet);
-    }
-    if (el.bottomSheetBackdrop) {
-      el.bottomSheetBackdrop.addEventListener('click', closeBottomSheet);
-    }
-    if (el.btnBottomProcessAll) {
-      el.btnBottomProcessAll.addEventListener('click', () => {
-        if (state.isQueueRunning) {
-          state.stopQueueRequested = true;
-          if (el.btnStopQueue) el.btnStopQueue.click();
-        } else {
-          runBatchQueue('all');
-        }
-      });
-    }
-    if (el.btnBottomCleanAll) {
-      el.btnBottomCleanAll.addEventListener('click', runCleanQueue);
-    }
-    if (el.btnBottomQuickTxt) {
-      el.btnBottomQuickTxt.addEventListener('click', () => exportFullChapter('txt'));
-    }
-
-    // 4. Bottom Sheet Menu Items
-    if (el.sheetBtnOcrAll) {
-      el.sheetBtnOcrAll.addEventListener('click', () => {
-        closeBottomSheet();
-        runBatchQueue('ocr_only');
-      });
-    }
-    if (el.sheetBtnTransAll) {
-      el.sheetBtnTransAll.addEventListener('click', () => {
-        closeBottomSheet();
-        runBatchQueue('translate_only');
-      });
-    }
-    if (el.sheetBtnCleanAll) {
-      el.sheetBtnCleanAll.addEventListener('click', () => {
-        closeBottomSheet();
-        runCleanQueue();
-      });
-    }
-    if (el.sheetBtnDownloadTxt) {
-      el.sheetBtnDownloadTxt.addEventListener('click', () => {
-        closeBottomSheet();
-        exportFullChapter('txt');
-      });
-    }
-    if (el.sheetBtnCleanZip) {
-      el.sheetBtnCleanZip.addEventListener('click', () => {
-        closeBottomSheet();
-        exportCleanedImagesZip();
-      });
-    }
-    if (el.sheetBtnBundleZip) {
-      el.sheetBtnBundleZip.addEventListener('click', () => {
-        closeBottomSheet();
-        exportBundleZip();
-      });
-    }
-    if (el.sheetBtnDownloadDoc) {
-      el.sheetBtnDownloadDoc.addEventListener('click', () => {
-        closeBottomSheet();
-        exportFullChapter('doc');
-      });
-    }
-    if (el.sheetBtnCopyAll) {
-      el.sheetBtnCopyAll.addEventListener('click', () => {
-        closeBottomSheet();
-        copyChapterToClipboard();
-      });
-    }
-    if (el.sheetBtnOpenExport) {
-      el.sheetBtnOpenExport.addEventListener('click', () => {
-        closeBottomSheet();
-        if (el.btnOpenExportModal) el.btnOpenExportModal.click();
-      });
-    }
-    if (el.sheetBtnClearAll) {
-      el.sheetBtnClearAll.addEventListener('click', () => {
-        closeBottomSheet();
-        clearAllBatch();
-      });
-    }
-
-    // 5. Proofreading Overlay Events
-    if (el.btnCloseProofread) {
-      el.btnCloseProofread.addEventListener('click', closeProofread);
-    }
-    if (el.btnProofreadPrev) {
-      el.btnProofreadPrev.addEventListener('click', () => navigateProofread(-1));
-    }
-    if (el.btnProofreadNext) {
-      el.btnProofreadNext.addEventListener('click', () => navigateProofread(1));
-    }
-    if (el.btnProofreadZoomIn) {
-      el.btnProofreadZoomIn.addEventListener('click', () => zoomProofread(25));
-    }
-    if (el.btnProofreadZoomOut) {
-      el.btnProofreadZoomOut.addEventListener('click', () => zoomProofread(-25));
-    }
-    if (el.btnProofreadZoomReset) {
-      el.btnProofreadZoomReset.addEventListener('click', () => {
-        state.proofreadZoom = 100;
-        renderProofreadCurrentPage();
-      });
-    }
-    if (el.btnProofreadCopyJp) {
-      el.btnProofreadCopyJp.addEventListener('click', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) copyToClipboard(item.ocrText, 'Đã copy tiếng Nhật!');
-      });
-    }
-    if (el.btnProofreadCopyVi) {
-      el.btnProofreadCopyVi.addEventListener('click', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) copyToClipboard(item.viText, 'Đã copy bản dịch!');
-      });
-    }
-    if (el.proofreadViText) {
-      el.proofreadViText.addEventListener('input', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) {
-          item.viText = el.proofreadViText.value;
-          scheduleSave(item);
-          updateCardDOM(item);
-        }
-      });
-    }
-    if (el.proofreadJpText) {
-      el.proofreadJpText.addEventListener('input', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) {
-          item.ocrText = el.proofreadJpText.value;
-          scheduleSave(item);
-          updateCardDOM(item);
-        }
-      });
-    }
-    if (el.btnProofreadCleanSingle) {
-      el.btnProofreadCleanSingle.addEventListener('click', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) cleanSingleImage(item);
-      });
-    }
-    if (el.btnProofreadTransSingle) {
-      el.btnProofreadTransSingle.addEventListener('click', () => {
-        const item = state.images[state.proofreadIndex];
-        if (item) translateSingleText(item);
-      });
-    }
-
-    // Touch Swipe trên Proofreading Overlay (Dành riêng cho màn hình cảm ứng di động)
-    let touchStartX = 0;
-    let touchEndX = 0;
-    if (el.proofreadImg) {
-      el.proofreadImg.addEventListener('touchstart', (e) => {
-        touchStartX = e.changedTouches[0].screenX;
-      }, { passive: true });
-
-      el.proofreadImg.addEventListener('touchend', (e) => {
-        touchEndX = e.changedTouches[0].screenX;
-        const diff = touchEndX - touchStartX;
-        if (Math.abs(diff) > 50) {
-          if (diff > 0) navigateProofread(-1); // Vuốt sang phải -> về trang trước
-          else navigateProofread(1); // Vuốt sang trái -> sang trang sau
-        }
-      }, { passive: true });
-    }
-
-    // Keyboard Shortcuts khi Soát Bản Dịch (ArrowLeft, ArrowRight, Escape)
-    window.addEventListener('keydown', (e) => {
-      if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
-        if (document.activeElement === el.proofreadViText || document.activeElement === el.proofreadJpText) {
-          return; // Đang gõ văn bản thì không bắt phím mũi tên
-        }
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          navigateProofread(-1);
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          navigateProofread(1);
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          closeProofread();
-        }
-      }
-    });
   }
 
   // Format File Size
@@ -1021,16 +775,30 @@
         sizeStr: sizeStr,
         base64: base64,
         status: 'idle',
-        cleanStatus: 'idle',
-        cleanedBase64: '',
-        currentView: 'original',
         dialogues: [],
         ocrText: '',
         viText: '',
         tokens: 0,
         seq: nextSeq(),
-        stage: 0
+        stage: 0,
+        // Bước tẩy chữ: trạng thái riêng, ảnh sạch nằm trong IndexedDB (kho "cleaned")
+        cleanStatus: 'idle',
+        hasCleaned: false,
+        cleanedMime: '',
+        hasOriginal: false
       };
+
+      // Bản hiển thị đã bị nén (<=1400px) -> giữ thêm ảnh gốc để tẩy chữ ở độ phân giải gốc
+      if (compressed) {
+        try {
+          const buffer = await readFileAsArrayBuffer(file);
+          const okOrig = await store.putOriginal({ id: item.id, mime: file.type || 'image/jpeg', data: buffer });
+          item.hasOriginal = !!okOrig;
+          if (!okOrig) reportSaveFailure();
+        } catch (e) {
+          item.hasOriginal = false;
+        }
+      }
 
       state.images.push(item);
       persistNewPage(item);
@@ -1059,10 +827,15 @@
     el.mangaRowsList.style.display = hasImages ? 'flex' : 'none';
 
     // Toolbar states
-    updateToolbarStates(state.isQueueRunning);
+    el.btnProcessAll.disabled = !hasImages || state.isQueueRunning;
+    el.btnOcrAll.disabled = !hasImages || state.isQueueRunning;
+    el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
+    el.btnClearAll.disabled = !hasImages || state.isQueueRunning;
+    el.btnExportChapter.disabled = !hasImages;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = !hasImages;
 
-    el.statBadge.textContent = `${state.images.length} trang trong danh sách`;
-    updateFilterCounts();
+    updateStatBadge();
+    if (el.btnCleanAll) el.btnCleanAll.disabled = !hasImages || state.isQueueRunning;
 
     if (!hasImages) {
       el.mangaRowsList.innerHTML = '';
@@ -1075,45 +848,32 @@
       const row = createRowElement(item, index + 1);
       el.mangaRowsList.appendChild(row);
     });
-
-    // Áp dụng bộ lọc hiện tại
-    applyCurrentFilterToDOM();
   }
 
   // Create Single Row Element
   function createRowElement(item, displayIndex) {
     const card = document.createElement('div');
-    card.className = `manga-row-card ${item.status}${state.isAllCollapsed ? ' is-collapsed' : ''}`;
+    card.className = `manga-row-card ${item.status}`;
     card.id = `row-${item.id}`;
-
-    const cleanLabel = item.cleanStatus === 'done'
-      ? 'TẨY: XONG'
-      : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
-
-    const summaryText = (item.viText || item.ocrText || '').trim().replace(/\s+/g, ' ').slice(0, 45);
 
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
-          <button type="button" class="btn-row-collapse-toggle" title="Thu gọn / Mở rộng thẻ này">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </button>
           <button class="btn-zoom-preview" title="Chỉnh kích thước ảnh (Phóng to / Thu nhỏ)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
           </button>
-          <span class="row-title">Trang ${displayIndex}: ${escapeHtml(item.name)}</span>
+          <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
           <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
-          <span class="badge-clean ${item.cleanStatus || 'idle'}">${cleanLabel}</span>
-          <span class="row-collapsed-summary">${escapeHtml(summaryText || 'Chưa dịch')}</span>
+          <span class="badge-clean ${item.cleanStatus || 'idle'}">${cleanBadgeText(item)}</span>
         </div>
         <div class="row-header-right">
-          <button class="btn-row-action btn-row-proofread" title="Soát bản dịch toàn màn hình cho trang này">Soát</button>
           <button class="btn-row-action btn-row-clean">Tẩy chữ</button>
+          <button class="btn-row-action btn-row-view-clean" style="${item.hasCleaned ? '' : 'display:none;'}">Xem ảnh sạch</button>
           <button class="btn-row-action btn-row-ocr">OCR</button>
-          <button class="btn-row-action btn-row-trans">Dịch</button>
+          <button class="btn-row-action btn-row-trans">Translate</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
           <button class="btn-row-delete" title="Xóa trang này">&times;</button>
         </div>
@@ -1132,11 +892,7 @@
               </svg>
             </button>
           </div>
-          <div class="thumb-switcher" style="${item.cleanedBase64 ? 'display:flex;' : 'display:none;'}">
-            <button type="button" class="thumb-switch-btn btn-view-orig ${item.currentView !== 'cleaned' ? 'active' : ''}">Gốc</button>
-            <button type="button" class="thumb-switch-btn cleaned btn-view-clean ${item.currentView === 'cleaned' ? 'active' : ''}">Đã tẩy</button>
-          </div>
-          <img src="${(item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
+          <img src="${item.base64}" alt="${escapeHtml(item.name)}" title="Bấm để xem toàn màn hình (hoặc kéo rê để di chuyển)">
         </div>
 
         <!-- Col 2: OCR Japanese -->
@@ -1151,12 +907,8 @@
         <!-- Col 3: Translation Vietnamese -->
         <div class="col-text trans">
           <div class="text-panel-header">
-            <span class="text-panel-title">Bản dịch (VI)</span>
-            <div class="text-panel-actions" style="display:flex; align-items:center; gap:4px;">
-              <button type="button" class="btn-panel-copy btn-mini-clean" title="Tẩy chữ riêng trang này">✨ Tẩy</button>
-              <button type="button" class="btn-panel-copy btn-mini-trans" title="Dịch lại riêng trang này">⚡ Dịch</button>
-              <button type="button" class="btn-panel-copy btn-copy-vi" title="Copy bản dịch">Copy</button>
-            </div>
+            <span class="text-panel-title">Translation (Tiếng Việt)</span>
+            <button class="btn-panel-copy btn-copy-vi">Copy VI</button>
           </div>
           <textarea class="text-panel-editor textarea-vi" placeholder="Chưa có bản dịch...">${escapeHtml(item.viText)}</textarea>
         </div>
@@ -1170,27 +922,6 @@
     const cardSlider = card.querySelector('.card-slider');
     const cardReset = card.querySelector('.card-reset-size');
     const imgEl = card.querySelector('.col-thumb img');
-
-    // Switcher Gốc vs Đã tẩy
-    const btnViewOrig = card.querySelector('.btn-view-orig');
-    const btnViewClean = card.querySelector('.btn-view-clean');
-    if (btnViewOrig && btnViewClean) {
-      btnViewOrig.addEventListener('click', (e) => {
-        e.stopPropagation();
-        item.currentView = 'original';
-        imgEl.src = item.base64;
-        btnViewOrig.classList.add('active');
-        btnViewClean.classList.remove('active');
-      });
-      btnViewClean.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!item.cleanedBase64) return;
-        item.currentView = 'cleaned';
-        imgEl.src = item.cleanedBase64;
-        btnViewClean.classList.add('active');
-        btnViewOrig.classList.remove('active');
-      });
-    }
 
     // 1. Chỉ hiện thanh trượt khi ấn vào nút [⤢] (toggle bật/tắt)
     btnZoom.addEventListener('click', (e) => {
@@ -1240,7 +971,7 @@
     imgEl.addEventListener('dragstart', (e) => e.preventDefault());
 
     thumbCol.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.card-size-widget') || e.target.closest('.thumb-switcher')) return;
+      if (e.target.closest('.card-size-widget')) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return; // Chỉ nhận click chuột trái hoặc chạm ngón tay
       isPointerDown = true;
       hasDragged = false;
@@ -1294,7 +1025,7 @@
         e.stopPropagation();
         return;
       }
-      el.lightboxImg.src = imgEl.src;
+      el.lightboxImg.src = item.base64;
       el.lightboxModal.style.display = 'flex';
     });
 
@@ -1333,50 +1064,11 @@
       renderBatchView();
     });
 
-    // Giai Đoạn 2: Nút thu gọn thẻ và Soát bản dịch
-    const btnCollapse = card.querySelector('.btn-row-collapse-toggle');
-    if (btnCollapse) {
-      btnCollapse.addEventListener('click', (e) => {
-        e.stopPropagation();
-        card.classList.toggle('is-collapsed');
-      });
-    }
-
-    const btnRowProofread = card.querySelector('.btn-row-proofread');
-    if (btnRowProofread) {
-      btnRowProofread.addEventListener('click', () => {
-        const idx = state.images.findIndex(x => x.id === item.id);
-        if (idx !== -1) openProofread(idx);
-      });
-    }
-
-    const btnMiniClean = card.querySelector('.btn-mini-clean');
-    if (btnMiniClean) {
-      btnMiniClean.addEventListener('click', (e) => {
-        e.stopPropagation();
-        cleanSingleImage(item);
-      });
-    }
-
-    const btnMiniTrans = card.querySelector('.btn-mini-trans');
-    if (btnMiniTrans) {
-      btnMiniTrans.addEventListener('click', (e) => {
-        e.stopPropagation();
-        translateSingleText(item);
-      });
-    }
-
-    const btnClean = card.querySelector('.btn-row-clean');
-    if (btnClean) btnClean.addEventListener('click', () => cleanSingleImage(item));
-
-    const btnOcr = card.querySelector('.btn-row-ocr');
-    if (btnOcr) btnOcr.addEventListener('click', () => processSingleImage(item, 'ocr_only'));
-
-    const btnTrans = card.querySelector('.btn-row-trans');
-    if (btnTrans) btnTrans.addEventListener('click', () => translateSingleText(item));
-
-    const btnAll = card.querySelector('.btn-row-all');
-    if (btnAll) btnAll.addEventListener('click', () => processSingleImage(item, 'all'));
+    card.querySelector('.btn-row-clean').addEventListener('click', () => cleanSingleImage(item));
+    card.querySelector('.btn-row-view-clean').addEventListener('click', () => openCleanedPreview(item));
+    card.querySelector('.btn-row-ocr').addEventListener('click', () => processSingleImage(item, 'ocr_only'));
+    card.querySelector('.btn-row-trans').addEventListener('click', () => translateSingleText(item));
+    card.querySelector('.btn-row-all').addEventListener('click', () => processSingleImage(item, 'all'));
 
     return card;
   }
@@ -1386,41 +1078,21 @@
     const card = document.getElementById(`row-${item.id}`);
     if (!card) return;
 
-    card.className = `manga-row-card ${item.status}${card.classList.contains('is-collapsed') ? ' is-collapsed' : ''}`;
+    card.className = `manga-row-card ${item.status}`;
     const badge = card.querySelector('.badge-status');
     if (badge) {
       badge.className = `badge-status ${item.status}`;
       badge.textContent = item.status.toUpperCase();
     }
 
-    const badgeClean = card.querySelector('.badge-clean');
-    if (badgeClean) {
-      badgeClean.className = `badge-clean ${item.cleanStatus || 'idle'}`;
-      badgeClean.textContent = item.cleanStatus === 'done'
-        ? 'TẨY: XONG'
-        : (item.cleanStatus === 'processing' ? 'ĐANG TẨY...' : (item.cleanStatus === 'error' ? 'TẨY LỖI' : 'CHƯA TẨY'));
+    const cleanBadge = card.querySelector('.badge-clean');
+    if (cleanBadge) {
+      cleanBadge.className = `badge-clean ${item.cleanStatus || 'idle'}`;
+      cleanBadge.textContent = cleanBadgeText(item);
+      if (item.cleanStatus === 'error' && item.cleanError) cleanBadge.title = item.cleanError;
     }
-
-    const summaryEl = card.querySelector('.row-collapsed-summary');
-    if (summaryEl) {
-      const summaryText = (item.viText || item.ocrText || '').trim().replace(/\s+/g, ' ').slice(0, 45);
-      summaryEl.textContent = summaryText || 'Chưa dịch';
-    }
-
-    const switcher = card.querySelector('.thumb-switcher');
-    if (switcher) switcher.style.display = item.cleanedBase64 ? 'flex' : 'none';
-
-    const btnViewOrig = card.querySelector('.btn-view-orig');
-    const btnViewClean = card.querySelector('.btn-view-clean');
-    if (btnViewOrig && btnViewClean) {
-      btnViewOrig.classList.toggle('active', item.currentView !== 'cleaned');
-      btnViewClean.classList.toggle('active', item.currentView === 'cleaned');
-    }
-
-    const imgEl = card.querySelector('.col-thumb img');
-    if (imgEl) {
-      imgEl.src = (item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64;
-    }
+    const btnViewClean = card.querySelector('.btn-row-view-clean');
+    if (btnViewClean) btnViewClean.style.display = item.hasCleaned ? '' : 'none';
 
     const textareaJp = card.querySelector('.textarea-jp');
     if (textareaJp) textareaJp.value = item.ocrText;
@@ -1428,141 +1100,9 @@
     const textareaVi = card.querySelector('.textarea-vi');
     if (textareaVi) textareaVi.value = item.viText;
 
+    updateStatBadge();
     el.btnExportChapter.disabled = state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = state.images.length === 0;
-
-    // Cập nhật bộ lọc và tiến độ
-    updateFilterCounts();
-    applyFilterToCardElement(card, item);
-
-    // Cập nhật Proofreading Overlay nếu đang mở đúng trang này
-    if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
-      const curItem = state.images[state.proofreadIndex];
-      if (curItem && curItem.id === item.id) {
-        renderProofreadCurrentPage();
-      }
-    }
-  }
-
-  // Tẩy chữ cho 1 ảnh đơn lẻ (với cơ chế retry 2 lần khi gặp lỗi kết nối/500/timeout)
-  async function cleanSingleImage(item, maxRetries = 2) {
-    if (item.cleanStatus === 'processing') return false;
-    item.cleanStatus = 'processing';
-    updateCardDOM(item);
-
-    const payload = {
-      imageBase64: item.base64,
-      cleanSFX: Boolean(state.settings.cleanSFX),
-      dilationPx: Number(state.settings.cleanDilation || 4),
-      detThreshold: Number(state.settings.cleanThreshold || 0.20),
-      inpaintModel: String(state.settings.cleanModel || 'anime-lama')
-    };
-
-    let attempt = 0;
-    let lastError = null;
-
-    while (attempt <= maxRetries) {
-      try {
-        const res = await fetch('/api/clean', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.cleanedImageBase64) {
-          throw new Error(data.error || `Server lỗi mã ${res.status}`);
-        }
-
-        let cleanB64 = data.cleanedImageBase64;
-        if (!cleanB64.startsWith('data:image/')) {
-          cleanB64 = 'data:image/png;base64,' + cleanB64;
-        }
-
-        item.cleanedBase64 = cleanB64;
-        item.cleanStatus = 'done';
-        item.currentView = 'cleaned'; // Tự động hiển thị bản đã tẩy trên thumbnail
-
-        await store.putCleaned({ id: item.id, cleanedBase64: item.cleanedBase64 });
-        scheduleSave(item, 0);
-        updateCardDOM(item);
-        showToast(`Đã tẩy chữ thành công trang: ${item.name}`);
-        return true;
-      } catch (err) {
-        lastError = err;
-        attempt++;
-        if (attempt <= maxRetries) {
-          console.warn(`[Clean Retry] Trang ${item.name} lỗi lần ${attempt}, đang thử lại sau 1.5s...`);
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      }
-    }
-
-    item.cleanStatus = 'error';
-    updateCardDOM(item);
-    scheduleSave(item, 0);
-    showToast(`Lỗi tẩy chữ trang ${item.name}: ${lastError ? lastError.message : 'Thất bại'}`);
-    return false;
-  }
-
-  // Tẩy chữ hàng loạt cho Chapter (Giới hạn 2 request đồng thời, có retry)
-  async function runCleanQueue() {
-    if (state.isQueueRunning) return;
-
-    const queueItems = state.images.filter(img => !img.cleanedBase64 || img.cleanStatus !== 'done');
-    if (queueItems.length === 0) {
-      showToast('Tất cả các trang trong danh sách đã được tẩy chữ xong!');
-      return;
-    }
-
-    state.isQueueRunning = true;
-    state.stopQueueRequested = false;
-    el.queueProgressBar.style.display = 'flex';
-    el.btnStopQueue.textContent = 'Dừng lại';
-
-    updateToolbarStates(true);
-
-    let completed = 0;
-    const total = queueItems.length;
-    let nextIndex = 0;
-    const concurrency = 2; // Giới hạn 2 request đồng thời
-
-    async function cleanWorker(workerId) {
-      while (nextIndex < total && !state.stopQueueRequested) {
-        const itemIdx = nextIndex++;
-        if (itemIdx >= total) break;
-
-        const currentItem = queueItems[itemIdx];
-        if (!currentItem) break;
-
-        el.queueProgressText.textContent = `[Luồng ${workerId + 1}] Đang tẩy chữ: ${currentItem.name} (${completed + 1}/${total})...`;
-        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
-
-        await cleanSingleImage(currentItem);
-
-        completed++;
-        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
-
-        if (!state.stopQueueRequested && nextIndex < total) {
-          await new Promise(r => setTimeout(r, 300));
-        }
-      }
-    }
-
-    await Promise.all([
-      cleanWorker(0),
-      cleanWorker(1)
-    ]);
-
-    el.queueProgressFill.style.width = '100%';
-    el.queueProgressText.textContent = `Hoàn thành tẩy chữ ${completed} / ${total} trang!`;
-
-    setTimeout(() => {
-      el.queueProgressBar.style.display = 'none';
-      state.isQueueRunning = false;
-      updateToolbarStates(false);
-      renderBatchView();
-    }, 1500);
   }
 
   // Process a Single Image via API
@@ -1725,17 +1265,6 @@
         completed++;
         el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
 
-        // Giai Đoạn 2: Hiển thị tiến độ x/N trên nút Dừng lại
-        if (el.btnBottomProcessAll) {
-          const bText = el.btnBottomProcessAll.querySelector('.btn-bottom-process-text');
-          if (bText) bText.textContent = `Dừng lại (${completed}/${total})`;
-        }
-        if (el.btnProcessAll) {
-          const sText = el.btnProcessAll.querySelector('.btn-process-text');
-          if (sText) sText.textContent = `Dừng lại (${completed}/${total})`;
-        }
-        updateFilterCounts();
-
         // Delay 1.8s per worker to strictly maintain < 15 RPM per key
         if (!state.stopQueueRequested && nextIndex < total) {
           await new Promise(r => setTimeout(r, 1800));
@@ -1765,303 +1294,358 @@
     }, 1500);
   }
 
-  function updateToolbarStates(isRunning) {
-    const hasImages = state.images.length > 0;
+  // ---------------------------------------------------------------------------
+  // BƯỚC TẨY CHỮ + ZIP (Giai đoạn 1)
+  //  - Ảnh nguồn: bản gốc trong kho "originals" (nếu bản hiển thị đã bị nén), ngược lại dùng chính base64
+  //  - Gọi /api/clean trước; lỗi/quá giới hạn dung lượng thì gọi thẳng backend (giống tab Xóa chữ)
+  //  - Tối đa 2 request đồng thời, mỗi trang thử lại tối đa 3 lần với lỗi tạm thời
+  //  - OCR/dịch luôn chạy trên ảnh GỐC (ảnh đã tẩy không còn chữ)
+  // ---------------------------------------------------------------------------
+  const CLEAN_CONCURRENCY = 2;
+  const CLEAN_MAX_ATTEMPTS = 3;
+  const IMG_EXT_RE = /\.(jpe?g|png|webp|gif|bmp)$/i;
 
-    // Subbar buttons
-    if (el.btnCleanAll) el.btnCleanAll.disabled = isRunning || !hasImages;
-    el.btnProcessAll.disabled = !hasImages;
-    el.btnOcrAll.disabled = isRunning || !hasImages;
-    el.btnTranslateAll.disabled = isRunning || !hasImages;
-    el.btnClearAll.disabled = isRunning || !hasImages;
-    if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || !hasImages;
-    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || !hasImages;
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-    // Bottom Action Bar
-    if (el.btnBottomProcessAll) {
-      el.btnBottomProcessAll.disabled = !hasImages;
-      el.btnBottomProcessAll.classList.toggle('is-running', isRunning);
-      const textEl = el.btnBottomProcessAll.querySelector('.btn-bottom-process-text');
-      if (textEl) {
-        textEl.textContent = isRunning ? 'Dừng lại' : 'OCR + Dịch tất cả';
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Không đọc được tệp'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function dataUrlToBuffer(dataUrl) {
+    const m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(dataUrl || '');
+    if (!m) throw new Error('Dữ liệu ảnh không hợp lệ');
+    const mime = m[1] || 'image/png';
+    const bin = m[2] ? atob(m[3]) : decodeURIComponent(m[3]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return { mime, buffer: bytes.buffer };
+  }
+
+  function bufferToDataUrl(buffer, mime) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Không đọc được ảnh'));
+      reader.readAsDataURL(new Blob([buffer], { type: mime || 'image/jpeg' }));
+    });
+  }
+
+  function cleanBadgeText(item) {
+    const labels = { idle: 'CHỜ', processing: 'ĐANG XỬ LÝ', done: 'XONG', error: 'LỖI' };
+    return 'Tẩy: ' + (labels[item.cleanStatus || 'idle'] || 'CHỜ');
+  }
+
+  function updateStatBadge() {
+    if (!el.statBadge) return;
+    const cleaned = state.images.filter((i) => i.hasCleaned).length;
+    el.statBadge.textContent = `${state.images.length} trang trong danh sách` + (cleaned ? ` · ${cleaned} đã tẩy` : '');
+  }
+
+  function updateProcessAllLabel() {
+    if (!el.btnProcessAllLabel) return;
+    const c = state.settings.stepClean;
+    const t = state.settings.stepTranslate;
+    el.btnProcessAllLabel.textContent = (c && t) ? 'Tẩy chữ + OCR + Dịch tất cả' : (c ? 'Tẩy chữ tất cả' : 'OCR + Translate all');
+  }
+
+  let lightboxObjUrl = null;
+  function closeLightbox() {
+    el.lightboxModal.style.display = 'none';
+    if (lightboxObjUrl) { URL.revokeObjectURL(lightboxObjUrl); lightboxObjUrl = null; }
+  }
+
+  async function openCleanedPreview(item) {
+    const rec = await store.getCleaned(item.id);
+    if (!rec || !rec.data) { showToast('Lỗi: không đọc được ảnh sạch trong bộ nhớ trình duyệt.'); return; }
+    if (lightboxObjUrl) URL.revokeObjectURL(lightboxObjUrl);
+    lightboxObjUrl = URL.createObjectURL(new Blob([rec.data], { type: rec.mime || 'image/png' }));
+    el.lightboxImg.src = lightboxObjUrl;
+    el.lightboxModal.style.display = 'flex';
+  }
+
+  async function getCleanSourceDataUrl(item) {
+    if (item.hasOriginal) {
+      const rec = await store.getOriginal(item.id);
+      if (rec && rec.data) return bufferToDataUrl(rec.data, rec.mime);
+    }
+    return item.base64; // ảnh nhỏ không bị nén, hoặc không đọc được bản gốc
+  }
+
+  async function postClean(url, payload) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      let msg = '';
+      try { const j = await res.json(); msg = String(j.detail || j.error || ''); } catch (e) { /* phản hồi không phải JSON */ }
+      const err = new Error(msg || `Server trả về mã lỗi ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
+  }
+
+  function isRetryableCleanError(err) {
+    const st = err && err.status;
+    return st === undefined || st === 408 || st === 425 || st === 429 || st >= 500;
+  }
+
+  async function requestClean(imageBase64) {
+    const payload = {
+      imageBase64,
+      cleanSFX: !!state.settings.cleanSFX,
+      dilationPx: state.settings.cleanDilation,
+      detThreshold: state.settings.cleanThreshold,
+      inpaintModel: state.settings.cleanModel
+    };
+    const direct = (state.settings.backendUrl || '').trim().replace(/\/+$/, '') + '/clean_page';
+    let lastErr;
+    for (let attempt = 0; attempt < CLEAN_MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        await sleep(1500 * attempt);
+        if (state.stopQueueRequested) break;
+      }
+      try {
+        try {
+          return await postClean('/api/clean', payload);
+        } catch (viaProxyErr) {
+          // /api/clean lỗi (vd. ảnh vượt giới hạn body của Vercel) -> gọi thẳng backend như tab Xóa chữ
+          return await postClean(direct, payload);
+        }
+      } catch (err) {
+        lastErr = err;
+        if (!isRetryableCleanError(err)) break;
       }
     }
-    if (el.btnBottomCleanAll) el.btnBottomCleanAll.disabled = isRunning || !hasImages;
-    if (el.btnBottomQuickTxt) el.btnBottomQuickTxt.disabled = isRunning || !hasImages;
-    if (el.btnOpenBottomSheet) el.btnOpenBottomSheet.disabled = isRunning;
-
-    const subbarProcessText = el.btnProcessAll ? el.btnProcessAll.querySelector('.btn-process-text') : null;
-    if (subbarProcessText) {
-      subbarProcessText.textContent = isRunning ? 'Dừng lại' : 'OCR + Dịch tất cả';
-    }
-
-    updateFilterCounts();
+    throw lastErr || new Error('Không tẩy chữ được.');
   }
 
-  // ---------------------------------------------------------------------------
-  // Giai Đoạn 2: Quản lý Bộ Lọc & Tiến Độ (Filter & Counts)
-  // ---------------------------------------------------------------------------
-  function updateFilterCounts() {
-    const total = state.images.length;
-    let done = 0;
-    let pending = 0;
-    let error = 0;
-
-    state.images.forEach(img => {
-      const isErr = img.status === 'error' || img.cleanStatus === 'error';
-      const isDone = (img.stage || 0) >= 2 && img.status === 'done';
-      if (isErr) error++;
-      if (isDone) done++;
-      if (!isDone && !isErr) pending++;
-    });
-
-    if (el.countAll) el.countAll.textContent = total;
-    if (el.countDone) el.countDone.textContent = done;
-    if (el.countPending) el.countPending.textContent = pending;
-    if (el.countError) el.countError.textContent = error;
-  }
-
-  function applyFilterToCardElement(card, item) {
-    if (!card || !item) return;
-    const filter = state.currentFilter || 'all';
-    if (filter === 'all') {
-      card.style.display = '';
-      return;
-    }
-    const isErr = item.status === 'error' || item.cleanStatus === 'error';
-    const isDone = (item.stage || 0) >= 2 && item.status === 'done';
-
-    let show = true;
-    if (filter === 'done') show = isDone;
-    else if (filter === 'pending') show = !isDone;
-    else if (filter === 'error') show = isErr;
-
-    card.style.display = show ? '' : 'none';
-  }
-
-  function applyCurrentFilterToDOM() {
-    state.images.forEach(item => {
-      const card = document.getElementById(`row-${item.id}`);
-      if (card) applyFilterToCardElement(card, item);
-    });
-  }
-
-  function setFilter(filterType) {
-    state.currentFilter = filterType;
-    [el.filterAll, el.filterDone, el.filterPending, el.filterError].forEach(btn => {
-      if (btn) btn.classList.toggle('active', btn.dataset.filter === filterType);
-    });
-    applyCurrentFilterToDOM();
-  }
-
-  function jumpToFirstPending() {
-    const firstPending = state.images.find(img => (img.stage || 0) < 2);
-    if (!firstPending) {
-      showToast('Tất cả các trang đã hoàn thành!');
-      return;
-    }
-    if (state.currentFilter === 'done') {
-      setFilter('all');
-    }
-    const card = document.getElementById(`row-${firstPending.id}`);
-    if (card) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.style.outline = '2px solid #f59e0b';
-      card.style.boxShadow = '0 0 20px rgba(245, 158, 11, 0.4)';
-      setTimeout(() => {
-        card.style.outline = '';
-        card.style.boxShadow = '';
-      }, 2500);
-      showToast(`Đã cuộn tới trang chưa xong: ${firstPending.name}`);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Giai Đoạn 2: Thu Gọn / Mở Rộng Tất Cả
-  // ---------------------------------------------------------------------------
-  function toggleCollapseAll() {
-    state.isAllCollapsed = !state.isAllCollapsed;
-    document.querySelectorAll('.manga-row-card').forEach(card => {
-      card.classList.toggle('is-collapsed', state.isAllCollapsed);
-    });
-    if (el.textToggleCollapse) {
-      el.textToggleCollapse.textContent = state.isAllCollapsed ? 'Mở rộng' : 'Thu gọn';
-    }
-    showToast(state.isAllCollapsed ? 'Đã thu gọn danh sách trang' : 'Đã mở rộng toàn bộ danh sách');
-  }
-
-  // ---------------------------------------------------------------------------
-  // Giai Đoạn 2: Bottom Sheet Menu
-  // ---------------------------------------------------------------------------
-  function openBottomSheet() {
-    if (el.bottomSheetBackdrop && el.bottomSheetCard) {
-      el.bottomSheetBackdrop.style.display = 'block';
-      el.bottomSheetCard.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    }
-  }
-
-  function closeBottomSheet() {
-    if (el.bottomSheetBackdrop && el.bottomSheetCard) {
-      el.bottomSheetBackdrop.style.display = 'none';
-      el.bottomSheetCard.style.display = 'none';
-      document.body.style.overflow = '';
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Giai Đoạn 2: Chế Độ Soát Bản Dịch (Proofreading Mode)
-  // ---------------------------------------------------------------------------
-  function openProofread(index = 0) {
-    if (state.images.length === 0) {
-      showToast('Vui lòng thêm ảnh Manga trước khi soát bản dịch.');
-      return;
-    }
-    state.proofreadIndex = Math.max(0, Math.min(state.images.length - 1, index));
-    state.proofreadZoom = 100;
-    renderProofreadCurrentPage();
-    if (el.proofreadOverlay) {
-      el.proofreadOverlay.style.display = 'flex';
-      document.body.style.overflow = 'hidden';
-    }
-  }
-
-  function closeProofread() {
-    if (el.proofreadOverlay) {
-      el.proofreadOverlay.style.display = 'none';
-      document.body.style.overflow = '';
-    }
-  }
-
-  function renderProofreadCurrentPage() {
-    const item = state.images[state.proofreadIndex];
-    if (!item) return;
-
-    if (el.proofreadTitle) el.proofreadTitle.textContent = `Soát bản dịch: ${item.name}`;
-    if (el.proofreadSubtitle) el.proofreadSubtitle.textContent = `Trang ${state.proofreadIndex + 1} / ${state.images.length} (${item.sizeStr})`;
-    if (el.proofreadPageCounter) el.proofreadPageCounter.textContent = `${state.proofreadIndex + 1} / ${state.images.length}`;
-
-    if (el.proofreadStatusBadge) {
-      el.proofreadStatusBadge.className = `badge-status ${item.status}`;
-      el.proofreadStatusBadge.textContent = item.status.toUpperCase();
-    }
-
-    if (el.proofreadImg) {
-      el.proofreadImg.src = (item.currentView === 'cleaned' && item.cleanedBase64) ? item.cleanedBase64 : item.base64;
-      el.proofreadImg.style.transform = `scale(${state.proofreadZoom / 100})`;
-    }
-    if (el.proofreadZoomText) el.proofreadZoomText.textContent = `${state.proofreadZoom}%`;
-
-    if (el.proofreadJpText) el.proofreadJpText.value = item.ocrText || '';
-    if (el.proofreadViText) el.proofreadViText.value = item.viText || '';
-
-    if (el.btnProofreadPrev) el.btnProofreadPrev.disabled = state.proofreadIndex <= 0;
-    if (el.btnProofreadNext) el.btnProofreadNext.disabled = state.proofreadIndex >= state.images.length - 1;
-  }
-
-  function navigateProofread(step) {
-    const nextIdx = state.proofreadIndex + step;
-    if (nextIdx >= 0 && nextIdx < state.images.length) {
-      state.proofreadIndex = nextIdx;
-      state.proofreadZoom = 100;
-      renderProofreadCurrentPage();
-    }
-  }
-
-  function zoomProofread(delta) {
-    state.proofreadZoom = Math.max(50, Math.min(300, state.proofreadZoom + delta));
-    if (el.proofreadImg) {
-      el.proofreadImg.style.transform = `scale(${state.proofreadZoom / 100})`;
-    }
-    if (el.proofreadZoomText) el.proofreadZoomText.textContent = `${state.proofreadZoom}%`;
-  }
-
-  // Tải file nhị phân Blob an toàn (không target=_blank)
-  function executeBlobDownload(filename, blob) {
+  async function cleanSingleImage(item) {
+    if (item.cleanStatus === 'processing') return false; // đang tẩy rồi
+    item.cleanStatus = 'processing';
+    item.cleanError = '';
+    updateCardDOM(item);
     try {
-      if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-        window.navigator.msSaveOrOpenBlob(blob, filename);
-        showToast('Đã lưu file: ' + filename);
-        return;
+      const src = await getCleanSourceDataUrl(item);
+      const data = await requestClean(src);
+      if (!data || !data.cleanedImageBase64) throw new Error('Backend không trả về ảnh đã tẩy.');
+      const { mime, buffer } = dataUrlToBuffer(data.cleanedImageBase64);
+      const saved = await store.putCleaned({ id: item.id, mime, data: buffer });
+      if (!saved) {
+        reportSaveFailure();
+        throw new Error('Không lưu được ảnh sạch vào trình duyệt (bộ nhớ đầy?).');
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        if (a.parentNode) document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 2000);
-      showToast('Đang tải file: ' + filename);
+      if (!state.images.includes(item)) { store.deleteCleaned(item.id); return false; } // trang bị xóa trong lúc chờ
+      item.hasCleaned = true;
+      item.cleanedMime = mime;
+      item.cleanStatus = 'done';
+      updateCardDOM(item);
+      scheduleSave(item, 0);
+      return true;
     } catch (err) {
-      showToast('Lỗi khi tải file ZIP: ' + err.message);
+      console.error(err);
+      item.cleanStatus = item.hasCleaned ? 'done' : 'error';
+      item.cleanError = err.message || 'Lỗi tẩy chữ';
+      updateCardDOM(item);
+      scheduleSave(item, 0);
+      showToast(`Lỗi tẩy chữ trang ${item.name}: ${item.cleanError}`);
+      return false;
     }
   }
 
-  // Xuất ZIP ảnh đã tẩy chữ (giữ nguyên tên file gốc)
-  async function exportCleanedImagesZip() {
-    if (typeof JSZip === 'undefined') {
-      showToast('Thư viện nén ZIP chưa tải xong, vui lòng thử lại sau giây lát.');
-      return;
-    }
-    const cleanedItems = state.images.filter(img => !!img.cleanedBase64);
-    if (cleanedItems.length === 0) {
-      showToast('Chưa có ảnh nào được tẩy chữ! Vui lòng bấm "Tẩy chữ" trước khi xuất.');
+  // Hàng đợi tẩy chữ: 2 luồng, bỏ qua trang đã tẩy xong (chạy tiếp phần còn lại sau khi tải lại trang)
+  async function runCleanQueue() {
+    if (state.isQueueRunning) return;
+    const queueItems = state.images.filter((img) => img.cleanStatus !== 'done');
+    if (queueItems.length === 0) {
+      showToast('Tất cả các trang đã được tẩy chữ xong!');
       return;
     }
 
-    showToast(`Đang đóng gói ${cleanedItems.length} ảnh đã tẩy vào file ZIP...`);
-    const zip = new JSZip();
+    state.isQueueRunning = true;
+    state.stopQueueRequested = false;
+    el.queueProgressBar.style.display = 'flex';
+    el.btnStopQueue.textContent = 'Dừng lại';
+    updateToolbarStates(true);
 
-    cleanedItems.forEach((img) => {
-      const b64 = img.cleanedBase64.includes(';base64,')
-        ? img.cleanedBase64.split(';base64,').pop()
-        : img.cleanedBase64;
-      zip.file(img.name, b64, { base64: true });
+    const total = queueItems.length;
+    let nextIndex = 0;
+    let completed = 0;
+    let failed = 0;
+
+    async function worker(workerId) {
+      while (nextIndex < total && !state.stopQueueRequested) {
+        const current = queueItems[nextIndex++];
+        el.queueProgressText.textContent = `Tẩy chữ [Luồng ${workerId + 1}]: ${current.name} (${completed + 1}/${total})...`;
+        const ok = await cleanSingleImage(current);
+        completed++;
+        if (!ok) failed++;
+        el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+      }
+    }
+
+    const workers = [];
+    for (let i = 0; i < Math.min(CLEAN_CONCURRENCY, total); i++) workers.push(worker(i));
+    await Promise.all(workers);
+
+    el.queueProgressFill.style.width = '100%';
+    el.queueProgressText.textContent = state.stopQueueRequested
+      ? `Đã dừng tẩy chữ: ${completed - failed}/${total} trang xong${failed ? `, ${failed} lỗi` : ''}.`
+      : `Tẩy chữ xong ${completed - failed}/${total} trang${failed ? `, ${failed} lỗi` : ''}.`;
+
+    state.isQueueRunning = false;
+    updateToolbarStates(false);
+    setTimeout(() => {
+      if (!state.isQueueRunning) el.queueProgressBar.style.display = 'none';
+    }, 2000);
+  }
+
+  // Nút chính: chạy các bước đang bật cho cả chapter (tẩy chữ trước, rồi OCR + dịch)
+  async function runSelectedSteps() {
+    if (state.isQueueRunning) return;
+    if (!state.settings.stepClean && !state.settings.stepTranslate) {
+      showToast('Vui lòng bật ít nhất một bước: Tẩy chữ hoặc OCR + Dịch.');
+      return;
+    }
+    if (state.settings.stepClean) await runCleanQueue();
+    if (state.settings.stepTranslate && !state.stopQueueRequested) await runBatchQueue('all');
+  }
+
+  // ----- Nhập ZIP (giữ tính năng nhập ZIP của tab cũ) -----
+  function isZipFile(f) {
+    return /\.zip$/i.test((f && f.name) || '') || /zip/i.test((f && f.type) || '');
+  }
+
+  function mimeFromName(name) {
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    return ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp' })[ext] || 'image/jpeg';
+  }
+
+  async function expandZipToFiles(zipFile) {
+    const zip = await JSZip.loadAsync(zipFile);
+    const entries = [];
+    zip.forEach((path, entry) => {
+      if (entry.dir) return;
+      const base = path.split('/').pop();
+      if (!base || base.charAt(0) === '.' || /(^|\/)__MACOSX\//.test(path)) return;
+      if (!IMG_EXT_RE.test(base)) return;
+      entries.push({ path, base, entry });
     });
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const filename = `Manga_Cleaned_Pages_${Date.now()}.zip`;
-    executeBlobDownload(filename, blob);
+    entries.sort((x, y) => x.path.localeCompare(y.path, undefined, { numeric: true, sensitivity: 'base' }));
+    const files = [];
+    for (const e of entries) {
+      const blob = await e.entry.async('blob');
+      files.push(new File([blob], e.base, { type: mimeFromName(e.base) }));
+    }
+    return files;
   }
 
-  // Xuất gói ZIP đầy đủ: Ảnh sạch (cleaned_images/) + Kịch bản dịch (.txt)
-  async function exportBundleZip() {
-    if (typeof JSZip === 'undefined') {
-      showToast('Thư viện nén ZIP chưa tải xong, vui lòng thử lại sau giây lát.');
+  async function addInputFiles(list) {
+    const all = [];
+    for (const f of list) {
+      if (!isZipFile(f)) { all.push(f); continue; }
+      if (typeof JSZip === 'undefined') { showToast('Lỗi: chưa tải được thư viện ZIP, không đọc được tệp ZIP.'); continue; }
+      try {
+        const inner = await expandZipToFiles(f);
+        if (!inner.length) showToast(`Tệp ZIP "${f.name}" không chứa ảnh nào.`);
+        all.push(...inner);
+      } catch (err) {
+        console.error(err);
+        showToast(`Lỗi: không đọc được tệp ZIP "${f.name}".`);
+      }
+    }
+    if (all.length) await addFilesToBatch(all);
+  }
+
+  // ----- Xuất ZIP ảnh đã tẩy (+ script .txt theo định dạng "=== tên_file ===") -----
+  function mimeToExt(mime) {
+    if (/png/i.test(mime)) return 'png';
+    if (/webp/i.test(mime)) return 'webp';
+    if (/jpe?g/i.test(mime)) return 'jpg';
+    return 'png';
+  }
+
+  // Giữ tên gốc của trang; chỉ đổi đuôi nếu định dạng ảnh sạch khác (backend trả PNG)
+  function cleanedFileName(item, used) {
+    const stem = (item.name || 'page').replace(/\.[^./\\]+$/, '') || 'page';
+    const ext = mimeToExt(item.cleanedMime);
+    let name = `${stem}.${ext}`;
+    let n = 2;
+    while (used.has(name.toLowerCase())) name = `${stem}_${n++}.${ext}`;
+    used.add(name.toLowerCase());
+    return name;
+  }
+
+  function saveBlob(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      if (a.parentNode) a.parentNode.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 4000);
+  }
+
+  let zipExporting = false;
+  async function exportCleanZip(withScript) {
+    if (zipExporting) return;
+    if (typeof JSZip === 'undefined') { showToast('Lỗi: chưa tải được thư viện nén ZIP. Kiểm tra mạng rồi thử lại.'); return; }
+    const cleaned = state.images.filter((i) => i.hasCleaned);
+    if (!cleaned.length) { showToast('Chưa có trang nào được tẩy chữ. Hãy bấm "Tẩy chữ tất cả" trước.'); return; }
+    if (withScript && !state.images.some((i) => (i.ocrText && i.ocrText.trim()) || (i.viText && i.viText.trim()))) {
+      showToast('Chưa có kịch bản! Hãy chạy "OCR + Dịch" trước, hoặc chọn "Tải ZIP ảnh đã tẩy".');
       return;
     }
-    const cleanedItems = state.images.filter(img => !!img.cleanedBase64);
-    const scriptContent = generateChapterContent();
 
-    if (cleanedItems.length === 0 && (!scriptContent || !scriptContent.trim())) {
-      showToast('Chưa có ảnh đã tẩy hoặc bản dịch để xuất gói.');
-      return;
+    zipExporting = true;
+    try {
+      showToast(`Đang nén ${cleaned.length} ảnh sạch...`);
+      const zip = new JSZip();
+      const used = new Set();
+      let missing = 0;
+      for (const item of cleaned) {
+        const rec = await store.getCleaned(item.id);
+        if (!rec || !rec.data) { missing++; continue; }
+        zip.file(cleanedFileName(item, used), rec.data, { binary: true });
+      }
+      if (withScript) zip.file('script.txt', '\uFEFF' + generateChapterContent());
+
+      // Ảnh đã nén sẵn nên dùng STORE (nhanh, đỡ tốn RAM trên điện thoại)
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true });
+      saveBlob(`Manga_Chapter_${withScript ? 'Clean_Script' : 'Clean'}_${Date.now()}.zip`, blob);
+
+      const notCleaned = state.images.length - cleaned.length;
+      const notes = [];
+      if (notCleaned) notes.push(`${notCleaned} trang chưa tẩy nên không có trong ZIP`);
+      if (missing) notes.push(`${missing} ảnh sạch không đọc được`);
+      showToast(`Đã tạo ZIP (${cleaned.length - missing} ảnh${withScript ? ' + script.txt' : ''}).` + (notes.length ? ' Lưu ý: ' + notes.join('; ') + '.' : ''));
+    } catch (err) {
+      console.error(err);
+      showToast('Lỗi: không tạo được tệp ZIP (' + (err.message || 'không rõ nguyên nhân') + '). Thử xuất ít trang hơn.');
+    } finally {
+      zipExporting = false;
     }
+  }
 
-    showToast('Đang đóng gói ảnh sạch và kịch bản vào file ZIP...');
-    const zip = new JSZip();
-
-    if (cleanedItems.length > 0) {
-      const imgFolder = zip.folder('cleaned_images');
-      cleanedItems.forEach((img) => {
-        const b64 = img.cleanedBase64.includes(';base64,')
-          ? img.cleanedBase64.split(';base64,').pop()
-          : img.cleanedBase64;
-        imgFolder.file(img.name, b64, { base64: true });
-      });
-    }
-
-    if (scriptContent && scriptContent.trim()) {
-      zip.file('chapter_script.txt', '\uFEFF' + scriptContent);
-    }
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const filename = `Manga_Chapter_Cleaned_Bundle_${Date.now()}.zip`;
-    executeBlobDownload(filename, blob);
+  function updateToolbarStates(isRunning) {
+    if (el.btnCleanAll) el.btnCleanAll.disabled = isRunning;
+    el.btnProcessAll.disabled = isRunning;
+    el.btnOcrAll.disabled = isRunning;
+    el.btnTranslateAll.disabled = isRunning;
+    el.btnClearAll.disabled = isRunning;
+    if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || state.images.length === 0;
+    if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || state.images.length === 0;
   }
 
   // Clear All
@@ -2254,27 +1838,21 @@
       localStorage.setItem('manga_reading_order', state.settings.readingOrder);
     }
 
+    state.settings.cleanModel = el.selectCleanModel.value;
+    state.settings.cleanSFX = el.checkCleanSFX.checked;
+    state.settings.cleanDilation = parseInt(el.rangeCleanDilation.value, 10) || 0;
+    state.settings.cleanThreshold = parseFloat(el.rangeCleanThreshold.value) || 0.2;
+    state.settings.backendUrl = (el.inputBackendUrl.value || '').trim() || 'https://dobietdc-backe-manga-remove.hf.space';
+    localStorage.setItem('manga_clean_model', state.settings.cleanModel);
+    localStorage.setItem('manga_clean_sfx', state.settings.cleanSFX);
+    localStorage.setItem('manga_clean_dilation', state.settings.cleanDilation);
+    localStorage.setItem('manga_clean_threshold', state.settings.cleanThreshold);
+    localStorage.setItem('manga_backend_url', state.settings.backendUrl);
+
     localStorage.setItem('manga_model', state.settings.model);
     localStorage.setItem('manga_api_key', state.settings.apiKey);
     localStorage.setItem('manga_api_key_2', state.settings.apiKey2);
     localStorage.setItem('manga_tone', state.settings.tone);
-
-    if (el.selectCleanModel) {
-      state.settings.cleanModel = el.selectCleanModel.value;
-      localStorage.setItem('manga_clean_model', state.settings.cleanModel);
-    }
-    if (el.inputCleanDilation) {
-      state.settings.cleanDilation = parseInt(el.inputCleanDilation.value, 10) || 4;
-      localStorage.setItem('manga_clean_dilation', state.settings.cleanDilation);
-    }
-    if (el.inputCleanThreshold) {
-      state.settings.cleanThreshold = parseFloat(el.inputCleanThreshold.value) || 0.20;
-      localStorage.setItem('manga_clean_threshold', state.settings.cleanThreshold);
-    }
-    if (el.toggleCleanSFX) {
-      state.settings.cleanSFX = el.toggleCleanSFX.checked;
-      localStorage.setItem('manga_clean_sfx', state.settings.cleanSFX);
-    }
 
     applySettingsToUI();
     el.settingsModal.style.display = 'none';
