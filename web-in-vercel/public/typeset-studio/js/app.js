@@ -81,9 +81,13 @@ const el = {
   btnNextPage: document.getElementById('btnNextPage'),
   btnAutoFitAll: document.getElementById('btnAutoFitAll'),
   btnAiCleanAndBox: document.getElementById('btnAiCleanAndBox'),
+  btnAiCleanIcon: document.getElementById('btnAiCleanIcon'),
+  btnAiCleanText: document.getElementById('btnAiCleanText'),
   btnAiCleanSettings: document.getElementById('btnAiCleanSettings'),
   aiCleanSettingsPopover: document.getElementById('aiCleanSettingsPopover'),
   btnCloseAiSettings: document.getElementById('btnCloseAiSettings'),
+  backendDot: document.getElementById('backendDot'),
+  valBackendStatus: document.getElementById('valBackendStatus'),
   settingDilation: document.getElementById('settingDilation'),
   valSettingDilation: document.getElementById('valSettingDilation'),
   settingThreshold: document.getElementById('settingThreshold'),
@@ -91,6 +95,27 @@ const el = {
   settingInpaintModel: document.getElementById('settingInpaintModel'),
   settingCleanSFX: document.getElementById('settingCleanSFX'),
   btnSaveAndReClean: document.getElementById('btnSaveAndReClean'),
+
+  // AI Status HUD Elements
+  aiStatusOverlay: document.getElementById('aiStatusOverlay'),
+  aiStatusCard: document.getElementById('aiStatusCard'),
+  aiStatusSpinner: document.getElementById('aiStatusSpinner'),
+  aiStatusBadgeIcon: document.getElementById('aiStatusBadgeIcon'),
+  aiStatusTitle: document.getElementById('aiStatusTitle'),
+  aiStatusSubtitle: document.getElementById('aiStatusSubtitle'),
+  aiStatusTimer: document.getElementById('aiStatusTimer'),
+  aiStepClean: document.getElementById('aiStepClean'),
+  aiStepCleanIcon: document.getElementById('aiStepCleanIcon'),
+  aiStepCleanDesc: document.getElementById('aiStepCleanDesc'),
+  aiStepCleanBadge: document.getElementById('aiStepCleanBadge'),
+  aiStepOcr: document.getElementById('aiStepOcr'),
+  aiStepOcrIcon: document.getElementById('aiStepOcrIcon'),
+  aiStepOcrDesc: document.getElementById('aiStepOcrDesc'),
+  aiStepOcrBadge: document.getElementById('aiStepOcrBadge'),
+  aiStatusFooter: document.getElementById('aiStatusFooter'),
+  aiStatusMessage: document.getElementById('aiStatusMessage'),
+  btnRetryAiClean: document.getElementById('btnRetryAiClean'),
+  btnDismissAiStatus: document.getElementById('btnDismissAiStatus'),
 
   btnToggleViewLang: document.getElementById('btnToggleViewLang'),
   viewLangLabel: document.getElementById('viewLangLabel'),
@@ -405,6 +430,248 @@ function setupDirectUploadEvents() {
 /* ==========================================================================
    Backend AI: Clean Speech Bubbles & Detect Text Coordinates (Comic-Text-Detector)
    ========================================================================== */
+let aiTimerInterval = null;
+let aiTimerStart = 0;
+let aiHudAutoCloseTimeout = null;
+
+async function checkBackendStatus() {
+  if (!el.valBackendStatus || !el.backendDot) return;
+  el.valBackendStatus.textContent = 'Đang kiểm tra...';
+  el.valBackendStatus.style.color = '#38bdf8';
+  el.backendDot.style.background = '#38bdf8';
+
+  try {
+    const res = await fetch('/api/health');
+    if (res.ok) {
+      const data = await res.json();
+      const latency = data.latencyMs ? `${data.latencyMs}ms` : 'Sẵn sàng';
+      el.valBackendStatus.textContent = `Online (${latency})`;
+      el.valBackendStatus.style.color = '#34d399';
+      el.backendDot.style.background = '#34d399';
+    } else {
+      el.valBackendStatus.textContent = `Lỗi HTTP ${res.status}`;
+      el.valBackendStatus.style.color = '#f87171';
+      el.backendDot.style.background = '#f87171';
+    }
+  } catch (err) {
+    el.valBackendStatus.textContent = 'Chưa kết nối';
+    el.valBackendStatus.style.color = '#fbbf24';
+    el.backendDot.style.background = '#fbbf24';
+  }
+}
+
+function showAiStatusHud(pageName) {
+  if (aiHudAutoCloseTimeout) {
+    clearTimeout(aiHudAutoCloseTimeout);
+    aiHudAutoCloseTimeout = null;
+  }
+  if (aiTimerInterval) clearInterval(aiTimerInterval);
+
+  if (el.aiStatusOverlay) el.aiStatusOverlay.style.display = 'block';
+  if (el.aiStatusCard) {
+    el.aiStatusCard.className = 'ai-status-card state-running';
+  }
+  if (el.aiStatusSpinner) el.aiStatusSpinner.classList.remove('paused');
+  if (el.aiStatusBadgeIcon) el.aiStatusBadgeIcon.textContent = '⚡';
+  if (el.aiStatusTitle) el.aiStatusTitle.textContent = 'Backend AI đang xử lý...';
+  if (el.aiStatusSubtitle) el.aiStatusSubtitle.textContent = `[${pageName}] • Đang gửi dữ liệu sang Backend`;
+  if (el.aiStatusTimer) el.aiStatusTimer.textContent = '0.0s';
+
+  // Step 1: Clean
+  if (el.aiStepCleanIcon) el.aiStepCleanIcon.innerHTML = '<span class="spin-inline">⏳</span>';
+  if (el.aiStepCleanDesc) el.aiStepCleanDesc.textContent = 'Đang gửi ảnh sang backend inpaint...';
+  if (el.aiStepCleanBadge) {
+    el.aiStepCleanBadge.textContent = 'Đang chạy';
+    el.aiStepCleanBadge.className = 'ai-step-badge running';
+  }
+
+  // Step 2: OCR
+  if (el.aiStepOcrIcon) el.aiStepOcrIcon.innerHTML = '<span class="spin-inline">⏳</span>';
+  if (el.aiStepOcrDesc) el.aiStepOcrDesc.textContent = 'Đang quét & nhận diện chữ khung thoại...';
+  if (el.aiStepOcrBadge) {
+    el.aiStepOcrBadge.textContent = 'Đang chạy';
+    el.aiStepOcrBadge.className = 'ai-step-badge running';
+  }
+
+  if (el.aiStatusFooter) el.aiStatusFooter.style.display = 'none';
+  if (el.btnRetryAiClean) el.btnRetryAiClean.style.display = 'none';
+
+  aiTimerStart = performance.now();
+  aiTimerInterval = setInterval(() => {
+    const elapsed = ((performance.now() - aiTimerStart) / 1000).toFixed(1);
+    if (el.aiStatusTimer) el.aiStatusTimer.textContent = `${elapsed}s`;
+    if (el.btnAiCleanText) el.btnAiCleanText.textContent = `Đang xử lý (${elapsed}s)...`;
+  }, 100);
+}
+
+function updateAiCleanStepStatus({ ok, duration, error }) {
+  if (ok) {
+    if (el.aiStepCleanIcon) el.aiStepCleanIcon.textContent = '✅';
+    if (el.aiStepCleanDesc) el.aiStepCleanDesc.textContent = `Tẩy sạch chữ hoàn tất (${duration}s)`;
+    if (el.aiStepCleanBadge) {
+      el.aiStepCleanBadge.textContent = 'Thành công';
+      el.aiStepCleanBadge.className = 'ai-step-badge success';
+    }
+  } else {
+    if (el.aiStepCleanIcon) el.aiStepCleanIcon.textContent = '❌';
+    if (el.aiStepCleanDesc) el.aiStepCleanDesc.textContent = `Lỗi (${duration}s): ${error || 'Thất bại'}`;
+    if (el.aiStepCleanBadge) {
+      el.aiStepCleanBadge.textContent = 'Thất bại';
+      el.aiStepCleanBadge.className = 'ai-step-badge error';
+    }
+  }
+}
+
+function updateAiOcrStepStatus({ ok, duration, count, error }) {
+  if (ok) {
+    if (el.aiStepOcrIcon) el.aiStepOcrIcon.textContent = '✅';
+    if (el.aiStepOcrDesc) {
+      el.aiStepOcrDesc.textContent = count > 0
+        ? `Đã tạo ${count} khung thoại (${duration}s)`
+        : `Quét xong (${duration}s) - không tìm thấy chữ`;
+    }
+    if (el.aiStepOcrBadge) {
+      el.aiStepOcrBadge.textContent = count > 0 ? `${count} box` : '0 box';
+      el.aiStepOcrBadge.className = 'ai-step-badge success';
+    }
+  } else {
+    if (el.aiStepOcrIcon) el.aiStepOcrIcon.textContent = '❌';
+    if (el.aiStepOcrDesc) el.aiStepOcrDesc.textContent = `Lỗi (${duration}s): ${error || 'Thất bại'}`;
+    if (el.aiStepOcrBadge) {
+      el.aiStepOcrBadge.textContent = 'Thất bại';
+      el.aiStepOcrBadge.className = 'ai-step-badge error';
+    }
+  }
+}
+
+function finishAiStatusHud({ cleanResult, ocrResult, pageIndex }) {
+  if (aiTimerInterval) {
+    clearInterval(aiTimerInterval);
+    aiTimerInterval = null;
+  }
+  const totalDuration = ((performance.now() - aiTimerStart) / 1000).toFixed(1);
+  if (el.aiStatusTimer) el.aiStatusTimer.textContent = `${totalDuration}s`;
+  if (el.aiStatusSpinner) el.aiStatusSpinner.classList.add('paused');
+
+  const cleanOk = cleanResult && cleanResult.ok;
+  const ocrOk = ocrResult && ocrResult.ok;
+
+  if (el.aiStatusFooter) el.aiStatusFooter.style.display = 'flex';
+
+  if (cleanOk && ocrOk) {
+    if (el.aiStatusCard) el.aiStatusCard.className = 'ai-status-card state-success';
+    if (el.aiStatusBadgeIcon) el.aiStatusBadgeIcon.textContent = '🎉';
+    if (el.aiStatusTitle) el.aiStatusTitle.textContent = 'Xử lý AI thành công!';
+    if (el.aiStatusSubtitle) el.aiStatusSubtitle.textContent = `Tổng thời gian: ${totalDuration}s • Ảnh đã được làm sạch`;
+    const boxCount = (ocrResult.data && Array.isArray(ocrResult.data.data)) ? ocrResult.data.data.length : 0;
+    if (el.aiStatusMessage) {
+      el.aiStatusMessage.textContent = `✅ Đã tẩy sạch chữ (${cleanResult.duration}s) và bắt được ${boxCount} khung thoại (${ocrResult.duration}s).`;
+    }
+    if (el.btnRetryAiClean) el.btnRetryAiClean.style.display = 'none';
+
+    aiHudAutoCloseTimeout = setTimeout(() => {
+      if (el.aiStatusOverlay) el.aiStatusOverlay.style.display = 'none';
+    }, 4500);
+  } else if (cleanOk || ocrOk) {
+    if (el.aiStatusCard) el.aiStatusCard.className = 'ai-status-card state-warning';
+    if (el.aiStatusBadgeIcon) el.aiStatusBadgeIcon.textContent = '⚠️';
+    if (el.aiStatusTitle) el.aiStatusTitle.textContent = 'Hoàn thành một phần';
+    if (cleanOk) {
+      if (el.aiStatusSubtitle) el.aiStatusSubtitle.textContent = 'Tẩy chữ thành công, nhưng bắt box OCR gặp lỗi';
+      if (el.aiStatusMessage) {
+        el.aiStatusMessage.textContent = `⚠️ Đã tẩy sạch chữ (${cleanResult.duration}s). Lỗi OCR: ${ocrResult.error}. Bạn vẫn có thể bấm nút "+ Thoại" để thêm bóng thoại thủ công.`;
+      }
+    } else {
+      if (el.aiStatusSubtitle) el.aiStatusSubtitle.textContent = 'Bắt box OCR thành công, nhưng tẩy chữ gặp lỗi';
+      if (el.aiStatusMessage) {
+        el.aiStatusMessage.textContent = `⚠️ Đã tạo khung thoại (${ocrResult.duration}s). Lỗi Tẩy chữ: ${cleanResult.error}.`;
+      }
+    }
+    if (el.btnRetryAiClean) {
+      el.btnRetryAiClean.style.display = 'inline-flex';
+      el.btnRetryAiClean.onclick = () => runBackendCleanAndBox(pageIndex);
+    }
+  } else {
+    if (el.aiStatusCard) el.aiStatusCard.className = 'ai-status-card state-error';
+    if (el.aiStatusBadgeIcon) el.aiStatusBadgeIcon.textContent = '❌';
+    if (el.aiStatusTitle) el.aiStatusTitle.textContent = 'Xử lý AI thất bại';
+    if (el.aiStatusSubtitle) el.aiStatusSubtitle.textContent = `Thời gian chờ: ${totalDuration}s • Không thể hoàn thành`;
+    if (el.aiStatusMessage) {
+      el.aiStatusMessage.textContent = `❌ Lỗi tẩy chữ: ${cleanResult.error || 'Thất bại'} | Lỗi OCR: ${ocrResult.error || 'Thất bại'}. Vui lòng kiểm tra kết nối server hoặc thử lại.`;
+    }
+    if (el.btnRetryAiClean) {
+      el.btnRetryAiClean.style.display = 'inline-flex';
+      el.btnRetryAiClean.onclick = () => runBackendCleanAndBox(pageIndex);
+    }
+  }
+}
+
+async function callCleanApi(base64, settings) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/clean', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: base64,
+        cleanSFX: settings.cleanSFX,
+        dilationPx: settings.dilationPx,
+        detThreshold: settings.detThreshold,
+        inpaintModel: settings.inpaintModel
+      })
+    });
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error || errMsg;
+      } catch (e) {
+        try { errMsg = await res.text(); } catch (e2) {}
+      }
+      return { ok: false, error: errMsg, duration };
+    }
+    const data = await res.json();
+    return { ok: true, data, duration };
+  } catch (err) {
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    return { ok: false, error: err.message || 'Lỗi mạng / Không thể kết nối server', duration };
+  }
+}
+
+async function callOcrApi(base64, settings) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/ocr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: base64,
+        readingOrder: 'manga',
+        ocrEngine: 'ja_manga',
+        chatOnly: true,
+        detThreshold: settings.detThreshold
+      })
+    });
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error || errMsg;
+      } catch (e) {
+        try { errMsg = await res.text(); } catch (e2) {}
+      }
+      return { ok: false, error: errMsg, duration };
+    }
+    const data = await res.json();
+    return { ok: true, data, duration };
+  } catch (err) {
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    return { ok: false, error: err.message || 'Lỗi mạng / Không thể kết nối server', duration };
+  }
+}
+
 async function runBackendCleanAndBox(pageIndex) {
   const page = appState.pages[pageIndex];
   if (!page) return;
@@ -415,7 +682,13 @@ async function runBackendCleanAndBox(pageIndex) {
   }
   appState.isAiProcessing = true;
   el.btnAiCleanAndBox.disabled = true;
-  showToast(`[${page.name}] Đang gọi Backend AI xóa chữ bong bóng chat và bắt tọa độ box...`, 4000);
+  el.btnAiCleanAndBox.classList.add('processing');
+  if (el.btnAiCleanIcon) el.btnAiCleanIcon.innerHTML = '<span class="spin-inline">⏳</span>';
+  if (el.btnAiCleanText) el.btnAiCleanText.textContent = 'Đang xử lý AI...';
+
+  const pageName = page.name || `Trang ${pageIndex + 1}`;
+  showAiStatusHud(pageName);
+  showToast(`[${pageName}] Đang gọi Backend AI xóa chữ và bắt box...`, 3000);
 
   try {
     // 1. Lấy dữ liệu ảnh dạng base64
@@ -427,51 +700,45 @@ async function runBackendCleanAndBox(pageIndex) {
       throw new Error('Không tìm thấy dữ liệu ảnh gốc để xử lý.');
     }
 
-    // 2. Gọi song song /api/clean (xóa chữ) và /api/ocr (bóc tách bounding box theo Comic-Text-Detector + manga-ocr)
-    const [cleanRes, ocrRes] = await Promise.all([
-      fetch('/api/clean', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64,
-          cleanSFX: appState.aiSettings.cleanSFX,
-          dilationPx: appState.aiSettings.dilationPx,
-          detThreshold: appState.aiSettings.detThreshold,
-          inpaintModel: appState.aiSettings.inpaintModel
-        })
-      }).then(r => r.ok ? r.json() : null).catch(() => null),
-
-      fetch('/api/ocr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64,
-          readingOrder: 'manga',
-          ocrEngine: 'ja_manga',
-          chatOnly: true
-        })
-      }).then(r => r.ok ? r.json() : null).catch(() => null)
-    ]);
-
-    // 3. Xử lý ảnh sạch (đã xóa chữ trong bong bóng chat)
-    if (cleanRes && cleanRes.cleanedImageBase64) {
-      page.displayBlob = cleanRes.cleanedImageBase64;
-      page.hasCleaned = true;
-      const db = await openDB();
-      if (db) {
-        try {
-          const tx = db.transaction(['cleaned'], 'readwrite');
-          tx.objectStore('cleaned').put({ id: page.id, blob: cleanRes.cleanedImageBase64 });
-        } catch (e) {}
+    // 2. Chạy song song Clean & OCR với phản hồi tiến độ thời gian thực
+    const cleanPromise = callCleanApi(base64, appState.aiSettings).then(async (cleanRes) => {
+      updateAiCleanStepStatus(cleanRes);
+      if (cleanRes.ok && cleanRes.data && cleanRes.data.cleanedImageBase64) {
+        page.displayBlob = cleanRes.data.cleanedImageBase64;
+        page.hasCleaned = true;
+        const db = await openDB();
+        if (db) {
+          try {
+            const tx = db.transaction(['cleaned'], 'readwrite');
+            tx.objectStore('cleaned').put({ id: page.id, blob: cleanRes.data.cleanedImageBase64 });
+          } catch (e) {}
+        }
+        if (appState.activePageIndex === pageIndex) {
+          const img = await loadImageElement(page.displayBlob);
+          if (img) {
+            appState.currentImageElement = img;
+            renderCanvas();
+          }
+        }
+        renderSidebar();
       }
-    }
+      return cleanRes;
+    });
 
-    // 4. Xử lý tọa độ bóng thoại và chữ tiếng Nhật nhận diện được
+    const ocrPromise = callOcrApi(base64, appState.aiSettings).then((ocrRes) => {
+      const count = (ocrRes.ok && ocrRes.data && Array.isArray(ocrRes.data.data)) ? ocrRes.data.data.length : 0;
+      updateAiOcrStepStatus({ ok: ocrRes.ok, duration: ocrRes.duration, count, error: ocrRes.error });
+      return ocrRes;
+    });
+
+    const [cleanRes, ocrRes] = await Promise.all([cleanPromise, ocrPromise]);
+
+    // 3. Xử lý tọa độ bóng thoại và chữ nhận diện được từ OCR
     const imgW = el.canvas.width || 1000;
     const imgH = el.canvas.height || 1400;
 
-    if (ocrRes && Array.isArray(ocrRes.data) && ocrRes.data.length) {
-      page.bubbles = ocrRes.data.map((item, idx) => {
+    if (ocrRes.ok && ocrRes.data && Array.isArray(ocrRes.data.data) && ocrRes.data.data.length) {
+      page.bubbles = ocrRes.data.data.map((item, idx) => {
         const box = item.box || [0, 0, 0, 0];
         const [ymin, xmin, ymax, xmax] = box;
 
@@ -512,20 +779,38 @@ async function runBackendCleanAndBox(pageIndex) {
           isUppercase: false
         };
       });
-      showToast(`Backend AI đã xóa chữ và bắt được ${page.bubbles.length} bóng thoại!`);
-    } else {
-      showToast('Backend AI đã xử lý xong (không tìm thấy bóng thoại mới).');
     }
 
-    // 5. Cập nhật IndexedDB và vẽ lại giao diện
+    // 4. Cập nhật cơ sở dữ liệu IndexedDB và vẽ lại giao diện
     await saveTypesetToDB(page);
     appState.activeBubbleIndex = page.bubbles && page.bubbles.length ? 0 : -1;
     await switchPage(pageIndex, true);
+
+    // 5. Kết thúc HUD với trạng thái minh bạch
+    finishAiStatusHud({ cleanResult: cleanRes, ocrResult: ocrRes, pageIndex });
+
+    if (cleanRes.ok && ocrRes.ok) {
+      showToast(`🎉 Backend AI hoàn tất: Đã xóa chữ (${cleanRes.duration}s) và tạo ${page.bubbles.length} khung thoại (${ocrRes.duration}s)!`, 4000);
+    } else if (cleanRes.ok && !ocrRes.ok) {
+      showToast(`⚠️ Đã xóa sạch chữ (${cleanRes.duration}s). Bắt box OCR lỗi: ${ocrRes.error}`, 5000);
+    } else if (!cleanRes.ok && ocrRes.ok) {
+      showToast(`⚠️ Đã tạo ${page.bubbles.length} khung thoại (${ocrRes.duration}s). Tẩy chữ lỗi: ${cleanRes.error}`, 5000);
+    } else {
+      showToast(`❌ Xử lý AI thất bại. Xem bảng thông báo để biết chi tiết.`, 5000);
+    }
   } catch (err) {
-    showToast(`Lỗi xử lý Backend AI: ${err.message || err}`);
+    finishAiStatusHud({
+      cleanResult: { ok: false, error: err.message || String(err), duration: '0.0' },
+      ocrResult: { ok: false, error: err.message || String(err), duration: '0.0' },
+      pageIndex
+    });
+    showToast(`Lỗi xử lý Backend AI: ${err.message || err}`, 5000);
   } finally {
     appState.isAiProcessing = false;
     el.btnAiCleanAndBox.disabled = false;
+    el.btnAiCleanAndBox.classList.remove('processing');
+    if (el.btnAiCleanIcon) el.btnAiCleanIcon.textContent = '⚡';
+    if (el.btnAiCleanText) el.btnAiCleanText.textContent = 'Tẩy & Bắt Box AI';
   }
 }
 
@@ -1563,13 +1848,22 @@ function setupAiCleanSettings() {
 
   el.btnAiCleanSettings.addEventListener('click', (e) => {
     e.stopPropagation();
-    const isHidden = el.aiCleanSettingsPopover.style.display === 'none';
+    const isHidden = el.aiCleanSettingsPopover.style.display === 'none' || !el.aiCleanSettingsPopover.style.display;
     el.aiCleanSettingsPopover.style.display = isHidden ? 'flex' : 'none';
+    if (isHidden) {
+      checkBackendStatus();
+    }
   });
 
   if (el.btnCloseAiSettings) {
     el.btnCloseAiSettings.addEventListener('click', () => {
       el.aiCleanSettingsPopover.style.display = 'none';
+    });
+  }
+
+  if (el.btnDismissAiStatus) {
+    el.btnDismissAiStatus.addEventListener('click', () => {
+      if (el.aiStatusOverlay) el.aiStatusOverlay.style.display = 'none';
     });
   }
 
@@ -1634,6 +1928,7 @@ async function initApp() {
   setupBubbleActions();
   setupDirectUploadEvents();
   setupAiCleanSettings();
+  checkBackendStatus();
 
   // Navigation Buttons
   el.btnPrevPage.addEventListener('click', () => switchPage(appState.activePageIndex - 1));

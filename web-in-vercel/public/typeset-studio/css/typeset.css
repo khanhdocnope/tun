@@ -849,3 +849,222 @@ body {
   outline-offset: -12px;
   background-color: rgba(14, 165, 233, 0.06);
 }
+
+/* ==========================================================================
+   AI Clean & OCR Status HUD
+   ========================================================================== */
+.ai-status-overlay {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 100;
+  max-width: 390px;
+  width: calc(100% - 36px);
+  pointer-events: auto;
+  animation: slideInDown 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInDown {
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.ai-status-card {
+  background: rgba(15, 20, 32, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(14, 165, 233, 0.2);
+  padding: 14px 16px;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ai-status-card.state-running {
+  border-color: rgba(14, 165, 233, 0.5);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(14, 165, 233, 0.2);
+}
+
+.ai-status-card.state-success {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(16, 185, 129, 0.2);
+}
+
+.ai-status-card.state-error {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(239, 68, 68, 0.25);
+}
+
+.ai-status-card.state-warning {
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(245, 158, 11, 0.25);
+}
+
+.ai-status-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-status-icon-wrap {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ai-status-spinner {
+  position: absolute;
+  inset: 0;
+  border: 2.5px solid rgba(14, 165, 233, 0.2);
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: aiSpin 0.8s linear infinite;
+}
+
+.ai-status-spinner.paused {
+  animation: none;
+  border-color: transparent;
+}
+
+@keyframes aiSpin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-status-badge-icon {
+  font-size: 16px;
+  z-index: 2;
+}
+
+.ai-status-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-status-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-status-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-status-timer {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.15);
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.ai-status-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.ai-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ai-step-icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.ai-step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-step-name {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.ai-step-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-step-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.ai-step-badge.running {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+}
+
+.ai-step-badge.success {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.ai-step-badge.error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.ai-status-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ai-status-message {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-main);
+  word-break: break-word;
+}
+
+.btn-ai-clean.processing {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #38bdf8 !important;
+}
+
+.spin-inline {
+  display: inline-block;
+  animation: aiSpin 0.9s linear infinite;
+}

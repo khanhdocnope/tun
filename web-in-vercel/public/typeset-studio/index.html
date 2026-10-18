@@ -57,10 +57,8 @@
     <div class="header-right">
       <div class="ai-clean-btn-group">
         <button type="button" class="btn-action btn-ai-clean" id="btnAiCleanAndBox" title="Backend AI tự động xóa chữ bong bóng chat và bóc tách tọa độ box">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-          </svg>
-          <span>⚡ Tẩy & Bắt Box AI</span>
+          <span class="btn-ai-clean-icon" id="btnAiCleanIcon">⚡</span>
+          <span id="btnAiCleanText">Xóa & Bắt Box AI</span>
         </button>
         <button type="button" class="btn-action btn-ai-settings-toggle" id="btnAiCleanSettings" title="Cài đặt tẩy chữ: Dilation, Threshold, Model">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -72,10 +70,20 @@
         <!-- AI Clean Settings Popover -->
         <div class="ai-clean-settings-popover" id="aiCleanSettingsPopover" style="display:none;">
           <div class="popover-header">
-            <span>⚙️ Cài đặt Tẩy & Bắt Box AI</span>
+            <span>⚙️ Cài đặt Xóa & Bắt Box AI</span>
             <button type="button" class="btn-icon-xs" id="btnCloseAiSettings">✕</button>
           </div>
           <div class="popover-body">
+            <!-- Backend Status Row -->
+            <div class="setting-item" style="margin-bottom:10px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px;">
+                <span style="color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                  <span id="backendDot" style="width:7px; height:7px; border-radius:50%; background:#34d399; display:inline-block;"></span>
+                  <span>Backend AI:</span>
+                </span>
+                <span id="valBackendStatus" style="font-weight:600; color:#34d399;">Đang kết nối...</span>
+              </div>
+            </div>
             <!-- Dilation Slider -->
             <div class="setting-item">
               <div class="setting-label-row">
@@ -108,12 +116,12 @@
             <!-- Clean SFX Checkbox -->
             <div class="setting-checkbox-row" style="display:flex; align-items:center; gap:8px; font-size:12px; margin-top:4px;">
               <input type="checkbox" id="settingCleanSFX" style="accent-color:var(--primary); cursor:pointer;">
-              <label for="settingCleanSFX" style="cursor:pointer; color:var(--text-main);">Tẩy cả chữ hiệu ứng (SFX) ngoài khung thoại</label>
+              <label for="settingCleanSFX" style="cursor:pointer; color:var(--text-main);">Xóa cả chữ hiệu ứng (SFX) ngoài khung thoại</label>
             </div>
           </div>
           <div class="popover-footer">
             <button type="button" class="btn-action btn-primary" id="btnSaveAndReClean" style="width:100%; justify-content:center;">
-              <span>Áp dụng & Tẩy lại trang này</span>
+              <span>Áp dụng & xóa lại trang này</span>
             </button>
           </div>
         </div>
@@ -178,6 +186,51 @@
     <section class="canvas-viewport-container" id="viewportContainer">
       <div class="canvas-wrapper" id="canvasWrapper">
         <canvas id="typesetCanvas"></canvas>
+      </div>
+
+      <!-- AI Clean & OCR Status HUD -->
+      <div class="ai-status-overlay" id="aiStatusOverlay" style="display:none;">
+        <div class="ai-status-card" id="aiStatusCard">
+          <div class="ai-status-header">
+            <div class="ai-status-icon-wrap">
+              <div class="ai-status-spinner" id="aiStatusSpinner"></div>
+              <span class="ai-status-badge-icon" id="aiStatusBadgeIcon">⚡</span>
+            </div>
+            <div class="ai-status-meta">
+              <div class="ai-status-title" id="aiStatusTitle">Backend AI đang xử lý</div>
+              <div class="ai-status-subtitle" id="aiStatusSubtitle">Trang 1 • Đang kết nối server...</div>
+            </div>
+            <div class="ai-status-timer" id="aiStatusTimer">0.0s</div>
+          </div>
+
+          <div class="ai-status-steps">
+            <div class="ai-step-item" id="aiStepClean">
+              <span class="ai-step-icon" id="aiStepCleanIcon">⏳</span>
+              <div class="ai-step-content">
+                <div class="ai-step-name">1. Xóa chữ manga (Inpaint AI)</div>
+                <div class="ai-step-desc" id="aiStepCleanDesc">Đang gửi ảnh sang backend...</div>
+              </div>
+              <span class="ai-step-badge running" id="aiStepCleanBadge">Đang chạy</span>
+            </div>
+
+            <div class="ai-step-item" id="aiStepOcr">
+              <span class="ai-step-icon" id="aiStepOcrIcon">⏳</span>
+              <div class="ai-step-content">
+                <div class="ai-step-name">2. Bắt tọa độ khung thoại (OCR)</div>
+                <div class="ai-step-desc" id="aiStepOcrDesc">Đang quét bong bóng thoại...</div>
+              </div>
+              <span class="ai-step-badge running" id="aiStepOcrBadge">Đang chạy</span>
+            </div>
+          </div>
+
+          <div class="ai-status-footer" id="aiStatusFooter" style="display:none;">
+            <div class="ai-status-message" id="aiStatusMessage"></div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button type="button" class="btn-action btn-primary btn-sm" id="btnRetryAiClean" style="display:none; padding:4px 10px; font-size:11px;">Thử lại</button>
+              <button type="button" class="btn-action btn-secondary btn-sm" id="btnDismissAiStatus" style="padding:4px 8px; font-size:11px;">Đóng</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Floating Canvas Toolbar -->
