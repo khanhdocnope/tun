@@ -27,7 +27,13 @@
       cleanDilation: parseInt(localStorage.getItem('manga_clean_dilation') || '4', 10),
       cleanThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.20'),
       backendUrl: localStorage.getItem('manga_backend_url') || 'https://dobietdc-backe-manga-remove.hf.space'
-    }
+    },
+    // Giai đoạn 2: Mobile UI State
+    currentFilter: 'all',
+    isAllCollapsed: false,
+    proofreadIndex: 0,
+    proofreadZoom: 100,
+    proofreadShowClean: false
   };
 
   // Thumbnail Size & Zoom Controller (0 -> 100)
@@ -96,6 +102,60 @@
     inputBackendUrl: document.getElementById('inputBackendUrl'),
     statBadge: document.getElementById('statBadge'),
     currentModelBadge: document.getElementById('currentModelBadge'),
+
+    // Giai đoạn 2: Elements
+    filterProgressBar: document.getElementById('filterProgressBar'),
+    filterAll: document.getElementById('filterAll'),
+    filterPending: document.getElementById('filterPending'),
+    filterError: document.getElementById('filterError'),
+    filterDone: document.getElementById('filterDone'),
+    countAll: document.getElementById('countAll'),
+    countPending: document.getElementById('countPending'),
+    countError: document.getElementById('countError'),
+    countDone: document.getElementById('countDone'),
+    btnJumpPending: document.getElementById('btnJumpPending'),
+    btnToggleCollapseAll: document.getElementById('btnToggleCollapseAll'),
+    btnToggleCollapseAllLabel: document.getElementById('btnToggleCollapseAllLabel'),
+    btnOpenProofread: document.getElementById('btnOpenProofread'),
+
+    bottomActionBar: document.getElementById('bottomActionBar'),
+    btnOpenBottomSheet: document.getElementById('btnOpenBottomSheet'),
+    btnBottomCleanAll: document.getElementById('btnBottomCleanAll'),
+    btnBottomProcessAll: document.getElementById('btnBottomProcessAll'),
+    btnBottomProcessAllLabel: document.getElementById('btnBottomProcessAllLabel'),
+    btnBottomQuickTxt: document.getElementById('btnBottomQuickTxt'),
+
+    bottomSheetBackdrop: document.getElementById('bottomSheetBackdrop'),
+    bottomSheetCard: document.getElementById('bottomSheetCard'),
+    btnCloseBottomSheet: document.getElementById('btnCloseBottomSheet'),
+    sheetBtnCleanAll: document.getElementById('sheetBtnCleanAll'),
+    sheetBtnOcrAll: document.getElementById('sheetBtnOcrAll'),
+    sheetBtnTranslateAll: document.getElementById('sheetBtnTranslateAll'),
+    sheetBtnDownloadTxt: document.getElementById('sheetBtnDownloadTxt'),
+    sheetBtnExportZipClean: document.getElementById('sheetBtnExportZipClean'),
+    sheetBtnExportZipBoth: document.getElementById('sheetBtnExportZipBoth'),
+    sheetBtnOpenExportModal: document.getElementById('sheetBtnOpenExportModal'),
+    sheetBtnClearAll: document.getElementById('sheetBtnClearAll'),
+
+    proofreadOverlay: document.getElementById('proofreadOverlay'),
+    proofreadPageIndicator: document.getElementById('proofreadPageIndicator'),
+    btnProofreadToggleClean: document.getElementById('btnProofreadToggleClean'),
+    btnProofreadToggleCleanLabel: document.getElementById('btnProofreadToggleCleanLabel'),
+    btnCloseProofread: document.getElementById('btnCloseProofread'),
+    proofreadImgWrapper: document.getElementById('proofreadImgWrapper'),
+    proofreadImgViewport: document.getElementById('proofreadImgViewport'),
+    proofreadImg: document.getElementById('proofreadImg'),
+    btnProofreadZoomOut: document.getElementById('btnProofreadZoomOut'),
+    btnProofreadZoomIn: document.getElementById('btnProofreadZoomIn'),
+    btnProofreadZoomReset: document.getElementById('btnProofreadZoomReset'),
+    proofreadZoomLevel: document.getElementById('proofreadZoomLevel'),
+    proofreadJpText: document.getElementById('proofreadJpText'),
+    proofreadViText: document.getElementById('proofreadViText'),
+    btnProofreadCopyJp: document.getElementById('btnProofreadCopyJp'),
+    btnProofreadCopyVi: document.getElementById('btnProofreadCopyVi'),
+    btnProofreadPrev: document.getElementById('btnProofreadPrev'),
+    btnProofreadNext: document.getElementById('btnProofreadNext'),
+    proofreadFooterName: document.getElementById('proofreadFooterName'),
 
     // Queue Progress Bar
     queueProgressBar: document.getElementById('queueProgressBar'),
@@ -660,6 +720,7 @@
     el.btnCloseSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnCancelSettings.addEventListener('click', () => el.settingsModal.style.display = 'none');
     el.btnSaveSettings.addEventListener('click', saveSettings);
+    bindPhase2Events();
   }
 
   // Format File Size
@@ -835,7 +896,11 @@
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = !hasImages;
 
     updateStatBadge();
+    updateFilterCounts();
     if (el.btnCleanAll) el.btnCleanAll.disabled = !hasImages || state.isQueueRunning;
+    if (el.btnBottomCleanAll) el.btnBottomCleanAll.disabled = !hasImages || state.isQueueRunning;
+    if (el.btnBottomProcessAll) el.btnBottomProcessAll.disabled = !hasImages || state.isQueueRunning;
+    if (el.btnBottomQuickTxt) el.btnBottomQuickTxt.disabled = !hasImages;
 
     if (!hasImages) {
       el.mangaRowsList.innerHTML = '';
@@ -856,27 +921,40 @@
     card.className = `manga-row-card ${item.status}`;
     card.id = `row-${item.id}`;
 
+    card.className = `manga-row-card ${item.status}${item.isCollapsed ? ' is-collapsed' : ''}`;
     card.innerHTML = `
       <div class="row-header">
         <div class="row-header-left">
+          <button type="button" class="btn-toggle-collapse" title="Thu gọn / Mở rộng trang">
+            <svg class="collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
           <button class="btn-zoom-preview" title="Chỉnh kích thước ảnh (Phóng to / Thu nhỏ)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
             </svg>
           </button>
-          <span class="row-title">Image ${displayIndex}: ${escapeHtml(item.name)}</span>
+          <span class="row-title">Trang ${displayIndex}: ${escapeHtml(item.name)}</span>
           <span class="row-size">${item.sizeStr}</span>
-          <span class="badge-status ${item.status}">${item.status.toUpperCase()}</span>
+          <span class="badge-status ${item.status}" data-status-vi="${statusViText(item.status)}">${item.status.toUpperCase()}</span>
           <span class="badge-clean ${item.cleanStatus || 'idle'}">${cleanBadgeText(item)}</span>
         </div>
         <div class="row-header-right">
           <button class="btn-row-action btn-row-clean">Tẩy chữ</button>
           <button class="btn-row-action btn-row-view-clean" style="${item.hasCleaned ? '' : 'display:none;'}">Xem ảnh sạch</button>
           <button class="btn-row-action btn-row-ocr">OCR</button>
-          <button class="btn-row-action btn-row-trans">Translate</button>
+          <button class="btn-row-action btn-row-trans">Dịch</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
+          <button class="btn-row-action btn-row-proofread" title="Soát bản dịch trang này">Soát</button>
           <button class="btn-row-delete" title="Xóa trang này">&times;</button>
         </div>
+      </div>
+
+      <!-- Dòng tóm tắt hiển thị khi thu gọn -->
+      <div class="collapsed-preview-bar">
+        <span class="preview-line-icon">💬</span>
+        <span class="preview-line-text">${escapeHtml(getFirstLineVi(item.viText))}</span>
       </div>
 
       <div class="row-body">
@@ -1070,6 +1148,23 @@
     card.querySelector('.btn-row-trans').addEventListener('click', () => translateSingleText(item));
     card.querySelector('.btn-row-all').addEventListener('click', () => processSingleImage(item, 'all'));
 
+    const btnCollapse = card.querySelector('.btn-toggle-collapse');
+    if (btnCollapse) {
+      btnCollapse.addEventListener('click', (e) => {
+        e.stopPropagation();
+        item.isCollapsed = !item.isCollapsed;
+        card.classList.toggle('is-collapsed', item.isCollapsed);
+      });
+    }
+
+    const btnProof = card.querySelector('.btn-row-proofread');
+    if (btnProof) {
+      btnProof.addEventListener('click', () => {
+        const idx = state.images.findIndex(x => x.id === item.id);
+        if (idx !== -1) openProofread(idx);
+      });
+    }
+
     return card;
   }
 
@@ -1078,11 +1173,12 @@
     const card = document.getElementById(`row-${item.id}`);
     if (!card) return;
 
-    card.className = `manga-row-card ${item.status}`;
+    card.className = `manga-row-card ${item.status}${item.isCollapsed ? ' is-collapsed' : ''}`;
     const badge = card.querySelector('.badge-status');
     if (badge) {
       badge.className = `badge-status ${item.status}`;
       badge.textContent = item.status.toUpperCase();
+      badge.setAttribute('data-status-vi', statusViText(item.status));
     }
 
     const cleanBadge = card.querySelector('.badge-clean');
@@ -1100,7 +1196,11 @@
     const textareaVi = card.querySelector('.textarea-vi');
     if (textareaVi) textareaVi.value = item.viText;
 
+    const previewLine = card.querySelector('.preview-line-text');
+    if (previewLine) previewLine.textContent = getFirstLineVi(item.viText);
+
     updateStatBadge();
+    updateFilterCounts();
     el.btnExportChapter.disabled = state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = state.images.length === 0;
   }
@@ -1264,6 +1364,9 @@
 
         completed++;
         el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+        if (el.btnProcessAllLabel) el.btnProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
+        if (el.btnBottomProcessAllLabel) el.btnBottomProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
+        updateFilterCounts();
 
         // Delay 1.8s per worker to strictly maintain < 15 RPM per key
         if (!state.stopQueueRequested && nextIndex < total) {
@@ -1350,7 +1453,9 @@
     if (!el.btnProcessAllLabel) return;
     const c = state.settings.stepClean;
     const t = state.settings.stepTranslate;
-    el.btnProcessAllLabel.textContent = (c && t) ? 'Tẩy chữ + OCR + Dịch tất cả' : (c ? 'Tẩy chữ tất cả' : 'OCR + Translate all');
+    const lbl = (c && t) ? 'Tẩy chữ + OCR + Dịch tất cả' : (c ? 'Tẩy chữ tất cả' : 'OCR + Dịch tất cả');
+    el.btnProcessAllLabel.textContent = lbl;
+    if (el.btnBottomProcessAllLabel) el.btnBottomProcessAllLabel.textContent = lbl;
   }
 
   let lightboxObjUrl = null;
@@ -1488,6 +1593,9 @@
         completed++;
         if (!ok) failed++;
         el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
+        if (el.btnProcessAllLabel) el.btnProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
+        if (el.btnBottomProcessAllLabel) el.btnBottomProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
+        updateFilterCounts();
       }
     }
 
@@ -1646,6 +1754,14 @@
     el.btnClearAll.disabled = isRunning;
     if (el.btnExportChapter) el.btnExportChapter.disabled = isRunning || state.images.length === 0;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = isRunning || state.images.length === 0;
+
+    if (el.btnBottomCleanAll) el.btnBottomCleanAll.disabled = isRunning;
+    if (el.btnBottomProcessAll) {
+      if (!isRunning) {
+        el.btnBottomProcessAll.disabled = (state.images.length === 0);
+        updateProcessAllLabel();
+      }
+    }
   }
 
   // Clear All
@@ -1938,4 +2054,409 @@
   }
 
   init();
+
+  // ==========================================================================
+  // GIAI ĐOẠN 2: HELPER FUNCTIONS & EVENT HANDLERS
+  // ==========================================================================
+
+  function statusViText(status) {
+    switch (status) {
+      case 'processing': return 'ĐANG XỬ LÝ';
+      case 'done': return 'XONG';
+      case 'error': return 'LỖI';
+      default: return 'CHỜ';
+    }
+  }
+
+  function getFirstLineVi(text) {
+    if (!text) return '(Chưa có bản dịch)';
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines[0] || '(Chưa có bản dịch)';
+  }
+
+  function updateFilterCounts() {
+    const total = state.images.length;
+    let doneCount = 0;
+    let errorCount = 0;
+    let pendingCount = 0;
+
+    state.images.forEach(img => {
+      const isDone = (img.status === 'done' || !state.settings.stepTranslate) &&
+                     (!state.settings.stepClean || img.cleanStatus === 'done');
+      const isErr = img.status === 'error' || img.cleanStatus === 'error';
+      if (isDone) {
+        doneCount++;
+      } else if (isErr) {
+        errorCount++;
+      } else {
+        pendingCount++;
+      }
+    });
+
+    if (el.countAll) el.countAll.textContent = total;
+    if (el.countDone) el.countDone.textContent = doneCount;
+    if (el.countError) el.countError.textContent = errorCount;
+    if (el.countPending) el.countPending.textContent = pendingCount;
+  }
+
+  function setFilter(filterType) {
+    state.currentFilter = filterType;
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.dataset.filter === filterType);
+    });
+
+    state.images.forEach(img => {
+      const card = document.getElementById(`row-${img.id}`);
+      if (!card) return;
+      let show = true;
+      const isDone = (img.status === 'done' || !state.settings.stepTranslate) &&
+                     (!state.settings.stepClean || img.cleanStatus === 'done');
+      const isErr = img.status === 'error' || img.cleanStatus === 'error';
+      const isPending = !isDone && !isErr;
+
+      if (filterType === 'done') show = isDone;
+      else if (filterType === 'error') show = isErr;
+      else if (filterType === 'pending') show = isPending;
+
+      card.classList.toggle('filter-hidden', !show);
+    });
+  }
+
+  function jumpToFirstPending() {
+    const firstPending = state.images.find(img => {
+      const isDone = (img.status === 'done' || !state.settings.stepTranslate) &&
+                     (!state.settings.stepClean || img.cleanStatus === 'done');
+      return !isDone;
+    });
+    if (firstPending) {
+      const card = document.getElementById(`row-${firstPending.id}`);
+      if (card) {
+        card.classList.remove('filter-hidden');
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }
+
+  function toggleCollapseAll() {
+    state.isAllCollapsed = !state.isAllCollapsed;
+    state.images.forEach(img => {
+      img.isCollapsed = state.isAllCollapsed;
+      const card = document.getElementById(`row-${img.id}`);
+      if (card) card.classList.toggle('is-collapsed', state.isAllCollapsed);
+    });
+    if (el.btnToggleCollapseAllLabel) {
+      el.btnToggleCollapseAllLabel.textContent = state.isAllCollapsed ? 'Mở rộng' : 'Thu gọn';
+    }
+  }
+
+  function openBottomSheet() {
+    if (el.bottomSheetBackdrop) el.bottomSheetBackdrop.style.display = 'flex';
+  }
+
+  function closeBottomSheet() {
+    if (el.bottomSheetBackdrop) el.bottomSheetBackdrop.style.display = 'none';
+  }
+
+  function openProofread(index = 0) {
+    if (!state.images.length) return;
+    state.proofreadIndex = Math.max(0, Math.min(state.images.length - 1, index));
+    state.proofreadShowClean = false;
+    state.proofreadZoom = 100;
+    renderProofreadView();
+    if (el.proofreadOverlay) el.proofreadOverlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeProofread() {
+    if (el.proofreadOverlay) el.proofreadOverlay.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function navigateProofread(step) {
+    if (!state.images.length) return;
+    const next = state.proofreadIndex + step;
+    if (next >= 0 && next < state.images.length) {
+      state.proofreadIndex = next;
+      state.proofreadShowClean = false;
+      renderProofreadView();
+    }
+  }
+
+  function renderProofreadView() {
+    const item = state.images[state.proofreadIndex];
+    if (!item) return;
+
+    if (el.proofreadPageIndicator) {
+      el.proofreadPageIndicator.textContent = `Trang ${state.proofreadIndex + 1} / ${state.images.length}`;
+    }
+    if (el.proofreadFooterName) {
+      el.proofreadFooterName.textContent = item.name;
+    }
+
+    if (el.btnProofreadToggleClean) {
+      if (item.hasCleaned) {
+        el.btnProofreadToggleClean.style.display = 'inline-flex';
+        if (el.btnProofreadToggleCleanLabel) {
+          el.btnProofreadToggleCleanLabel.textContent = state.proofreadShowClean ? 'Xem ảnh gốc' : 'Xem ảnh sạch';
+        }
+      } else {
+        el.btnProofreadToggleClean.style.display = 'none';
+      }
+    }
+
+    if (el.proofreadImg) {
+      if (state.proofreadShowClean && item.hasCleaned) {
+        store.getCleaned(item.id).then(record => {
+          if (record && record.data) {
+            const blob = new Blob([record.data], { type: record.mime || 'image/png' });
+            el.proofreadImg.src = URL.createObjectURL(blob);
+          } else {
+            el.proofreadImg.src = item.base64;
+          }
+        }).catch(() => {
+          el.proofreadImg.src = item.base64;
+        });
+      } else {
+        el.proofreadImg.src = item.base64;
+      }
+      applyProofreadZoom();
+    }
+
+    if (el.proofreadJpText) el.proofreadJpText.value = item.ocrText || '';
+    if (el.proofreadViText) el.proofreadViText.value = item.viText || '';
+
+    if (el.btnProofreadPrev) el.btnProofreadPrev.disabled = (state.proofreadIndex <= 0);
+    if (el.btnProofreadNext) el.btnProofreadNext.disabled = (state.proofreadIndex >= state.images.length - 1);
+  }
+
+  function applyProofreadZoom() {
+    if (!el.proofreadImg) return;
+    el.proofreadImg.style.transform = `scale(${state.proofreadZoom / 100})`;
+    if (el.proofreadZoomLevel) el.proofreadZoomLevel.textContent = `${state.proofreadZoom}%`;
+  }
+
+  function toggleProofreadClean() {
+    state.proofreadShowClean = !state.proofreadShowClean;
+    renderProofreadView();
+  }
+
+  function updateRowTextsFromProofread(item) {
+    const card = document.getElementById(`row-${item.id}`);
+    if (!card) return;
+    const txtJp = card.querySelector('.textarea-jp');
+    if (txtJp) txtJp.value = item.ocrText;
+    const txtVi = card.querySelector('.textarea-vi');
+    if (txtVi) txtVi.value = item.viText;
+    const prevText = card.querySelector('.preview-line-text');
+    if (prevText) prevText.textContent = getFirstLineVi(item.viText);
+  }
+
+  // Bind Phase 2 Events
+  function bindPhase2Events() {
+    // Filter chips
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.addEventListener('click', () => setFilter(chip.dataset.filter));
+    });
+
+    if (el.btnJumpPending) {
+      el.btnJumpPending.addEventListener('click', jumpToFirstPending);
+    }
+
+    if (el.btnToggleCollapseAll) {
+      el.btnToggleCollapseAll.addEventListener('click', toggleCollapseAll);
+    }
+
+    if (el.btnOpenProofread) {
+      el.btnOpenProofread.addEventListener('click', () => openProofread(0));
+    }
+
+    // Bottom Action Bar
+    if (el.btnOpenBottomSheet) {
+      el.btnOpenBottomSheet.addEventListener('click', openBottomSheet);
+    }
+    if (el.btnCloseBottomSheet) {
+      el.btnCloseBottomSheet.addEventListener('click', closeBottomSheet);
+    }
+    if (el.bottomSheetBackdrop) {
+      el.bottomSheetBackdrop.addEventListener('click', (e) => {
+        if (e.target === el.bottomSheetBackdrop) closeBottomSheet();
+      });
+    }
+
+    if (el.btnBottomCleanAll) {
+      el.btnBottomCleanAll.addEventListener('click', () => {
+        if (!state.isQueueRunning) runCleanQueue();
+      });
+    }
+
+    if (el.btnBottomProcessAll) {
+      el.btnBottomProcessAll.addEventListener('click', () => {
+        if (state.isQueueRunning) {
+          state.stopQueueRequested = true;
+          if (el.btnStopQueue) el.btnStopQueue.click();
+        } else {
+          runSelectedSteps();
+        }
+      });
+    }
+
+    if (el.btnBottomQuickTxt) {
+      el.btnBottomQuickTxt.addEventListener('click', () => {
+        if (el.btnQuickDownloadTxt && !el.btnQuickDownloadTxt.disabled) {
+          el.btnQuickDownloadTxt.click();
+        }
+      });
+    }
+
+    // Bottom Sheet items
+    if (el.sheetBtnCleanAll) {
+      el.sheetBtnCleanAll.addEventListener('click', () => {
+        closeBottomSheet();
+        if (!state.isQueueRunning) runCleanQueue();
+      });
+    }
+    if (el.sheetBtnOcrAll) {
+      el.sheetBtnOcrAll.addEventListener('click', () => {
+        closeBottomSheet();
+        if (!state.isQueueRunning) runBatchQueue('ocr');
+      });
+    }
+    if (el.sheetBtnTranslateAll) {
+      el.sheetBtnTranslateAll.addEventListener('click', () => {
+        closeBottomSheet();
+        if (!state.isQueueRunning) runBatchQueue('trans');
+      });
+    }
+    if (el.sheetBtnDownloadTxt) {
+      el.sheetBtnDownloadTxt.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnQuickDownloadTxt && !el.btnQuickDownloadTxt.disabled) el.btnQuickDownloadTxt.click();
+      });
+    }
+    if (el.sheetBtnExportZipClean) {
+      el.sheetBtnExportZipClean.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnExportZipClean) el.btnExportZipClean.click();
+      });
+    }
+    if (el.sheetBtnExportZipBoth) {
+      el.sheetBtnExportZipBoth.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnExportZipBoth) el.btnExportZipBoth.click();
+      });
+    }
+    if (el.sheetBtnOpenExportModal) {
+      el.sheetBtnOpenExportModal.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnOpenExportModal) el.btnOpenExportModal.click();
+      });
+    }
+    if (el.sheetBtnClearAll) {
+      el.sheetBtnClearAll.addEventListener('click', () => {
+        closeBottomSheet();
+        clearAllBatch();
+      });
+    }
+
+    // Proofreading Overlay
+    if (el.btnCloseProofread) {
+      el.btnCloseProofread.addEventListener('click', closeProofread);
+    }
+    if (el.btnProofreadPrev) {
+      el.btnProofreadPrev.addEventListener('click', () => navigateProofread(-1));
+    }
+    if (el.btnProofreadNext) {
+      el.btnProofreadNext.addEventListener('click', () => navigateProofread(1));
+    }
+    if (el.btnProofreadToggleClean) {
+      el.btnProofreadToggleClean.addEventListener('click', toggleProofreadClean);
+    }
+
+    if (el.btnProofreadZoomIn) {
+      el.btnProofreadZoomIn.addEventListener('click', () => {
+        state.proofreadZoom = Math.min(300, state.proofreadZoom + 25);
+        applyProofreadZoom();
+      });
+    }
+    if (el.btnProofreadZoomOut) {
+      el.btnProofreadZoomOut.addEventListener('click', () => {
+        state.proofreadZoom = Math.max(50, state.proofreadZoom - 25);
+        applyProofreadZoom();
+      });
+    }
+    if (el.btnProofreadZoomReset) {
+      el.btnProofreadZoomReset.addEventListener('click', () => {
+        state.proofreadZoom = 100;
+        applyProofreadZoom();
+      });
+    }
+
+    if (el.btnProofreadCopyJp) {
+      el.btnProofreadCopyJp.addEventListener('click', () => {
+        if (el.proofreadJpText) copyToClipboard(el.proofreadJpText.value, 'Đã sao chép OCR tiếng Nhật!');
+      });
+    }
+    if (el.btnProofreadCopyVi) {
+      el.btnProofreadCopyVi.addEventListener('click', () => {
+        if (el.proofreadViText) copyToClipboard(el.proofreadViText.value, 'Đã sao chép bản dịch tiếng Việt!');
+      });
+    }
+
+    if (el.proofreadJpText) {
+      el.proofreadJpText.addEventListener('input', (e) => {
+        const item = state.images[state.proofreadIndex];
+        if (item) {
+          item.ocrText = e.target.value;
+          updateRowTextsFromProofread(item);
+          scheduleSave(item);
+        }
+      });
+    }
+    if (el.proofreadViText) {
+      el.proofreadViText.addEventListener('input', (e) => {
+        const item = state.images[state.proofreadIndex];
+        if (item) {
+          item.viText = e.target.value;
+          updateRowTextsFromProofread(item);
+          scheduleSave(item);
+        }
+      });
+    }
+
+    // Keyboard navigation for proofread
+    document.addEventListener('keydown', (e) => {
+      if (el.proofreadOverlay && el.proofreadOverlay.style.display === 'flex') {
+        if (e.target === el.proofreadJpText || e.target === el.proofreadViText) return;
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          navigateProofread(-1);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          navigateProofread(1);
+        } else if (e.key === 'Escape') {
+          closeProofread();
+        }
+      }
+    });
+
+    // Touch swipe for proofreading overlay on mobile
+    if (el.proofreadImgWrapper) {
+      let touchStartX = 0;
+      let touchEndX = 0;
+      el.proofreadImgWrapper.addEventListener('touchstart', (e) => {
+        if (e.changedTouches && e.changedTouches.length) {
+          touchStartX = e.changedTouches[0].screenX;
+        }
+      }, { passive: true });
+      el.proofreadImgWrapper.addEventListener('touchend', (e) => {
+        if (e.changedTouches && e.changedTouches.length) {
+          touchEndX = e.changedTouches[0].screenX;
+          const diff = touchEndX - touchStartX;
+          if (diff > 60) navigateProofread(-1);
+          else if (diff < -60) navigateProofread(1);
+        }
+      }, { passive: true });
+    }
+  }
+
 })();
