@@ -1362,36 +1362,31 @@ kbd {
   .batch-buttons {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
 
-  .btn-sub {
-    padding: 8px 6px;
-    font-size: 0.76rem;
-    text-align: center;
-    justify-content: center;
-    white-space: nowrap;
-    border-radius: var(--radius-sm);
-  }
-
-  .btn-ocr-all {
+  .btn-clean-all {
     order: 1;
   }
 
-  .btn-trans-all {
+  .btn-ocr-all {
     order: 2;
   }
 
-  .btn-clear-all {
+  .btn-trans-all {
     order: 3;
   }
 
-  .btn-primary-highlight {
-    grid-column: span 3;
+  .btn-clear-all {
     order: 4;
-    padding: 11px 8px;
-    font-size: 0.88rem;
+  }
+
+  .btn-primary-highlight {
+    grid-column: span 2;
+    order: 5;
+    padding: 10px 8px;
+    font-size: 0.86rem;
     font-weight: 700;
   }
 
@@ -1565,7 +1560,7 @@ kbd {
   }
 
   .batch-buttons {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 6px;
   }
 
@@ -1737,16 +1732,18 @@ kbd {
 }
 
 /* ==========================================================================
-   GIAI ĐOẠN 2: MOBILE UI OPTIMIZATION (BATCH STUDIO)
+   GIAI ĐOẠN 2 & 3: TỐI ƯU GIAO DIỆN DESKTOP & MOBILE (BATCH STUDIO)
    ========================================================================== */
 
-/* 1. Header 2 hàng tối ưu mobile */
+/* 1. Cấu trúc Header 2 hàng chuẩn hóa */
 .studio-header {
   height: auto !important;
   min-height: 52px;
-  padding: 8px 16px !important;
+  padding: 8px 24px !important;
   flex-direction: column !important;
   gap: 8px;
+  background-color: var(--bg-main);
+  border-bottom: 1px solid var(--border);
 }
 
 .studio-header-row-1,
@@ -1755,7 +1752,7 @@ kbd {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  gap: 8px;
+  gap: 12px;
 }
 
 .header-left,
@@ -1765,7 +1762,247 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+/* DESKTOP ( >= 769px ): Header gọn gàng 1 dòng, Action bar 1 hàng, ẩn thanh đáy mobile */
+@media (min-width: 769px) {
+  .studio-header {
+    padding: 10px 24px !important;
+    gap: 8px !important;
+  }
+
+  .header-left,
+  .header-right,
+  .row-2-left,
+  .row-2-right {
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  /* Ẩn Bottom Action Bar của mobile trên màn hình máy tính */
+  .bottom-action-bar {
+    display: none !important;
+  }
+
+  .batch-container {
+    padding-bottom: 40px !important;
+  }
+
+  /* Action subbar trên desktop: 1 hàng ngang chuẩn mực */
+  .action-subbar {
+    height: 56px !important;
+    padding: 0 24px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .step-toggles {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+
+  .batch-buttons {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: auto !important;
+    flex-wrap: nowrap !important;
+    grid-template-columns: none !important;
+  }
+
+  .btn-sub {
+    width: auto !important;
+    padding: 7px 14px !important;
+    font-size: 0.8rem !important;
+    white-space: nowrap !important;
+  }
+
+  .btn-primary-highlight {
+    grid-column: auto !important;
+    order: 5 !important;
+    padding: 8px 18px !important;
+    font-size: 0.84rem !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+
+  .batch-stats {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin-left: auto !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+}
+
+/* MOBILE & TABLET NHỎ ( <= 768px ): Tối ưu hàng nút và dùng Bottom Action Bar */
+@media (max-width: 768px) {
+  .btn-text-full {
+    display: none !important;
+  }
+  .btn-text-short {
+    display: inline !important;
+  }
+
+  .studio-header {
+    padding: 6px 10px !important;
+    gap: 5px !important;
+  }
+
+  .studio-header-row-1,
+  .studio-header-row-2 {
+    gap: 4px !important;
+  }
+
+  .header-left,
+  .header-right,
+  .row-2-left,
+  .row-2-right {
+    gap: 4px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .btn-back-home {
+    padding: 4px 6px !important;
+    font-size: 0.72rem !important;
+    gap: 4px !important;
+  }
+  .btn-back-home {
+    padding: 4px 6px !important;
+    font-size: 0.72rem !important;
+    gap: 3px !important;
+    min-width: 32px !important;
+  }
+  .btn-back-home span {
+    display: none !important;
+  }
+
+  .lang-selector-group {
+    padding: 2px 4px !important;
+    gap: 2px !important;
+  }
+  .lang-label {
+    font-size: 0.5rem !important;
+  }
+  .lang-select {
+    font-size: 0.7rem !important;
+    max-width: 62px !important;
+  }
+  .studio-divider {
+    display: none !important;
+  }
+
+  .btn-add-images {
+    padding: 4px 6px !important;
+    font-size: 0.72rem !important;
+    min-width: 0 !important;
+    gap: 3px !important;
+  }
+
+  .btn-icon-text,
+  .btn-direct-download {
+    padding: 4px 6px !important;
+    min-width: 28px !important;
+    justify-content: center !important;
+  }
+  .btn-icon-text span,
+  .btn-direct-download span {
+    display: none !important;
+  }
+
+  .dropdown-wrapper {
+    display: inline-block !important;
+  }
+
+  .btn-export {
+    padding: 4px 6px !important;
+    font-size: 0.72rem !important;
+    min-width: 0 !important;
+    gap: 3px !important;
+  }
+
+  .btn-comic-mode {
+    padding: 3px 5px !important;
+    font-size: 0.68rem !important;
+    gap: 2px !important;
+  }
+
+  .toggle-switch-wrapper {
+    gap: 3px !important;
+  }
+  .toggle-slider {
+    width: 26px !important;
+    height: 15px !important;
+  }
+  .toggle-slider:before {
+    width: 9px !important;
+    height: 9px !important;
+  }
+  .toggle-switch-wrapper input:checked + .toggle-slider:before {
+    transform: translateX(11px) !important;
+  }
+  .toggle-text {
+    font-size: 0.68rem !important;
+  }
+
+  .btn-outline-collapse,
+  .btn-outline-proofread {
+    padding: 4px 6px !important;
+    font-size: 0.7rem !important;
+    min-height: 32px !important;
+    gap: 3px !important;
+  }
+
+  /* Trên mobile, giữ dàn nút gọn gàng cân xứng 2 cột, không bị gãy nút lẻ loi */
+  .action-subbar {
+    height: auto !important;
+    padding: 8px 10px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .step-toggles {
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .batch-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+    width: 100% !important;
+  }
+
+  .btn-clean-all { order: 1 !important; }
+  .btn-ocr-all { order: 2 !important; }
+  .btn-trans-all { order: 3 !important; }
+  .btn-clear-all { order: 4 !important; }
+  .btn-primary-highlight {
+    grid-column: span 2 !important;
+    order: 5 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 10px 8px !important;
+  }
+
+  .bottom-action-bar {
+    display: block !important;
+  }
 }
 
 .btn-outline-collapse,
