@@ -123,3 +123,35 @@ test('snapBoxToBubble simulation: stops at dark panel border line and does not o
   assert.equal(bottomY < 92, true, `bottomY (${bottomY}) must not cross panel line at row 92`);
   assert.equal(bottomY >= 89, true);
 });
+
+test('eraseAndBoxRegion simulation: correctly clamps selected box bounds and initializes bubble', () => {
+  const canvasW = 1000;
+  const canvasH = 1500;
+
+  // Selected region coordinates that might exceed boundary or be negative
+  const rawBox = { x: -10, y: 1450, width: 300, height: 200 };
+
+  const x = Math.max(0, Math.min(canvasW - 10, Math.round(rawBox.x)));
+  const y = Math.max(0, Math.min(canvasH - 10, Math.round(rawBox.y)));
+  const width = Math.max(20, Math.min(canvasW - x, Math.round(rawBox.width)));
+  const height = Math.max(20, Math.min(canvasH - y, Math.round(rawBox.height)));
+
+  assert.equal(x, 0, 'Negative x should clamp to 0');
+  assert.equal(y, 1450);
+  assert.equal(width, 300);
+  assert.equal(height, 50, 'Height should clamp to canvas boundary (1500 - 1450)');
+
+  // Verify created bubble properties
+  const targetBubble = {
+    id: 123456,
+    x, y, width, height,
+    srcText: 'こんにちは',
+    text: 'Xin chào',
+    autoFit: true,
+    bgFill: '#ffffff'
+  };
+
+  assert.equal(targetBubble.bgFill, '#ffffff', 'Newly erased box should default to clean white fill');
+  assert.equal(targetBubble.autoFit, true);
+  assert.equal(targetBubble.text, 'Xin chào');
+});

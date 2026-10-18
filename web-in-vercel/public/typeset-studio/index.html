@@ -355,6 +355,14 @@
           <span>Vẽ box (W)</span>
         </button>
 
+        <button type="button" class="btn-tool" id="btnToolEraseOcr" title="Kéo chuột chọn vùng để tẩy sạch chữ & tạo box tự động (Phím E)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 20H7L3 16C2 15 2 13 3 12L13 2L22 11L18 15"></path>
+            <path d="M11 17L17 11"></path>
+          </svg>
+          <span>Tẩy & Box (E)</span>
+        </button>
+
         <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
 
         <button type="button" class="btn-tool" id="btnSnapBubble" title="Tự động nhận diện và co vừa khít viền bóng thoại manga (Chặn tràn panel)">
@@ -371,6 +379,13 @@
             <line x1="12" y1="4" x2="12" y2="20"></line>
           </svg>
           <span>Khớp chữ</span>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnEraseAndOcrBox" title="Tẩy sạch chữ gốc và nhận diện OCR nội dung cho khung thoại đang chọn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+          </svg>
+          <span>Tẩy chữ vùng này</span>
         </button>
 
         <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
@@ -445,13 +460,17 @@
           </label>
           <textarea id="propText" class="prop-input-textarea" placeholder="Nhập lời thoại cần chèn..."></textarea>
           <div style="display:flex; gap:6px; margin-top:6px;">
-            <button type="button" class="btn-action btn-secondary" id="btnInspectorSnapBubble" style="flex:1; justify-content:center; padding:5px 8px; font-size:11px;" title="Tự động nhận diện và ôm khít viền bóng thoại manga (chặn tràn vạch panel)">
+            <button type="button" class="btn-action btn-secondary" id="btnInspectorSnapBubble" style="flex:1; justify-content:center; padding:5px 6px; font-size:11px;" title="Tự động nhận diện và ôm khít viền bóng thoại manga (chặn tràn vạch panel)">
               <span style="color:#fbbf24;">⚡</span>
               <span>Ôm bóng thoại</span>
             </button>
-            <button type="button" class="btn-action btn-secondary" id="btnInspectorFitText" style="flex:1; justify-content:center; padding:5px 8px; font-size:11px;" title="Co khung vừa vặn chiều cao chữ">
+            <button type="button" class="btn-action btn-secondary" id="btnInspectorFitText" style="flex:1; justify-content:center; padding:5px 6px; font-size:11px;" title="Co khung vừa vặn chiều cao chữ">
               <span style="color:#38bdf8;">📏</span>
               <span>Khớp chữ</span>
+            </button>
+            <button type="button" class="btn-action btn-secondary" id="btnInspectorEraseOcr" style="flex:1; justify-content:center; padding:5px 6px; font-size:11px;" title="Tẩy sạch chữ gốc dưới khung thoại này và nhận diện OCR nội dung">
+              <span style="color:#f43f5e;">🧹</span>
+              <span>Tẩy & OCR</span>
             </button>
           </div>
         </div>

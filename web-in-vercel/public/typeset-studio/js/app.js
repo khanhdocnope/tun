@@ -148,10 +148,13 @@ const el = {
   inputAddLocalImages: document.getElementById('inputAddLocalImages'),
   btnToolSelect: document.getElementById('btnToolSelect'),
   btnToolDraw: document.getElementById('btnToolDraw'),
+  btnToolEraseOcr: document.getElementById('btnToolEraseOcr'),
   btnSnapBubble: document.getElementById('btnSnapBubble'),
   btnFitText: document.getElementById('btnFitText'),
+  btnEraseAndOcrBox: document.getElementById('btnEraseAndOcrBox'),
   btnInspectorSnapBubble: document.getElementById('btnInspectorSnapBubble'),
   btnInspectorFitText: document.getElementById('btnInspectorFitText'),
+  btnInspectorEraseOcr: document.getElementById('btnInspectorEraseOcr'),
   btnAddBubble: document.getElementById('btnAddBubble'),
   btnDeleteBubble: document.getElementById('btnDeleteBubble'),
   btnZoomIn: document.getElementById('btnZoomIn'),
@@ -985,16 +988,26 @@ function renderCanvas() {
     drawSelectionHandles(ctx, sel);
   }
 
-  // Vẽ khung preview khi đang kéo chuột vẽ box thoại
+  // Vẽ khung preview khi đang kéo chuột vẽ box thoại hoặc chọn vùng xóa chữ
   if (appState.isDrawingBox && appState.tempDrawBox) {
     const { x, y, width, height } = appState.tempDrawBox;
+    const isErase = appState.activeTool === 'erase_ocr';
     ctx.save();
-    ctx.strokeStyle = '#10b981';
+    ctx.strokeStyle = isErase ? '#f43f5e' : '#10b981';
     ctx.lineWidth = 2;
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash([5, 4]);
     ctx.strokeRect(x, y, width, height);
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+    ctx.fillStyle = isErase ? 'rgba(244, 63, 94, 0.2)' : 'rgba(16, 185, 129, 0.15)';
     ctx.fillRect(x, y, width, height);
+
+    if (isErase && width > 40 && height > 20) {
+      ctx.fillStyle = '#f43f5e';
+      const badgeW = Math.min(width, 130);
+      ctx.fillRect(x, Math.max(0, y - 20), badgeW, 18);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('🧹 Tẩy chữ & Bắt text', x + 5, Math.max(12, y - 6));
+    }
     ctx.restore();
   }
 }
@@ -1164,6 +1177,201 @@ function getResizeHandles(bubble) {
   };
 }
 
+/**
+ * Tẩy sạch chữ ở vùng chọn trên ảnh gốc và tự động tạo khung thoại chứa nội dung OCR
+ */
+async function eraseAndBoxRegion(box, isExistingBubble = false) {
+  const page = appState.pages[appState.activePageIndex];
+  if (!page) return;
+
+  const imgW = el.canvas.width || 1000;
+  const imgH = el.canvas.height || 1400;
+
+  const x = Math.max(0, Math.min(imgW - 10, Math.round(box.x)));
+  const y = Math.max(0, Math.min(imgH - 10, Math.round(box.y)));
+  const width = Math.max(20, Math.min(imgW - x, Math.round(box.width)));
+  const height = Math.max(20, Math.min(imgH - y, Math.round(box.height)));
+
+  showToast('🧹 Đang cắt vùng, tẩy sạch chữ & nhận diện OCR...', 3500);
+
+  // 1. Tạo hoặc chọn khung thoại với nền trắng tạm thời che ngay chữ bên dưới
+  let targetBubble;
+  if (isExistingBubble && appState.activeBubbleIndex >= 0 && page.bubbles && page.bubbles[appState.activeBubbleIndex]) {
+    targetBubble = page.bubbles[appState.activeBubbleIndex];
+    targetBubble.x = x;
+    targetBubble.y = y;
+    targetBubble.width = width;
+    targetBubble.height = height;
+    if (!targetBubble.bgFill || targetBubble.bgFill === 'transparent') {
+      targetBubble.bgFill = '#ffffff';
+    }
+  } else {
+    if (!page.bubbles) page.bubbles = [];
+    targetBubble = {
+      id: Date.now(),
+      x,
+      y,
+      width,
+      height,
+      srcText: '',
+      text: 'Đang nhận diện...',
+      font: appState.defaultFont || 'Yuki Arenzi',
+      fontSize: 22,
+      autoFit: true,
+      color: '#000000',
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      align: 'center',
+      verticalAlign: 'middle',
+      lineHeightRatio: 1.25,
+      padding: 8,
+      bgFill: '#ffffff'
+    };
+    page.bubbles.push(targetBubble);
+    appState.activeBubbleIndex = page.bubbles.length - 1;
+  }
+
+  appState.activeTool = 'select';
+  if (typeof updateToolModeUI === 'function') updateToolModeUI();
+  updateInspector();
+  renderCanvas();
+  saveTypesetToDB(page);
+
+  // 2. Cắt ảnh vùng chọn từ ảnh gốc chưa tẩy chữ (nếu có trong DB) hoặc ảnh hiện tại
+  let cropSrc = appState.currentImageElement;
+  try {
+    const db = await openDB();
+    if (db) {
+      const tx = db.transaction(['pages'], 'readonly');
+      const pReq = tx.objectStore('pages').get(page.id);
+      const pData = await new Promise(res => { pReq.onsuccess = () => res(pReq.result); pReq.onerror = () => res(null); });
+      if (pData && pData.base64) {
+        cropSrc = await loadImageElement(pData.base64);
+      }
+    }
+  } catch (e) {}
+
+  const cropCanvas = document.createElement('canvas');
+  cropCanvas.width = width;
+  cropCanvas.height = height;
+  const cropCtx = cropCanvas.getContext('2d');
+  cropCtx.drawImage(cropSrc || el.canvas, x, y, width, height, 0, 0, width, height);
+  const cropBase64 = cropCanvas.toDataURL('image/png');
+
+  // 3. Gọi song song Inpaint tẩy chữ & OCR
+  const cleanPromise = callCleanApi(cropBase64, appState.aiSettings);
+  const ocrPromise = callOcrApi(cropBase64, appState.aiSettings);
+
+  const [cleanResSettled, ocrResSettled] = await Promise.allSettled([cleanPromise, ocrPromise]);
+
+  // Xử lý tẩy chữ bằng AI inpaint:
+  if (cleanResSettled.status === 'fulfilled' && cleanResSettled.value && cleanResSettled.value.ok) {
+    const cleanData = cleanResSettled.value.data;
+    if (cleanData && cleanData.cleanedImageBase64) {
+      try {
+        const patchImg = await loadImageElement(cleanData.cleanedImageBase64);
+        const compCanvas = document.createElement('canvas');
+        compCanvas.width = imgW;
+        compCanvas.height = imgH;
+        const compCtx = compCanvas.getContext('2d');
+        if (appState.currentImageElement) {
+          compCtx.drawImage(appState.currentImageElement, 0, 0);
+        }
+        compCtx.drawImage(patchImg, x, y, width, height);
+
+        const newBlob = await new Promise(r => compCanvas.toBlob(r, 'image/png'));
+        if (newBlob) {
+          page.hasCleaned = true;
+          const db = await openDB();
+          if (db) {
+            try {
+              const tx = db.transaction(['cleaned'], 'readwrite');
+              tx.objectStore('cleaned').put({ id: page.id, blob: newBlob });
+            } catch (e) {}
+          }
+          if (appState.currentImageElement && appState.currentImageElement._objectUrl) {
+            URL.revokeObjectURL(appState.currentImageElement._objectUrl);
+          }
+          appState.currentImageElement = await loadImageElement(newBlob);
+          targetBubble.bgFill = 'transparent';
+          renderCanvas();
+        }
+      } catch (patchErr) {
+        console.warn('Lỗi ghép patch inpaint:', patchErr);
+      }
+    }
+  }
+
+  // Xử lý kết quả OCR:
+  let detectedJp = '';
+  let detectedVi = '';
+  if (ocrResSettled.status === 'fulfilled' && ocrResSettled.value && ocrResSettled.value.ok) {
+    const ocrData = ocrResSettled.value.data;
+    if (ocrData && Array.isArray(ocrData.data) && ocrData.data.length) {
+      detectedJp = ocrData.data.map(d => d.original_text).filter(Boolean).join(' ');
+      detectedVi = ocrData.data.map(d => d.translated_text).filter(Boolean).join(' ');
+    }
+  }
+
+  // Fallback Gemini Vision OCR nếu backend OCR không phát hiện chữ
+  const activeKey = (appState.apiKey || localStorage.getItem('manga_api_key') || '').trim();
+  if (!detectedJp && activeKey) {
+    try {
+      const visRes = await fetch('/api/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: 'ocr',
+          imageBase64: cropBase64,
+          readingOrder: 'manga',
+          sourceLang: 'ja',
+          apiKey: activeKey,
+          model: appState.geminiModel || 'gemini-2.5-flash-lite'
+        })
+      });
+      const visData = await visRes.json();
+      if (visRes.ok && visData.text) {
+        detectedJp = visData.text.replace(/\[\d+\]\s*/g, '').replace(/\n+/g, ' ').trim();
+      }
+    } catch (visErr) {}
+  }
+
+  // Dịch tự động sang tiếng Việt nếu có chữ tiếng Nhật mà chưa có bản dịch
+  if (detectedJp && !detectedVi && activeKey) {
+    try {
+      const transRes = await fetch('/api/translate-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: detectedJp,
+          text_jp: detectedJp,
+          sourceLang: 'ja',
+          targetLang: 'vi',
+          apiKey: activeKey,
+          model: appState.geminiModel || 'gemini-2.5-flash-lite'
+        })
+      });
+      const transData = await transRes.json();
+      if (transRes.ok && (transData.translatedText || transData.text_vi)) {
+        detectedVi = transData.translatedText || transData.text_vi;
+      }
+    } catch (transErr) {}
+  }
+
+  targetBubble.srcText = detectedJp || '';
+  targetBubble.text = detectedVi || detectedJp || 'Lời thoại mới';
+
+  updateInspector();
+  renderCanvas();
+  saveTypesetToDB(page);
+
+  if (detectedJp) {
+    showToast(`🎉 Đã tẩy chữ & nhận diện: "${targetBubble.text}"`);
+  } else {
+    showToast('🎉 Đã tẩy chữ & tạo khung thoại vùng chọn');
+  }
+}
+
 /* ==========================================================================
    Viewport Controls: Zoom, Pan & Fit Screen
    ========================================================================== */
@@ -1257,8 +1465,8 @@ el.viewport.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // Chế độ vẽ box trực tiếp trên Canvas
-  if (appState.activeTool === 'draw') {
+  // Chế độ vẽ box hoặc chọn vùng xóa chữ trực tiếp trên Canvas
+  if (appState.activeTool === 'draw' || appState.activeTool === 'erase_ocr') {
     appState.isDrawingBox = true;
     appState.drawStartCoords = { x: coords.x, y: coords.y };
     appState.tempDrawBox = { x: coords.x, y: coords.y, width: 0, height: 0 };
@@ -1365,7 +1573,7 @@ window.addEventListener('mousemove', (e) => {
   const page = appState.pages[appState.activePageIndex];
   if (!page || !page.bubbles) return;
 
-  if (appState.activeTool === 'draw') {
+  if (appState.activeTool === 'draw' || appState.activeTool === 'erase_ocr') {
     el.canvas.style.cursor = 'crosshair';
   } else if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
@@ -1422,39 +1630,43 @@ window.addEventListener('mouseup', () => {
     appState.tempDrawBox = null;
     appState.drawStartCoords = null;
 
-    if (box && box.width >= 20 && box.height >= 20) {
-      const page = appState.pages[appState.activePageIndex];
-      if (page) {
-        if (!page.bubbles) page.bubbles = [];
-        const newBubble = {
-          x: Math.round(box.x),
-          y: Math.round(box.y),
-          width: Math.round(box.width),
-          height: Math.round(box.height),
-          srcText: '',
-          text: '',
-          font: appState.defaultFont || 'Yuki Arenzi',
-          fontSize: 22,
-          autoFit: true,
-          color: '#000000',
-          strokeColor: '#ffffff',
-          strokeWidth: 3,
-          align: 'center',
-          verticalAlign: 'middle',
-          lineHeightRatio: 1.25,
-          padding: 8
-        };
-        page.bubbles.push(newBubble);
-        appState.activeBubbleIndex = page.bubbles.length - 1;
-        appState.activeTool = 'select';
-        updateToolModeUI();
-        saveTypesetToDB(page);
-        updateInspector();
-        renderCanvas();
-        if (el.propText) {
-          el.propText.focus();
+    if (box && box.width >= 15 && box.height >= 15) {
+      if (appState.activeTool === 'erase_ocr') {
+        eraseAndBoxRegion(box, false);
+      } else {
+        const page = appState.pages[appState.activePageIndex];
+        if (page) {
+          if (!page.bubbles) page.bubbles = [];
+          const newBubble = {
+            x: Math.round(box.x),
+            y: Math.round(box.y),
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            srcText: '',
+            text: '',
+            font: appState.defaultFont || 'Yuki Arenzi',
+            fontSize: 22,
+            autoFit: true,
+            color: '#000000',
+            strokeColor: '#ffffff',
+            strokeWidth: 3,
+            align: 'center',
+            verticalAlign: 'middle',
+            lineHeightRatio: 1.25,
+            padding: 8
+          };
+          page.bubbles.push(newBubble);
+          appState.activeBubbleIndex = page.bubbles.length - 1;
+          appState.activeTool = 'select';
+          updateToolModeUI();
+          saveTypesetToDB(page);
+          updateInspector();
+          renderCanvas();
+          if (el.propText) {
+            el.propText.focus();
+          }
+          showToast('Đã tạo khung thoại mới! Hãy nhập nội dung.');
         }
-        showToast('Đã tạo khung thoại mới! Hãy nhập nội dung.');
       }
     } else {
       renderCanvas();
@@ -1987,17 +2199,35 @@ function setupBubbleActions() {
     const updateToolModeUI = () => {
       if (el.btnToolSelect) el.btnToolSelect.classList.toggle('active', appState.activeTool === 'select');
       if (el.btnToolDraw) el.btnToolDraw.classList.toggle('active', appState.activeTool === 'draw');
+      if (el.btnToolEraseOcr) el.btnToolEraseOcr.classList.toggle('active', appState.activeTool === 'erase_ocr');
       if (el.canvas) {
-        el.canvas.style.cursor = appState.activeTool === 'draw' ? 'crosshair' : 'default';
+        el.canvas.style.cursor = (appState.activeTool === 'draw' || appState.activeTool === 'erase_ocr') ? 'crosshair' : 'default';
       }
     };
 
     if (el.btnToolSelect) el.btnToolSelect.addEventListener('click', () => { appState.activeTool = 'select'; updateToolModeUI(); });
     if (el.btnToolDraw) el.btnToolDraw.addEventListener('click', () => { appState.activeTool = 'draw'; updateToolModeUI(); });
+    if (el.btnToolEraseOcr) el.btnToolEraseOcr.addEventListener('click', () => { appState.activeTool = 'erase_ocr'; updateToolModeUI(); });
     if (el.btnSnapBubble) el.btnSnapBubble.addEventListener('click', snapActiveBubble);
     if (el.btnFitText) el.btnFitText.addEventListener('click', fitActiveBubbleToText);
+    if (el.btnEraseAndOcrBox) el.btnEraseAndOcrBox.addEventListener('click', () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || appState.activeBubbleIndex < 0 || !page.bubbles || !page.bubbles[appState.activeBubbleIndex]) {
+        showToast('Vui lòng chọn một khung thoại trên canvas trước.');
+        return;
+      }
+      eraseAndBoxRegion(page.bubbles[appState.activeBubbleIndex], true);
+    });
     if (el.btnInspectorSnapBubble) el.btnInspectorSnapBubble.addEventListener('click', snapActiveBubble);
     if (el.btnInspectorFitText) el.btnInspectorFitText.addEventListener('click', fitActiveBubbleToText);
+    if (el.btnInspectorEraseOcr) el.btnInspectorEraseOcr.addEventListener('click', () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || appState.activeBubbleIndex < 0 || !page.bubbles || !page.bubbles[appState.activeBubbleIndex]) {
+        showToast('Vui lòng chọn một khung thoại trước.');
+        return;
+      }
+      eraseAndBoxRegion(page.bubbles[appState.activeBubbleIndex], true);
+    });
 
     // Double-click on bubble to focus editor
     el.canvas.addEventListener('dblclick', (e) => {
@@ -2033,6 +2263,12 @@ function setupBubbleActions() {
           appState.activeTool = 'draw';
           updateToolModeUI();
           showToast('Công cụ: Vẽ khung thoại (W)');
+          return;
+        }
+        if (e.key === 'e' || e.key === 'E') {
+          appState.activeTool = 'erase_ocr';
+          updateToolModeUI();
+          showToast('Công cụ: Chọn vùng xóa chữ & bắt text (E)');
           return;
         }
 
