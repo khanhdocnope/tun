@@ -119,13 +119,44 @@ def run_tests():
         pg.wait_for_timeout(200)
         check('Xóa bóng thoại thành công', pg.locator('#activeBubbleBadge').inner_text() == 'Chưa chọn')
 
-        # 8. Kiểm tra sự kiện xuất ảnh PNG
+        # 8. Kiểm tra Nạp ảnh trực tiếp qua input file
+        page_file = os.path.join(os.path.dirname(__file__), 'page2.jpg')
+        if os.path.exists(page_file):
+            initial_count = pg.locator('.page-thumb-card').count()
+            pg.set_input_files('#inputAddLocalImages', page_file)
+            pg.wait_for_timeout(800)
+            new_count = pg.locator('.page-thumb-card').count()
+            check('Tải ảnh trực tiếp trong Typeset Studio thành công', new_count == initial_count + 1, f'{new_count} trang')
+
+        # 9. Kiểm tra Tẩy chữ & Bắt Box AI (Backend)
+        check('Nút Tẩy & Bắt Box AI có mặt', pg.locator('#btnAiCleanAndBox').is_visible())
+        pg.click('#btnAiCleanAndBox')
+        pg.wait_for_selector('#btnAiCleanAndBox:not([disabled])', timeout=10000)
+        pg.wait_for_timeout(300)
+
+        # Kiểm tra box được tự động tạo từ Backend AI
+        check('Bắt box AI tự động tạo bóng thoại', pg.locator('#activeBubbleBadge').inner_text() != 'Chưa chọn')
+        jp_val = pg.locator('#propSrcText').input_value()
+        check('Ô tiếng Nhật gốc hiển thị chữ nhận diện được từ OCR', 'こんにちは世界' in jp_val, jp_val)
+        vi_val = pg.locator('#propText').input_value()
+        check('Ô tiếng Việt hiển thị bản dịch tương ứng', 'Xin chào thế giới' in vi_val, vi_val)
+
+        # 10. Kiểm tra nút chuyển đổi chế độ xem Dịch (VI) / Gốc (JP)
+        check('Nút toggle ngôn ngữ hiển thị', pg.locator('#btnToggleViewLang').is_visible())
+        pg.click('#btnToggleViewLang')
+        pg.wait_for_timeout(200)
+        check('Chuyển sang chế độ xem tiếng Nhật gốc (JP)', 'Gốc (JP)' in pg.locator('#viewLangLabel').inner_text())
+        pg.click('#btnToggleViewLang')
+        pg.wait_for_timeout(200)
+        check('Chuyển lại chế độ xem bản dịch tiếng Việt (VI)', 'Dịch (VI)' in pg.locator('#viewLangLabel').inner_text())
+
+        # 11. Kiểm tra sự kiện xuất ảnh PNG
         with pg.expect_download(timeout=5000) as download_info:
             pg.click('#btnExportCurrentPng')
         download = download_info.value
         check('Nút Xuất PNG tải về tệp ảnh hợp lệ', download.suggested_filename.endswith('.png'), download.suggested_filename)
 
-        # 9. Kiểm tra sự kiện xuất ZIP hoàn chỉnh
+        # 12. Kiểm tra sự kiện xuất ZIP hoàn chỉnh
         with pg.expect_download(timeout=8000) as download_zip_info:
             pg.click('#btnExportFullZip')
         download_zip = download_zip_info.value

@@ -55,6 +55,13 @@
     </div>
 
     <div class="header-right">
+      <button type="button" class="btn-action btn-ai-clean" id="btnAiCleanAndBox" title="Backend AI tự động xóa chữ bong bóng chat và bóc tách tọa độ box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+        <span>⚡ Tẩy & Bắt Box AI</span>
+      </button>
+
       <button type="button" class="btn-action btn-secondary" id="btnAutoFitAll" title="Tự động tính cỡ chữ và căn chỉnh cho toàn bộ bóng thoại">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -96,13 +103,13 @@
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
           </button>
-          <label class="btn-icon-sm" for="inputAddLocalImages" title="Thêm ảnh từ máy tính" style="cursor:pointer;">
+          <label class="btn-icon-sm" for="inputAddLocalImages" title="Thêm ảnh hoặc file ZIP từ máy tính" style="cursor:pointer;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </label>
-          <input type="file" id="inputAddLocalImages" multiple accept="image/*" style="display:none">
+          <input type="file" id="inputAddLocalImages" multiple accept="image/*,.zip,application/zip,application/x-zip-compressed" style="display:none">
         </div>
       </div>
       <div class="pages-scroll-list" id="pagesList">
@@ -132,6 +139,10 @@
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
           </svg>
           <span>Xóa</span>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnToggleViewLang" title="Chuyển đổi xem bản dịch tiếng Việt hoặc tiếng Nhật gốc trên Canvas">
+          <span id="viewLangLabel">Xem: Dịch (VI)</span>
         </button>
 
         <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
@@ -165,10 +176,22 @@
       </div>
 
       <div class="inspector-body" id="inspectorBody">
-        <!-- Text Area -->
+        <!-- Japanese OCR Source Text -->
+        <div class="property-group">
+          <div class="property-label">
+            <span>Tiếng Nhật nhận diện (OCR)</span>
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="btn-icon-xs" id="btnCopyJp" title="Sao chép chữ Nhật">Copy</button>
+              <button type="button" class="btn-icon-xs" id="btnTranslateBubble" title="Dịch sang tiếng Việt bằng AI">Dịch → VI</button>
+            </div>
+          </div>
+          <textarea id="propSrcText" class="prop-input-textarea prop-textarea-jp" placeholder="Chữ tiếng Nhật gốc nhận diện được..."></textarea>
+        </div>
+
+        <!-- Vietnamese Translation Text -->
         <div class="property-group">
           <label class="property-label" for="propText">
-            <span>Lời thoại tiếng Việt</span>
+            <span>Lời thoại tiếng Việt (Typeset)</span>
           </label>
           <textarea id="propText" class="prop-input-textarea" placeholder="Nhập lời thoại cần chèn..."></textarea>
         </div>

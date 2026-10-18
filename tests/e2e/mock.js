@@ -37,6 +37,19 @@
       if (window.__mock.transFailW.includes(w)) return json({ error: 'dịch hỏng giả lập' }, 500);
       return json({ success: true, ocrTextBlock: 'こんにちは ' + w, viTextBlock: 'Xin chào ' + w, missingTranslation: [] });
     }
+    if (url.endsWith('/api/ocr')) {
+      const [w, h] = await dims(body.imageBase64);
+      return json({
+        success: true,
+        totalBoxes: 1,
+        data: [
+          { id: 1, box: [100, 150, 250, 400], original_text: 'こんにちは世界', translated_text: 'Xin chào thế giới' }
+        ]
+      });
+    }
+    if (url.endsWith('/api/translate-text')) {
+      return json({ success: true, translatedText: 'Bản dịch mẫu tiếng Việt' });
+    }
     return realFetch(input, init);
   };
 })();

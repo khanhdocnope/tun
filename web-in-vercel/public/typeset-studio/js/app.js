@@ -22,7 +22,9 @@ const appState = {
   dragStartX: 0,
   dragStartY: 0,
   initialBubbleRect: null,
-  currentImageElement: null
+  currentImageElement: null,
+  displayLang: 'vi', // 'vi' (Vietnamese typeset) or 'jp' (Original Japanese OCR)
+  isAiProcessing: false
 };
 
 // DOM Elements
@@ -36,6 +38,9 @@ const el = {
   activeBubbleBadge: document.getElementById('activeBubbleBadge'),
 
   // Inspector
+  propSrcText: document.getElementById('propSrcText'),
+  btnCopyJp: document.getElementById('btnCopyJp'),
+  btnTranslateBubble: document.getElementById('btnTranslateBubble'),
   propText: document.getElementById('propText'),
   propFont: document.getElementById('propFont'),
   propAutoFit: document.getElementById('propAutoFit'),
@@ -54,10 +59,13 @@ const el = {
   customFontsOptgroup: document.getElementById('customFontsOptgroup'),
   fontFileInput: document.getElementById('fontFileInput'),
 
-  // Buttons
+  // Buttons & Controls
   btnPrevPage: document.getElementById('btnPrevPage'),
   btnNextPage: document.getElementById('btnNextPage'),
   btnAutoFitAll: document.getElementById('btnAutoFitAll'),
+  btnAiCleanAndBox: document.getElementById('btnAiCleanAndBox'),
+  btnToggleViewLang: document.getElementById('btnToggleViewLang'),
+  viewLangLabel: document.getElementById('viewLangLabel'),
   btnExportCurrentPng: document.getElementById('btnExportCurrentPng'),
   btnExportFullZip: document.getElementById('btnExportFullZip'),
   btnSyncFromBatch: document.getElementById('btnSyncFromBatch'),
@@ -89,6 +97,19 @@ function showToast(message, duration = 3000) {
   }, duration);
 }
 
+function blobToBase64(blobOrFile) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blobOrFile);
+  });
+}
+
+function naturalSort(a, b) {
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+}
+
 /* ==========================================================================
    IndexedDB Connection (v3)
    ========================================================================== */
@@ -97,7 +118,7 @@ const DB_VERSION = 3;
 
 async function openDB() {
   if (appState.db) return appState.db;
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -138,7 +159,7 @@ async function loadDataFromIndexedDB() {
             const cl = cleanedMap.get(page.id) || null;
             const ts = typesetMap.get(page.id) || null;
 
-            // Lấy ảnh hiển thị: ưu tiên ảnh đã tẩy sạch bóng thoại
+            // Ưu tiên ảnh đã tẩy sạch bong bóng chat
             let displayBlob = null;
             if (cl && cl.blob) {
               displayBlob = cl.blob;
@@ -146,16 +167,15 @@ async function loadDataFromIndexedDB() {
               displayBlob = page.base64;
             }
 
-            // Lấy danh sách bóng thoại đã lưu hoặc tạo từ text dịch
+            // Danh sách bóng thoại đã lưu hoặc tạo từ text dịch
             let bubbles = [];
             if (ts && Array.isArray(ts.bubbles) && ts.bubbles.length) {
               bubbles = ts.bubbles;
             } else if (Array.isArray(st.bubbles) && st.bubbles.length) {
-              // Chuyển đổi từ định dạng Gemini [ymin, xmin, ymax, xmax] sang pixel sau khi load ảnh
               bubbles = st.bubbles.map(b => ({
                 rawBox: b.box || b.box_2d || null,
-                srcText: b.src || '',
-                text: b.tgt || b.text || '',
+                srcText: b.src || b.original_text || '',
+                text: b.tgt || b.translated_text || b.text || '',
                 font: 'Yuki Arenzi',
                 fontSize: 22,
                 autoFit: true,
@@ -167,9 +187,9 @@ async function loadDataFromIndexedDB() {
                 padding: 8
               }));
             } else if (st.viText) {
-              // Tách các dòng viText thành các bóng thoại mẫu nếu chưa có tọa độ
               const lines = st.viText.split('\n').map(l => l.trim()).filter(Boolean);
               bubbles = lines.map((line, idx) => ({
+                srcText: '',
                 text: line,
                 font: 'Yuki Arenzi',
                 fontSize: 22,
@@ -180,7 +200,6 @@ async function loadDataFromIndexedDB() {
                 align: 'center',
                 lineHeightRatio: 1.25,
                 padding: 8,
-                // Tạm thời đặt tỷ lệ % khung hình
                 relRect: {
                   xPct: 0.15,
                   yPct: 0.1 + (idx * 0.15) % 0.75,
@@ -193,6 +212,7 @@ async function loadDataFromIndexedDB() {
             return {
               id: page.id,
               name: page.name || `Trang ${page.seq || 1}`,
+              base64: page.base64 || (typeof displayBlob === 'string' ? displayBlob : null),
               displayBlob,
               hasCleaned: !!cl,
               hasTranslated: !!st.viText,
@@ -228,6 +248,255 @@ async function saveTypesetToDB(page) {
 }
 
 /* ==========================================================================
+   Direct Upload (Files, ZIP & Drag and Drop)
+   ========================================================================== */
+async function handleFilesAdded(files) {
+  if (!files || !files.length) return;
+  const fileList = Array.from(files);
+  const newPages = [];
+  showToast(`Đang nạp ${fileList.length} tệp...`);
+
+  for (const file of fileList) {
+    if (file.name.endsWith('.zip') || file.type.includes('zip')) {
+      if (typeof JSZip !== 'undefined') {
+        try {
+          const zip = await JSZip.loadAsync(file);
+          const entries = [];
+          zip.forEach((relPath, entry) => {
+            if (!entry.dir && !relPath.startsWith('__MACOSX') && /\.(png|jpe?g|webp|bmp)$/i.test(relPath)) {
+              entries.push(entry);
+            }
+          });
+          entries.sort(naturalSort);
+          for (const entry of entries) {
+            const blob = await entry.async('blob');
+            const b64 = await blobToBase64(blob);
+            newPages.push({
+              name: entry.name.split('/').pop(),
+              base64: b64,
+              displayBlob: b64
+            });
+          }
+        } catch (e) {
+          showToast(`Lỗi giải nén ZIP: ${e.message}`);
+        }
+      }
+    } else if (/\.(png|jpe?g|webp|bmp)$/i.test(file.name) || file.type.startsWith('image/')) {
+      const b64 = await blobToBase64(file);
+      newPages.push({
+        name: file.name,
+        base64: b64,
+        displayBlob: b64
+      });
+    }
+  }
+
+  if (!newPages.length) {
+    showToast('Không tìm thấy tệp ảnh hợp lệ.');
+    return;
+  }
+
+  const db = await openDB();
+  const startIndex = appState.pages.length;
+
+  for (let i = 0; i < newPages.length; i++) {
+    const p = newPages[i];
+    const item = {
+      id: 'ts_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) + '_' + i,
+      seq: startIndex + i + 1,
+      name: p.name,
+      base64: p.base64,
+      displayBlob: p.displayBlob,
+      bubbles: [],
+      hasCleaned: false,
+      hasTranslated: false
+    };
+
+    if (db) {
+      try {
+        const tx = db.transaction(['pages', 'state'], 'readwrite');
+        tx.objectStore('pages').put({
+          id: item.id,
+          seq: item.seq,
+          name: item.name,
+          base64: item.base64,
+          sizeStr: 'Mới'
+        });
+        tx.objectStore('state').put({
+          id: item.id,
+          status: 'idle',
+          cleanStatus: 'idle',
+          viText: '',
+          ocrText: '',
+          bubbles: []
+        });
+      } catch (e) {}
+    }
+
+    appState.pages.push(item);
+  }
+
+  renderSidebar();
+  updateNavigationUI();
+  await switchPage(startIndex);
+  showToast(`Đã thêm thành công ${newPages.length} trang mới!`);
+}
+
+function setupDirectUploadEvents() {
+  if (el.inputAddLocalImages) {
+    el.inputAddLocalImages.addEventListener('change', (e) => {
+      handleFilesAdded(e.target.files);
+      e.target.value = '';
+    });
+  }
+
+  // Kéo thả ảnh trực tiếp vào màn hình Canvas
+  ['dragenter', 'dragover'].forEach(name => {
+    el.viewport.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.viewport.classList.add('drag-over');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(name => {
+    el.viewport.addEventListener(name, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.viewport.classList.remove('drag-over');
+    });
+  });
+
+  el.viewport.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files) {
+      handleFilesAdded(e.dataTransfer.files);
+    }
+  });
+}
+
+/* ==========================================================================
+   Backend AI: Clean Speech Bubbles & Detect Text Coordinates (Comic-Text-Detector)
+   ========================================================================== */
+async function runBackendCleanAndBox(pageIndex) {
+  const page = appState.pages[pageIndex];
+  if (!page) return;
+
+  if (appState.isAiProcessing) {
+    showToast('Đang có tác vụ AI đang chạy, vui lòng chờ...');
+    return;
+  }
+  appState.isAiProcessing = true;
+  el.btnAiCleanAndBox.disabled = true;
+  showToast(`[${page.name}] Đang gọi Backend AI xóa chữ bong bóng chat và bắt tọa độ box...`, 4000);
+
+  try {
+    // 1. Lấy dữ liệu ảnh dạng base64
+    let base64 = page.base64;
+    if (!base64 && page.displayBlob) {
+      base64 = await blobToBase64(page.displayBlob);
+    }
+    if (!base64) {
+      throw new Error('Không tìm thấy dữ liệu ảnh gốc để xử lý.');
+    }
+
+    // 2. Gọi song song /api/clean (xóa chữ) và /api/ocr (bóc tách bounding box theo Comic-Text-Detector + manga-ocr)
+    const [cleanRes, ocrRes] = await Promise.all([
+      fetch('/api/clean', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          cleanSFX: false,
+          dilationPx: 4,
+          detThreshold: 0.20,
+          inpaintModel: 'anime-lama'
+        })
+      }).then(r => r.ok ? r.json() : null).catch(() => null),
+
+      fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64,
+          readingOrder: 'manga',
+          ocrEngine: 'ja_manga',
+          chatOnly: true
+        })
+      }).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
+
+    // 3. Xử lý ảnh sạch (đã xóa chữ trong bong bóng chat)
+    if (cleanRes && cleanRes.cleanedImageBase64) {
+      page.displayBlob = cleanRes.cleanedImageBase64;
+      page.hasCleaned = true;
+      const db = await openDB();
+      if (db) {
+        try {
+          const tx = db.transaction(['cleaned'], 'readwrite');
+          tx.objectStore('cleaned').put({ id: page.id, blob: cleanRes.cleanedImageBase64 });
+        } catch (e) {}
+      }
+    }
+
+    // 4. Xử lý tọa độ bóng thoại và chữ tiếng Nhật nhận diện được
+    const imgW = el.canvas.width || 1000;
+    const imgH = el.canvas.height || 1400;
+
+    if (ocrRes && Array.isArray(ocrRes.data) && ocrRes.data.length) {
+      page.bubbles = ocrRes.data.map((item, idx) => {
+        const box = item.box || [0, 0, 0, 0];
+        const [ymin, xmin, ymax, xmax] = box;
+
+        let x, y, width, height;
+        if (ymax <= 1000 && xmax <= 1000 && ymin >= 0 && xmin >= 0 && (imgW > 1000 || imgH > 1000)) {
+          x = Math.round((xmin / 1000) * imgW);
+          y = Math.round((ymin / 1000) * imgH);
+          width = Math.max(30, Math.round(((xmax - xmin) / 1000) * imgW));
+          height = Math.max(25, Math.round(((ymax - ymin) / 1000) * imgH));
+        } else {
+          x = Math.round(xmin);
+          y = Math.round(ymin);
+          width = Math.max(30, Math.round(xmax - xmin));
+          height = Math.max(25, Math.round(ymax - ymin));
+        }
+
+        return {
+          id: item.id || idx + 1,
+          x,
+          y,
+          width,
+          height,
+          srcText: item.original_text || '',
+          text: item.translated_text || '',
+          font: 'Yuki Arenzi',
+          fontSize: 22,
+          autoFit: true,
+          color: '#000000',
+          strokeColor: '#ffffff',
+          strokeWidth: 3,
+          align: 'center',
+          lineHeightRatio: 1.25,
+          padding: 8
+        };
+      });
+      showToast(`Backend AI đã xóa chữ và bắt được ${page.bubbles.length} bóng thoại!`);
+    } else {
+      showToast('Backend AI đã xử lý xong (không tìm thấy bóng thoại mới).');
+    }
+
+    // 5. Cập nhật IndexedDB và vẽ lại giao diện
+    await saveTypesetToDB(page);
+    appState.activeBubbleIndex = page.bubbles && page.bubbles.length ? 0 : -1;
+    await switchPage(pageIndex, true);
+  } catch (err) {
+    showToast(`Lỗi xử lý Backend AI: ${err.message || err}`);
+  } finally {
+    appState.isAiProcessing = false;
+    el.btnAiCleanAndBox.disabled = false;
+  }
+}
+
+/* ==========================================================================
    Image Loader & Canvas Rendering
    ========================================================================== */
 function loadImageElement(blobOrBase64) {
@@ -246,10 +515,12 @@ function loadImageElement(blobOrBase64) {
   });
 }
 
-async function switchPage(index) {
+async function switchPage(index, preserveBubble = false) {
   if (index < 0 || index >= appState.pages.length) return;
   appState.activePageIndex = index;
-  appState.activeBubbleIndex = -1;
+  if (!preserveBubble) {
+    appState.activeBubbleIndex = -1;
+  }
 
   updateNavigationUI();
   renderSidebar();
@@ -257,17 +528,13 @@ async function switchPage(index) {
   const page = appState.pages[index];
   if (!page) return;
 
-  // Tải hình ảnh của trang
   const img = await loadImageElement(page.displayBlob);
   appState.currentImageElement = img;
 
   if (img) {
     el.canvas.width = img.naturalWidth || 1000;
     el.canvas.height = img.naturalHeight || 1400;
-
-    // Chuẩn hóa tọa độ các bóng thoại theo kích thước thật của ảnh nếu cần
     initPageBubblesCoordinates(page, el.canvas.width, el.canvas.height);
-
     fitCanvasToScreen();
   }
 
@@ -279,7 +546,6 @@ function initPageBubblesCoordinates(page, imgW, imgH) {
   if (!page.bubbles) page.bubbles = [];
 
   page.bubbles.forEach((b, idx) => {
-    // 1. Tọa độ từ Gemini box_2d: [ymin, xmin, ymax, xmax] (chuẩn hóa 0-1000)
     if (b.rawBox && Array.isArray(b.rawBox)) {
       const [ymin, xmin, ymax, xmax] = b.rawBox;
       b.x = Math.round((xmin / 1000) * imgW);
@@ -287,17 +553,13 @@ function initPageBubblesCoordinates(page, imgW, imgH) {
       b.width = Math.max(40, Math.round(((xmax - xmin) / 1000) * imgW));
       b.height = Math.max(30, Math.round(((ymax - ymin) / 1000) * imgH));
       delete b.rawBox;
-    }
-    // 2. Tọa độ từ tỷ lệ tương đối
-    else if (b.relRect) {
+    } else if (b.relRect) {
       b.x = Math.round(b.relRect.xPct * imgW);
       b.y = Math.round(b.relRect.yPct * imgH);
       b.width = Math.round(b.relRect.wPct * imgW);
       b.height = Math.round(b.relRect.hPct * imgH);
       delete b.relRect;
-    }
-    // 3. Mặc định nếu chưa có tọa độ
-    else if (b.x == null) {
+    } else if (b.x == null) {
       b.x = Math.round(imgW * 0.2);
       b.y = Math.round(imgH * (0.15 + (idx * 0.15) % 0.65));
       b.width = Math.round(imgW * 0.35);
@@ -308,22 +570,23 @@ function initPageBubblesCoordinates(page, imgW, imgH) {
 
 function renderCanvas() {
   const img = appState.currentImageElement;
-  if (!img) return;
 
   ctx.clearRect(0, 0, el.canvas.width, el.canvas.height);
 
-  // 1. Vẽ ảnh nền (đã tẩy hoặc ảnh gốc)
-  ctx.drawImage(img, 0, 0, el.canvas.width, el.canvas.height);
+  if (img) {
+    ctx.drawImage(img, 0, 0, el.canvas.width, el.canvas.height);
+  } else {
+    ctx.fillStyle = '#1e2330';
+    ctx.fillRect(0, 0, el.canvas.width, el.canvas.height);
+  }
 
   const activePage = appState.pages[appState.activePageIndex];
   if (!activePage || !activePage.bubbles) return;
 
-  // 2. Vẽ tất cả bóng thoại chữ
   activePage.bubbles.forEach((bubble) => {
-    TypesetEngine.renderBubble(ctx, bubble);
+    TypesetEngine.renderBubble(ctx, bubble, { displayLang: appState.displayLang });
   });
 
-  // 3. Vẽ khung viền tương tác và 8 tay cầm co giãn cho bóng thoại đang chọn
   if (appState.activeBubbleIndex >= 0 && appState.activeBubbleIndex < activePage.bubbles.length) {
     const sel = activePage.bubbles[appState.activeBubbleIndex];
     drawSelectionHandles(ctx, sel);
@@ -334,13 +597,11 @@ function drawSelectionHandles(ctx, bubble) {
   const { x, y, width, height } = bubble;
   ctx.save();
 
-  // Đường viền nét đứt màu xanh Indigo
   ctx.strokeStyle = '#6366f1';
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
   ctx.strokeRect(x, y, width, height);
 
-  // 8 Tay cầm co giãn (NW, N, NE, E, SE, S, SW, W)
   const handleSize = 8;
   const handles = getResizeHandles(bubble);
 
@@ -365,7 +626,7 @@ function getResizeHandles(bubble) {
     ne: { x: x + width, y, cursor: 'nesw-resize' },
     e: { x: x + width, y: y + height / 2, cursor: 'ew-resize' },
     se: { x: x + width, y: y + height, cursor: 'nwse-resize' },
-    s: { x: x + width / 2, y: y + height, cursor: 'ns-resize' },
+    s: { x: x + width / 2, y, cursor: 'ns-resize' },
     sw: { x, y: y + height, cursor: 'nesw-resize' },
     w: { x, y: y + height / 2, cursor: 'ew-resize' }
   };
@@ -419,7 +680,6 @@ function hitTestHandle(bubble, mouseX, mouseY) {
 }
 
 function hitTestBubble(bubbles, mouseX, mouseY) {
-  // Duyệt ngược từ trên xuống dưới
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     if (mouseX >= b.x && mouseX <= b.x + b.width && mouseY >= b.y && mouseY <= b.y + b.height) {
@@ -429,9 +689,7 @@ function hitTestBubble(bubbles, mouseX, mouseY) {
   return -1;
 }
 
-// Mouse events on canvas viewport
 el.viewport.addEventListener('mousedown', (e) => {
-  // Giữ chuột giữa hoặc phím Space để Pan
   if (e.button === 1 || e.spaceKey || (e.button === 0 && e.target === el.viewport)) {
     appState.isPanning = true;
     appState.panStartX = e.clientX - appState.panX;
@@ -440,13 +698,12 @@ el.viewport.addEventListener('mousedown', (e) => {
     return;
   }
 
-  if (e.button !== 0) return; // Chỉ xử lý chuột trái
+  if (e.button !== 0) return;
 
   const coords = getCanvasCoords(e);
   const page = appState.pages[appState.activePageIndex];
   if (!page || !page.bubbles) return;
 
-  // 1. Kiểm tra bấm vào tay cầm resize của bóng thoại đang chọn
   if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
     const handle = hitTestHandle(activeBubble, coords.x, coords.y);
@@ -460,7 +717,6 @@ el.viewport.addEventListener('mousedown', (e) => {
     }
   }
 
-  // 2. Kiểm tra bấm vào một bóng thoại
   const hitIndex = hitTestBubble(page.bubbles, coords.x, coords.y);
   if (hitIndex >= 0) {
     appState.activeBubbleIndex = hitIndex;
@@ -473,7 +729,6 @@ el.viewport.addEventListener('mousedown', (e) => {
     return;
   }
 
-  // 3. Bấm ra ngoài -> Hủy chọn bóng thoại
   appState.activeBubbleIndex = -1;
   updateInspector();
   renderCanvas();
@@ -491,7 +746,6 @@ window.addEventListener('mousemove', (e) => {
   const page = appState.pages[appState.activePageIndex];
   if (!page || !page.bubbles) return;
 
-  // Thay đổi con trỏ chuột
   if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
     const handle = hitTestHandle(activeBubble, coords.x, coords.y);
@@ -506,7 +760,6 @@ window.addEventListener('mousemove', (e) => {
     el.canvas.style.cursor = hitTestBubble(page.bubbles, coords.x, coords.y) >= 0 ? 'pointer' : 'default';
   }
 
-  // Xử lý kéo di chuyển bóng thoại
   if (appState.isDraggingBubble && appState.activeBubbleIndex >= 0) {
     const dx = coords.x - appState.dragStartX;
     const dy = coords.y - appState.dragStartY;
@@ -517,7 +770,6 @@ window.addEventListener('mousemove', (e) => {
     return;
   }
 
-  // Xử lý co giãn bóng thoại (Resize)
   if (appState.isResizingBubble && appState.activeBubbleIndex >= 0) {
     const dx = coords.x - appState.dragStartX;
     const dy = coords.y - appState.dragStartY;
@@ -555,7 +807,6 @@ window.addEventListener('mouseup', () => {
   }
 });
 
-// Phóng to / Thu nhỏ bằng con lăn chuột (Mouse Wheel Zoom)
 el.viewport.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -571,6 +822,10 @@ function updateInspector() {
   const page = appState.pages[appState.activePageIndex];
   if (!page || appState.activeBubbleIndex < 0 || !page.bubbles[appState.activeBubbleIndex]) {
     el.activeBubbleBadge.textContent = 'Chưa chọn';
+    el.propSrcText.value = '';
+    el.propSrcText.disabled = true;
+    el.btnCopyJp.disabled = true;
+    el.btnTranslateBubble.disabled = true;
     el.propText.value = '';
     el.propText.disabled = true;
     el.propFont.disabled = true;
@@ -586,6 +841,9 @@ function updateInspector() {
   const b = page.bubbles[appState.activeBubbleIndex];
   el.activeBubbleBadge.textContent = `Thoại #${appState.activeBubbleIndex + 1}`;
 
+  el.propSrcText.disabled = false;
+  el.btnCopyJp.disabled = false;
+  el.btnTranslateBubble.disabled = false;
   el.propText.disabled = false;
   el.propFont.disabled = false;
   el.propAutoFit.disabled = false;
@@ -595,6 +853,7 @@ function updateInspector() {
   el.propStrokeWidth.disabled = false;
   el.propLineHeight.disabled = false;
 
+  el.propSrcText.value = b.srcText || '';
   el.propText.value = b.text || '';
   el.propFont.value = b.font || 'Yuki Arenzi';
   el.propAutoFit.checked = b.autoFit !== false;
@@ -614,7 +873,6 @@ function updateInspector() {
   el.propLineHeight.value = b.lineHeightRatio || 1.25;
   el.valLineHeight.textContent = String(b.lineHeightRatio || 1.25);
 
-  // Segmented align buttons
   document.querySelectorAll('#alignSegmented .btn-seg').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.align === (b.align || 'center'));
   });
@@ -626,11 +884,56 @@ function bindInspectorEvents() {
     return (page && appState.activeBubbleIndex >= 0) ? page.bubbles[appState.activeBubbleIndex] : null;
   };
 
+  el.propSrcText.addEventListener('input', (e) => {
+    const b = getActiveBubble();
+    if (!b) return;
+    b.srcText = e.target.value;
+    if (appState.displayLang === 'jp') renderCanvas();
+    saveTypesetToDB(appState.pages[appState.activePageIndex]);
+  });
+
+  el.btnCopyJp.addEventListener('click', () => {
+    const text = el.propSrcText.value;
+    if (!text) {
+      showToast('Chưa có chữ tiếng Nhật để sao chép.');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(() => showToast('Đã sao chép tiếng Nhật!'));
+  });
+
+  el.btnTranslateBubble.addEventListener('click', async () => {
+    const b = getActiveBubble();
+    if (!b || !b.srcText) {
+      showToast('Không có chữ tiếng Nhật để dịch.');
+      return;
+    }
+    showToast('Đang dịch tiếng Nhật sang tiếng Việt...');
+    try {
+      const res = await fetch('/api/translate-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: b.srcText, sourceLang: 'ja', targetLang: 'vi' })
+      });
+      const data = await res.json();
+      if (data && data.translatedText) {
+        b.text = data.translatedText;
+        el.propText.value = b.text;
+        renderCanvas();
+        saveTypesetToDB(appState.pages[appState.activePageIndex]);
+        showToast('Đã dịch xong!');
+      } else {
+        showToast('Không nhận được bản dịch từ API.');
+      }
+    } catch (err) {
+      showToast(`Lỗi dịch: ${err.message || err}`);
+    }
+  });
+
   el.propText.addEventListener('input', (e) => {
     const b = getActiveBubble();
     if (!b) return;
     b.text = e.target.value;
-    renderCanvas();
+    if (appState.displayLang === 'vi') renderCanvas();
     saveTypesetToDB(appState.pages[appState.activePageIndex]);
   });
 
@@ -726,14 +1029,12 @@ function setupCustomFontUpload() {
       await fontFace.load();
       document.fonts.add(fontFace);
 
-      // Thêm option vào dropdown
       const opt = document.createElement('option');
       opt.value = fontName;
       opt.textContent = `${fontName} (Tùy chỉnh)`;
       el.customFontsOptgroup.appendChild(opt);
       el.propFont.value = fontName;
 
-      // Cập nhật cho bóng thoại đang chọn
       const page = appState.pages[appState.activePageIndex];
       if (page && appState.activeBubbleIndex >= 0) {
         page.bubbles[appState.activeBubbleIndex].font = fontName;
@@ -749,7 +1050,7 @@ function setupCustomFontUpload() {
 }
 
 /* ==========================================================================
-   Add / Delete Bubble
+   Add / Delete Bubble & Toggle Language View
    ========================================================================== */
 function setupBubbleActions() {
   el.btnAddBubble.addEventListener('click', () => {
@@ -762,6 +1063,7 @@ function setupBubbleActions() {
       y: Math.round(el.canvas.height * 0.35),
       width: Math.round(el.canvas.width * 0.3),
       height: Math.round(el.canvas.height * 0.12),
+      srcText: '新しいテキスト',
       text: 'Lời thoại mới',
       font: 'Yuki Arenzi',
       fontSize: 22,
@@ -796,19 +1098,30 @@ function setupBubbleActions() {
 
   el.btnDeleteBubble.addEventListener('click', deleteActiveBubble);
 
-  // Phím Delete hoặc Backspace để xóa bóng thoại
+  // Toggle View Language (Dịch VI vs Gốc JP)
+  if (el.btnToggleViewLang) {
+    el.btnToggleViewLang.addEventListener('click', () => {
+      appState.displayLang = appState.displayLang === 'vi' ? 'jp' : 'vi';
+      if (el.viewLangLabel) {
+        el.viewLangLabel.textContent = appState.displayLang === 'vi' ? 'Xem: Dịch (VI)' : 'Xem: Gốc (JP)';
+      }
+      renderCanvas();
+      showToast(`Đang hiển thị chế độ: ${appState.displayLang === 'vi' ? 'Bản dịch tiếng Việt' : 'Tiếng Nhật gốc'}`);
+    });
+  }
+
+  // Phím tắt bàn phím
   window.addEventListener('keydown', (e) => {
-    if ((e.key === 'Delete' || e.key === 'Del') && document.activeElement !== el.propText) {
+    if ((e.key === 'Delete' || e.key === 'Del') && document.activeElement !== el.propText && document.activeElement !== el.propSrcText) {
       deleteActiveBubble();
     }
-    // Phím mũi tên chuyển trang
-    if (document.activeElement !== el.propText) {
+    if (document.activeElement !== el.propText && document.activeElement !== el.propSrcText) {
       if (e.key === 'ArrowLeft') switchPage(appState.activePageIndex - 1);
       if (e.key === 'ArrowRight') switchPage(appState.activePageIndex + 1);
     }
   });
 
-  // Tự động căn chữ tất cả
+  // Nút Tự căn chữ tất cả
   el.btnAutoFitAll.addEventListener('click', () => {
     const page = appState.pages[appState.activePageIndex];
     if (!page || !page.bubbles || !page.bubbles.length) return;
@@ -821,6 +1134,13 @@ function setupBubbleActions() {
     saveTypesetToDB(page);
     showToast(`Đã tự động căn chữ cho ${page.bubbles.length} bóng thoại`);
   });
+
+  // Nút Tẩy chữ & Bắt Box AI (Backend)
+  if (el.btnAiCleanAndBox) {
+    el.btnAiCleanAndBox.addEventListener('click', () => {
+      runBackendCleanAndBox(appState.activePageIndex);
+    });
+  }
 }
 
 /* ==========================================================================
@@ -888,7 +1208,6 @@ async function exportCurrentPagePNG() {
     return;
   }
 
-  // Tạo canvas ảo không có khung chọn
   const offscreen = document.createElement('canvas');
   offscreen.width = (appState.currentImageElement && appState.currentImageElement.naturalWidth) || el.canvas.width || 1000;
   offscreen.height = (appState.currentImageElement && appState.currentImageElement.naturalHeight) || el.canvas.height || 1400;
@@ -902,7 +1221,7 @@ async function exportCurrentPagePNG() {
   }
 
   if (page.bubbles) {
-    page.bubbles.forEach(b => TypesetEngine.renderBubble(octx, b));
+    page.bubbles.forEach(b => TypesetEngine.renderBubble(octx, b, { displayLang: appState.displayLang }));
   }
 
   offscreen.toBlob((blob) => {
@@ -949,7 +1268,7 @@ async function exportFullChapterZIP() {
       initPageBubblesCoordinates(page, offscreen.width, offscreen.height);
 
       if (page.bubbles) {
-        page.bubbles.forEach(b => TypesetEngine.renderBubble(octx, b));
+        page.bubbles.forEach(b => TypesetEngine.renderBubble(octx, b, { displayLang: appState.displayLang }));
       }
 
       const blob = await new Promise(res => offscreen.toBlob(res, 'image/png'));
@@ -976,6 +1295,7 @@ async function initApp() {
   bindInspectorEvents();
   setupCustomFontUpload();
   setupBubbleActions();
+  setupDirectUploadEvents();
 
   // Navigation Buttons
   el.btnPrevPage.addEventListener('click', () => switchPage(appState.activePageIndex - 1));

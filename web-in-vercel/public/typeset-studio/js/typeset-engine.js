@@ -132,7 +132,6 @@ export const TypesetEngine = (function () {
   function renderBubble(ctx, bubble, renderOptions = {}) {
     const {
       x, y, width, height,
-      text,
       font = 'Yuki Arenzi',
       fontSize = 20,
       autoFit = true,
@@ -145,7 +144,12 @@ export const TypesetEngine = (function () {
       bgFill = 'transparent'
     } = bubble;
 
-    if (!text || width <= 0 || height <= 0) return;
+    const displayLang = renderOptions.displayLang || 'vi';
+    const displayText = displayLang === 'jp'
+      ? (bubble.srcText || bubble.text)
+      : (bubble.text || bubble.srcText);
+
+    if (!displayText || width <= 0 || height <= 0) return;
 
     ctx.save();
 
@@ -160,13 +164,13 @@ export const TypesetEngine = (function () {
 
     // 2. Tính kích thước chữ
     const actualFontSize = autoFit
-      ? calculateAutoFitFontSize(ctx, text, width, height, font, { padding, lineHeightRatio })
+      ? calculateAutoFitFontSize(ctx, displayText, width, height, font, { padding, lineHeightRatio })
       : fontSize;
 
     const availableWidth = Math.max(10, width - padding * 2);
     const availableHeight = Math.max(10, height - padding * 2);
 
-    const layout = computeTextLayout(ctx, text, availableWidth, actualFontSize, font, lineHeightRatio);
+    const layout = computeTextLayout(ctx, displayText, availableWidth, actualFontSize, font, lineHeightRatio);
 
     ctx.font = `${actualFontSize}px "${font}", "Comic Neue", "Plus Jakarta Sans", sans-serif`;
     ctx.textBaseline = 'middle';
