@@ -14,6 +14,7 @@ const appState = {
   panX: 0,
   panY: 0,
   isPanning: false,
+  isSpaceDown: false,
   panStartX: 0,
   panStartY: 0,
   isDraggingBubble: false,
@@ -722,9 +723,10 @@ function hitTestBubble(bubbles, mouseX, mouseY) {
 }
 
 el.viewport.addEventListener('mousedown', (e) => {
-  if (e.target.closest('.viewport-floating-bar')) return;
+  if (e.target.closest('.viewport-floating-bar') || e.target.closest('.ai-clean-settings-popover')) return;
 
-  if (e.button === 1 || e.spaceKey || (e.button === 0 && e.target === el.viewport)) {
+  // Spacebar pan, middle-click pan, or right-click pan:
+  if (appState.isSpaceDown || e.button === 1 || e.button === 2) {
     appState.isPanning = true;
     appState.panStartX = e.clientX - appState.panX;
     appState.panStartY = e.clientY - appState.panY;
@@ -734,10 +736,29 @@ el.viewport.addEventListener('mousedown', (e) => {
 
   if (e.button !== 0) return;
 
+  // Left-click on viewport background outside canvas:
+  if (e.target === el.viewport) {
+    appState.isPanning = true;
+    appState.panStartX = e.clientX - appState.panX;
+    appState.panStartY = e.clientY - appState.panY;
+    el.viewport.classList.add('panning');
+    appState.activeBubbleIndex = -1;
+    updateInspector();
+    renderCanvas();
+    return;
+  }
+
   const coords = getCanvasCoords(e);
   const page = appState.pages[appState.activePageIndex];
-  if (!page || !page.bubbles) return;
+  if (!page || !page.bubbles) {
+    appState.isPanning = true;
+    appState.panStartX = e.clientX - appState.panX;
+    appState.panStartY = e.clientY - appState.panY;
+    el.viewport.classList.add('panning');
+    return;
+  }
 
+  // 1. Check if clicking on an active bubble resize handle
   if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
     const handle = hitTestHandle(activeBubble, coords.x, coords.y);
@@ -751,6 +772,7 @@ el.viewport.addEventListener('mousedown', (e) => {
     }
   }
 
+  // 2. Check if clicking on any bubble to select/drag it
   const hitIndex = hitTestBubble(page.bubbles, coords.x, coords.y);
   if (hitIndex >= 0) {
     appState.activeBubbleIndex = hitIndex;
@@ -763,9 +785,47 @@ el.viewport.addEventListener('mousedown', (e) => {
     return;
   }
 
+  // 3. Clicked on empty area of canvas -> Start Panning directly for easy image navigation!
+  appState.isPanning = true;
+  appState.panStartX = e.clientX - appState.panX;
+  appState.panStartY = e.clientY - appState.panY;
+  el.viewport.classList.add('panning');
+
   appState.activeBubbleIndex = -1;
   updateInspector();
   renderCanvas();
+});
+
+// Prevent context menu on viewport (enables smooth right-click panning)
+el.viewport.addEventListener('contextmenu', (e) => {
+  if (e.target.closest('input, textarea')) return;
+  e.preventDefault();
+});
+
+// Spacebar drag navigation
+window.addEventListener('keydown', (e) => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
+
+  if (e.code === 'Space' && !appState.isSpaceDown) {
+    e.preventDefault();
+    appState.isSpaceDown = true;
+    el.viewport.classList.add('space-pressed');
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') {
+    appState.isSpaceDown = false;
+    el.viewport.classList.remove('space-pressed');
+  }
+});
+
+window.addEventListener('blur', () => {
+  appState.isSpaceDown = false;
+  appState.isPanning = false;
+  el.viewport.classList.remove('space-pressed');
+  el.viewport.classList.remove('panning');
 });
 
 window.addEventListener('mousemove', (e) => {
@@ -773,6 +833,11 @@ window.addEventListener('mousemove', (e) => {
     appState.panX = e.clientX - appState.panStartX;
     appState.panY = e.clientY - appState.panStartY;
     applyTransform();
+    return;
+  }
+
+  if (appState.isSpaceDown) {
+    el.canvas.style.cursor = 'grab';
     return;
   }
 
@@ -841,11 +906,23 @@ window.addEventListener('mouseup', () => {
   }
 });
 
+// Focal-point zoom with mouse wheel
 el.viewport.addEventListener('wheel', (e) => {
   e.preventDefault();
-  const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-  const newScale = Math.min(3.0, Math.max(0.15, appState.scale * zoomFactor));
+  const zoomFactor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+  const oldScale = appState.scale;
+  const newScale = Math.min(5.0, Math.max(0.15, oldScale * zoomFactor));
+  if (newScale === oldScale) return;
+
+  const rect = el.viewport.getBoundingClientRect();
+  const relX = (e.clientX - rect.left) - rect.width / 2;
+  const relY = (e.clientY - rect.top) - rect.height / 2;
+
+  // Anchor the point under cursor
+  appState.panX = relX - (relX - appState.panX) * (newScale / oldScale);
+  appState.panY = relY - (relY - appState.panY) * (newScale / oldScale);
   appState.scale = newScale;
+
   applyTransform();
 }, { passive: false });
 
@@ -1285,7 +1362,6 @@ async function deletePage(idx) {
   if (idx < 0 || idx >= appState.pages.length) return;
   const page = appState.pages[idx];
   const pageName = page.name || `Trang ${idx + 1}`;
-  if (!confirm(`Bạn có chắc muốn xóa "${pageName}" khỏi dự án không?`)) return;
 
   const db = await openDB();
   if (db) {
