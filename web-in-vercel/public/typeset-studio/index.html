@@ -67,62 +67,166 @@
           </svg>
         </button>
 
-        <!-- AI Clean Settings Popover -->
+        <!-- AI & Studio Settings Popover -->
         <div class="ai-clean-settings-popover" id="aiCleanSettingsPopover" style="display:none;">
           <div class="popover-header">
-            <span>⚙️ Cài đặt Xóa & Bắt Box AI</span>
+            <span>⚙️ Cài đặt Studio: Phông chữ & AI</span>
             <button type="button" class="btn-icon-xs" id="btnCloseAiSettings">✕</button>
           </div>
-          <div class="popover-body">
-            <!-- Backend Status Row -->
-            <div class="setting-item" style="margin-bottom:10px;">
-              <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px;">
-                <span style="color:var(--text-muted); display:flex; align-items:center; gap:6px;">
-                  <span id="backendDot" style="width:7px; height:7px; border-radius:50%; background:#34d399; display:inline-block;"></span>
-                  <span>Backend AI:</span>
-                </span>
-                <span id="valBackendStatus" style="font-weight:600; color:#34d399;">Đang kết nối...</span>
-              </div>
-            </div>
-            <!-- Dilation Slider -->
-            <div class="setting-item">
-              <div class="setting-label-row">
-                <label for="settingDilation">Độ giãn viền nét (Dilation)</label>
-                <span class="setting-badge" id="valSettingDilation">8px</span>
-              </div>
-              <input type="range" id="settingDilation" class="prop-slider" min="1" max="25" value="8" step="1">
-              <div class="setting-hint">Tăng từ 8–14px giúp quét sạch toàn bộ viền chữ, triệt tiêu lem nét và vụn đen.</div>
-            </div>
 
-            <!-- Detection Threshold -->
-            <div class="setting-item">
-              <div class="setting-label-row">
-                <label for="settingThreshold">Ngưỡng phát hiện (Threshold)</label>
-                <span class="setting-badge" id="valSettingThreshold">0.18</span>
-              </div>
-              <input type="range" id="settingThreshold" class="prop-slider" min="0.05" max="0.50" value="0.18" step="0.01">
-              <div class="setting-hint">Giảm &lt; 0.18 để nhận diện cả chữ nhỏ, chữ mờ ngoài bong bóng.</div>
-            </div>
-
-            <!-- Inpaint Model -->
-            <div class="setting-item">
-              <label for="settingInpaintModel" class="setting-label-row">Mô hình AI Inpaint</label>
-              <select id="settingInpaintModel" class="prop-select">
-                <option value="anime-lama" selected>anime-lama (Tối ưu Manga/Anime)</option>
-                <option value="big-lama">big-lama (Độ nét cao cho ảnh lớn)</option>
-              </select>
-            </div>
-
-            <!-- Clean SFX Checkbox -->
-            <div class="setting-checkbox-row" style="display:flex; align-items:center; gap:8px; font-size:12px; margin-top:4px;">
-              <input type="checkbox" id="settingCleanSFX" style="accent-color:var(--primary); cursor:pointer;">
-              <label for="settingCleanSFX" style="cursor:pointer; color:var(--text-main);">Xóa cả chữ hiệu ứng (SFX) ngoài khung thoại</label>
-            </div>
+          <div class="popover-tabs" id="popoverTabs">
+            <button type="button" class="popover-tab active" data-tab="tabClean">⚡ Tẩy chữ AI</button>
+            <button type="button" class="popover-tab" data-tab="tabGemini">🤖 Gemini AI (Dịch)</button>
+            <button type="button" class="popover-tab" data-tab="tabFont">🔤 Phông mặc định</button>
           </div>
-          <div class="popover-footer">
-            <button type="button" class="btn-action btn-primary" id="btnSaveAndReClean" style="width:100%; justify-content:center;">
-              <span>Áp dụng & xóa lại trang này</span>
-            </button>
+
+          <div class="popover-body">
+            <!-- TAB 1: AI CLEAN SETTINGS (Active default) -->
+            <div class="popover-tab-content active" id="tabClean">
+              <!-- Backend Status Row -->
+              <div class="setting-item" style="margin-bottom:6px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:6px;">
+                  <span style="color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+                    <span id="backendDot" style="width:7px; height:7px; border-radius:50%; background:#34d399; display:inline-block;"></span>
+                    <span>Backend AI:</span>
+                  </span>
+                  <span id="valBackendStatus" style="font-weight:600; color:#34d399;">Đang kết nối...</span>
+                </div>
+              </div>
+
+              <!-- Dilation Slider -->
+              <div class="setting-item">
+                <div class="setting-label-row">
+                  <label for="settingDilation">Độ giãn viền nét (Dilation)</label>
+                  <span class="setting-badge" id="valSettingDilation">8px</span>
+                </div>
+                <input type="range" id="settingDilation" class="prop-slider" min="1" max="25" value="8" step="1">
+                <div class="setting-hint">Tăng từ 8–14px giúp quét sạch toàn bộ viền chữ, triệt tiêu lem nét và vụn đen.</div>
+              </div>
+
+              <!-- Detection Threshold -->
+              <div class="setting-item">
+                <div class="setting-label-row">
+                  <label for="settingThreshold">Ngưỡng phát hiện (Threshold)</label>
+                  <span class="setting-badge" id="valSettingThreshold">0.18</span>
+                </div>
+                <input type="range" id="settingThreshold" class="prop-slider" min="0.05" max="0.50" value="0.18" step="0.01">
+                <div class="setting-hint">Giảm &lt; 0.18 để nhận diện cả chữ nhỏ, chữ mờ ngoài bong bóng.</div>
+              </div>
+
+              <!-- Inpaint Model -->
+              <div class="setting-item">
+                <label for="settingInpaintModel" class="setting-label-row">Mô hình AI Inpaint</label>
+                <select id="settingInpaintModel" class="prop-select">
+                  <option value="anime-lama" selected>anime-lama (Tối ưu Manga/Anime)</option>
+                  <option value="big-lama">big-lama (Độ nét cao cho ảnh lớn)</option>
+                </select>
+              </div>
+
+              <!-- Clean SFX Checkbox -->
+              <div class="setting-checkbox-row" style="display:flex; align-items:center; gap:8px; font-size:12px; margin-top:4px;">
+                <input type="checkbox" id="settingCleanSFX" style="accent-color:var(--primary); cursor:pointer;">
+                <label for="settingCleanSFX" style="cursor:pointer; color:var(--text-main);">Tẩy cả chữ hiệu ứng (SFX) ngoài khung thoại</label>
+              </div>
+
+              <div class="popover-footer" style="padding:10px 0 0 0; border-top:1px solid rgba(255,255,255,0.06); margin-top:8px;">
+                <button type="button" class="btn-action btn-primary" id="btnSaveAndReClean" style="width:100%; justify-content:center;">
+                  <span>Áp dụng & Tẩy lại trang này</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB 2: GEMINI AI & API KEY -->
+            <div class="popover-tab-content" id="tabGemini" style="display:none;">
+              <div class="setting-item">
+                <div class="setting-label-row">
+                  <label for="inputGeminiApiKey">Gemini API Key</label>
+                  <span style="font-size:10px; color:#38bdf8;">Google AI Studio</span>
+                </div>
+                <div class="input-with-action">
+                  <input type="password" id="inputGeminiApiKey" class="prop-input" placeholder="Dán Gemini API Key (AIza...)" autocomplete="off">
+                  <button type="button" class="btn-input-icon" id="btnToggleApiKeyVis" title="Hiện/Ẩn API Key">👁️</button>
+                </div>
+                <div class="setting-hint">Lấy key miễn phí tại <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#38bdf8; text-decoration:underline;">aistudio.google.com</a> (1,500 lượt gọi/ngày miễn phí).</div>
+              </div>
+
+              <div class="setting-item">
+                <label for="inputGeminiApiKey2" class="setting-label-row">API Key 2 (Tùy chọn - Dự phòng)</label>
+                <input type="password" id="inputGeminiApiKey2" class="prop-input" placeholder="Nhập key thứ 2 để tăng tốc / dự phòng" autocomplete="off">
+              </div>
+
+              <div class="setting-item">
+                <label for="selectGeminiModel" class="setting-label-row">Mô hình AI Dịch thuật</label>
+                <select id="selectGeminiModel" class="prop-select">
+                  <option value="gemini-2.5-flash-lite" selected>gemini-2.5-flash-lite (Hạn mức cao nhất: 1,500 req/ngày - Siêu tốc)</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash (Hạn mức 1,500 req/ngày - Dịch tự nhiên mượt)</option>
+                  <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Bản Flash Lite mới nhất)</option>
+                  <option value="gemini-flash-latest">gemini-flash-latest (Bản Flash mới nhất)</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro (Suy luận ngữ cảnh sâu sắc - 50 req/ngày)</option>
+                </select>
+                <div class="setting-hint">Mô hình <b>gemini-2.5-flash-lite</b> có số lượt gọi/ngày cao nhất (1,500 lần/ngày), tốc độ phản hồi cực nhanh, dịch hội thoại manga rất chuẩn.</div>
+              </div>
+
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
+                <button type="button" class="btn-action btn-secondary btn-sm" id="btnTestGeminiKey" style="font-size:11px; padding:5px 12px;">
+                  <span>🧪 Kiểm tra Key</span>
+                </button>
+                <span id="testKeyStatusBadge" style="font-size:11px; font-weight:600; color:var(--text-muted);">Chưa kiểm tra</span>
+              </div>
+            </div>
+
+            <!-- TAB 3: DEFAULT FONT SETTINGS -->
+            <div class="popover-tab-content" id="tabFont" style="display:none;">
+              <div class="setting-item">
+                <label for="selectDefaultFont" class="setting-label-row">Phông chữ mặc định dự án</label>
+                <select id="selectDefaultFont" class="prop-select">
+                  <optgroup label="Bộ Font Manga Việt Hóa (20 fonts)">
+                    <option value="Yuki Arenzi" selected>Yuki Arenzi (Manga thoại chính)</option>
+                    <option value="Yuki Burobu">Yuki Burobu (Hài hước / Tròn)</option>
+                    <option value="Yuki Marian Journal">Yuki Marian Journal (Tâm sự / Nhẹ nhàng)</option>
+                    <option value="Yuki Starstreak">Yuki Starstreak (Hành động / Tốc độ)</option>
+                    <option value="Yuki Chicken Pie">Yuki Chicken Pie (Dễ thương / Chibi)</option>
+                    <option value="Yuki Crash Landing">Yuki Crash Landing (Mạnh mẽ / Quát tháo)</option>
+                    <option value="Yuki Downhill Dive">Yuki Downhill Dive</option>
+                    <option value="Yuki Gingerline">Yuki Gingerline</option>
+                    <option value="Yuki Gorillaz Story">Yuki Gorillaz Story</option>
+                    <option value="Yuki Only Angel">Yuki Only Angel</option>
+                    <option value="Yuki Swands Hand">Yuki Swands Hand</option>
+                    <option value="Yuki La Belle Aurore">Yuki La Belle Aurore</option>
+                    <option value="Yuki Little Cupcakes">Yuki Little Cupcakes</option>
+                    <option value="Yuki Nagurigaki Crayon">Yuki Nagurigaki Crayon</option>
+                    <option value="Yuki Ripsnort">Yuki Ripsnort</option>
+                    <option value="Yuki Roasthink">Yuki Roasthink</option>
+                    <option value="Yuki Screwball">Yuki Screwball</option>
+                    <option value="Yuki Skulduggery">Yuki Skulduggery</option>
+                    <option value="Yuki Superscratchy">Yuki Superscratchy</option>
+                    <option value="Yuki Tea And Oranges">Yuki Tea And Oranges</option>
+                  </optgroup>
+                  <optgroup label="Font Comic Phổ Biến">
+                    <option value="Comic Neue">Comic Neue</option>
+                    <option value="Bangers">Bangers</option>
+                    <option value="Baloo 2">Baloo 2</option>
+                    <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+                  </optgroup>
+                  <optgroup label="Font Tùy Chỉnh Nạp Thêm" id="defaultCustomFontsOptgroup">
+                    <!-- Custom fonts synced here -->
+                  </optgroup>
+                </select>
+                <div class="setting-hint">Phông này sẽ tự động áp dụng cho mọi bóng thoại mới tạo và khi AI bắt box.</div>
+              </div>
+
+              <div class="setting-item" style="margin-top:4px;">
+                <button type="button" class="btn-action btn-secondary" id="btnApplyDefaultFontCurrentPage" style="width:100%; justify-content:center; font-size:11.5px; padding:6px 10px;">
+                  <span>Áp dụng phông này cho cả trang này</span>
+                </button>
+              </div>
+
+              <div class="setting-item">
+                <button type="button" class="btn-action btn-secondary" id="btnApplyDefaultFontAllPages" style="width:100%; justify-content:center; font-size:11.5px; padding:6px 10px;">
+                  <span>Áp dụng phông này cho toàn bộ dự án</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -308,9 +412,14 @@
 
         <!-- Font Family -->
         <div class="property-group">
-          <label class="property-label" for="propFont">
-            <span>Font chữ Manga</span>
-          </label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <label class="property-label" for="propFont" style="margin-bottom:0;">
+              <span>Font chữ Manga</span>
+            </label>
+            <button type="button" class="btn-link-action" id="btnSetAsDefaultFont" title="Đặt phông này làm mặc định cho mọi bóng thoại mới tạo" style="font-size:11px; color:#38bdf8; background:none; border:none; cursor:pointer; padding:2px 4px; display:inline-flex; align-items:center; gap:3px;">
+              <span>⭐ Đặt làm mặc định</span>
+            </button>
+          </div>
           <select id="propFont" class="prop-select">
             <optgroup label="Bộ Font Manga Việt Hóa">
               <option value="Yuki Arenzi" selected>Yuki Arenzi</option>

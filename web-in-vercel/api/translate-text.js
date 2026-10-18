@@ -35,7 +35,8 @@ module.exports = async (req, res) => {
       prevContext
     } = req.body || {};
 
-    if (!text_jp || !text_jp.trim()) {
+    const inputPromptText = (text_jp || req.body?.text || "").trim();
+    if (!inputPromptText) {
       return res.status(400).json({ error: "Thiếu văn bản gốc cần dịch." });
     }
 
@@ -53,7 +54,7 @@ module.exports = async (req, res) => {
 
     const modelName = model || "gemini-3.1-flash-lite";
     const order = readingOrder || comicType || "manga";
-    const prompt = buildTranslatePrompt(text_jp.trim(), sourceLang, targetLang, tone, order, prevContext);
+    const prompt = buildTranslatePrompt(inputPromptText, sourceLang, targetLang, tone, order, prevContext);
 
     const parts = [{ text: prompt }];
 
@@ -76,7 +77,13 @@ module.exports = async (req, res) => {
     rawTrans = rawTrans.replace(/^(?:Translation:|Translated text:|Here is the translation:)/i, "").trim();
     const cleanTrans = stripEmptyLines(rawTrans);
 
-    res.json({ success: true, text_vi: cleanTrans, modelUsed, keyIndex: keyIndex || 0 });
+    res.json({
+      success: true,
+      text_vi: cleanTrans,
+      translatedText: cleanTrans,
+      modelUsed,
+      keyIndex: keyIndex || 0
+    });
   } catch (err) {
     console.error("translate-text error:", err);
     res.status(500).json({ error: err.message || "Lỗi dịch văn bản." });

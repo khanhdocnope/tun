@@ -26,6 +26,10 @@ const appState = {
   currentImageElement: null,
   displayLang: 'vi', // 'vi' (Vietnamese typeset) or 'jp' (Original Japanese OCR)
   isAiProcessing: false,
+  defaultFont: localStorage.getItem('manga_default_font') || 'Yuki Arenzi',
+  apiKey: localStorage.getItem('manga_api_key') || '',
+  apiKey2: localStorage.getItem('manga_api_key_2') || '',
+  geminiModel: localStorage.getItem('manga_gemini_model') || 'gemini-2.5-flash-lite',
   aiSettings: {
     dilationPx: parseInt(localStorage.getItem('manga_clean_dilation') || '8', 10),
     detThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.18'),
@@ -50,6 +54,7 @@ const el = {
   btnTranslateBubble: document.getElementById('btnTranslateBubble'),
   propText: document.getElementById('propText'),
   propFont: document.getElementById('propFont'),
+  btnSetAsDefaultFont: document.getElementById('btnSetAsDefaultFont'),
   propAutoFit: document.getElementById('propAutoFit'),
   propFontSize: document.getElementById('propFontSize'),
   valFontSize: document.getElementById('valFontSize'),
@@ -95,6 +100,20 @@ const el = {
   settingInpaintModel: document.getElementById('settingInpaintModel'),
   settingCleanSFX: document.getElementById('settingCleanSFX'),
   btnSaveAndReClean: document.getElementById('btnSaveAndReClean'),
+
+  // Settings Tabs & Inputs
+  popoverTabs: document.getElementById('popoverTabs'),
+  inputGeminiApiKey: document.getElementById('inputGeminiApiKey'),
+  btnToggleApiKeyVis: document.getElementById('btnToggleApiKeyVis'),
+  inputGeminiApiKey2: document.getElementById('inputGeminiApiKey2'),
+  selectGeminiModel: document.getElementById('selectGeminiModel'),
+  btnTestGeminiKey: document.getElementById('btnTestGeminiKey'),
+  testKeyStatusBadge: document.getElementById('testKeyStatusBadge'),
+
+  selectDefaultFont: document.getElementById('selectDefaultFont'),
+  defaultCustomFontsOptgroup: document.getElementById('defaultCustomFontsOptgroup'),
+  btnApplyDefaultFontCurrentPage: document.getElementById('btnApplyDefaultFontCurrentPage'),
+  btnApplyDefaultFontAllPages: document.getElementById('btnApplyDefaultFontAllPages'),
 
   // AI Status HUD Elements
   aiStatusOverlay: document.getElementById('aiStatusOverlay'),
@@ -763,7 +782,7 @@ async function runBackendCleanAndBox(pageIndex) {
           height,
           srcText: item.original_text || '',
           text: item.translated_text || '',
-          font: 'Yuki Arenzi',
+          font: appState.defaultFont || 'Yuki Arenzi',
           fontSize: 22,
           autoFit: true,
           color: '#000000',
@@ -1319,28 +1338,66 @@ function bindInspectorEvents() {
     navigator.clipboard.writeText(text).then(() => showToast('Đã sao chép tiếng Nhật!'));
   });
 
+  if (el.btnSetAsDefaultFont) {
+    el.btnSetAsDefaultFont.addEventListener('click', () => {
+      const b = getActiveBubble();
+      const chosenFont = b ? b.font : (el.propFont && el.propFont.value);
+      if (!chosenFont) return;
+      appState.defaultFont = chosenFont;
+      localStorage.setItem('manga_default_font', chosenFont);
+      if (el.selectDefaultFont) el.selectDefaultFont.value = chosenFont;
+      showToast(`⭐ Đã đặt "${chosenFont}" làm phông mặc định cho mọi bóng thoại mới!`);
+    });
+  }
+
   el.btnTranslateBubble.addEventListener('click', async () => {
     const b = getActiveBubble();
     if (!b || !b.srcText) {
       showToast('Không có chữ tiếng Nhật để dịch.');
       return;
     }
-    showToast('Đang dịch tiếng Nhật sang tiếng Việt...');
+
+    const activeKey = (appState.apiKey || localStorage.getItem('manga_api_key') || '').trim();
+    if (!activeKey) {
+      showToast('⚠️ Vui lòng cấu hình Gemini API Key trong Cài đặt ⚙️ để dịch!');
+      if (el.aiCleanSettingsPopover) {
+        el.aiCleanSettingsPopover.style.display = 'flex';
+        document.querySelectorAll('.popover-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'tabGemini'));
+        document.querySelectorAll('.popover-tab-content').forEach(c => {
+          const isMatch = c.id === 'tabGemini';
+          c.classList.toggle('active', isMatch);
+          c.style.display = isMatch ? 'flex' : 'none';
+        });
+        if (el.inputGeminiApiKey) el.inputGeminiApiKey.focus();
+      }
+      return;
+    }
+
+    showToast('Đang gọi Gemini AI dịch tiếng Nhật...');
     try {
+      const activeModel = appState.geminiModel || localStorage.getItem('manga_gemini_model') || 'gemini-2.5-flash-lite';
       const res = await fetch('/api/translate-text', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: b.srcText, sourceLang: 'ja', targetLang: 'vi' })
+        body: JSON.stringify({
+          text: b.srcText,
+          text_jp: b.srcText,
+          sourceLang: 'ja',
+          targetLang: 'vi',
+          apiKey: activeKey,
+          apiKey2: appState.apiKey2 || localStorage.getItem('manga_api_key_2') || '',
+          model: activeModel
+        })
       });
       const data = await res.json();
-      if (data && data.translatedText) {
-        b.text = data.translatedText;
+      if (res.ok && (data.translatedText || data.text_vi)) {
+        b.text = data.translatedText || data.text_vi;
         el.propText.value = b.text;
         renderCanvas();
         saveTypesetToDB(appState.pages[appState.activePageIndex]);
-        showToast('Đã dịch xong!');
+        showToast(`✅ Đã dịch xong (${data.modelUsed || activeModel})!`);
       } else {
-        showToast('Không nhận được bản dịch từ API.');
+        showToast(`❌ Lỗi dịch: ${data.error || 'Không nhận được bản dịch từ API'}`);
       }
     } catch (err) {
       showToast(`Lỗi dịch: ${err.message || err}`);
@@ -1522,6 +1579,14 @@ function setupCustomFontUpload() {
       opt.value = fontName;
       opt.textContent = `${fontName} (Tùy chỉnh)`;
       el.customFontsOptgroup.appendChild(opt);
+
+      if (el.defaultCustomFontsOptgroup) {
+        const optDefault = document.createElement('option');
+        optDefault.value = fontName;
+        optDefault.textContent = `${fontName} (Tùy chỉnh)`;
+        el.defaultCustomFontsOptgroup.appendChild(optDefault);
+      }
+
       el.propFont.value = fontName;
 
       const page = appState.pages[appState.activePageIndex];
@@ -1554,7 +1619,7 @@ function setupBubbleActions() {
       height: Math.round(el.canvas.height * 0.12),
       srcText: '新しいテキスト',
       text: 'Lời thoại mới',
-      font: 'Yuki Arenzi',
+      font: appState.defaultFont || 'Yuki Arenzi',
       fontSize: 22,
       autoFit: true,
       color: '#000000',
@@ -1867,6 +1932,155 @@ function setupAiCleanSettings() {
     });
   }
 
+  // Popover Tabs Switching
+  if (el.popoverTabs) {
+    el.popoverTabs.addEventListener('click', (e) => {
+      const tabBtn = e.target.closest('.popover-tab');
+      if (!tabBtn) return;
+      const targetId = tabBtn.dataset.tab;
+      document.querySelectorAll('.popover-tab').forEach(b => b.classList.toggle('active', b === tabBtn));
+      document.querySelectorAll('.popover-tab-content').forEach(c => {
+        const isMatch = c.id === targetId;
+        c.classList.toggle('active', isMatch);
+        c.style.display = isMatch ? 'flex' : 'none';
+      });
+    });
+  }
+
+  // TAB 1: Gemini API Keys & Model
+  if (el.inputGeminiApiKey) {
+    el.inputGeminiApiKey.value = appState.apiKey;
+    el.inputGeminiApiKey.addEventListener('input', (e) => {
+      appState.apiKey = e.target.value.trim();
+      localStorage.setItem('manga_api_key', appState.apiKey);
+    });
+  }
+
+  if (el.btnToggleApiKeyVis && el.inputGeminiApiKey) {
+    el.btnToggleApiKeyVis.addEventListener('click', () => {
+      const isPwd = el.inputGeminiApiKey.type === 'password';
+      el.inputGeminiApiKey.type = isPwd ? 'text' : 'password';
+      el.btnToggleApiKeyVis.textContent = isPwd ? '🔒' : '👁️';
+    });
+  }
+
+  if (el.inputGeminiApiKey2) {
+    el.inputGeminiApiKey2.value = appState.apiKey2;
+    el.inputGeminiApiKey2.addEventListener('input', (e) => {
+      appState.apiKey2 = e.target.value.trim();
+      localStorage.setItem('manga_api_key_2', appState.apiKey2);
+    });
+  }
+
+  if (el.selectGeminiModel) {
+    el.selectGeminiModel.value = appState.geminiModel;
+    el.selectGeminiModel.addEventListener('change', (e) => {
+      appState.geminiModel = e.target.value;
+      localStorage.setItem('manga_gemini_model', e.target.value);
+    });
+  }
+
+  if (el.btnTestGeminiKey) {
+    el.btnTestGeminiKey.addEventListener('click', async () => {
+      const key = (appState.apiKey || (el.inputGeminiApiKey && el.inputGeminiApiKey.value) || '').trim();
+      if (!key) {
+        showToast('Vui lòng nhập API Key trước khi kiểm tra!');
+        if (el.testKeyStatusBadge) {
+          el.testKeyStatusBadge.textContent = 'Chưa có key';
+          el.testKeyStatusBadge.style.color = '#f87171';
+        }
+        return;
+      }
+
+      if (el.testKeyStatusBadge) {
+        el.testKeyStatusBadge.textContent = 'Đang thử...';
+        el.testKeyStatusBadge.style.color = '#38bdf8';
+      }
+
+      try {
+        const res = await fetch('/api/translate-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: 'こんにちは世界',
+            text_jp: 'こんにちは世界',
+            apiKey: key,
+            apiKey2: appState.apiKey2,
+            model: appState.geminiModel
+          })
+        });
+        const data = await res.json();
+        if (res.ok && (data.translatedText || data.text_vi)) {
+          if (el.testKeyStatusBadge) {
+            el.testKeyStatusBadge.textContent = '✅ Key hợp lệ!';
+            el.testKeyStatusBadge.style.color = '#34d399';
+          }
+          showToast(`✅ Kết nối Gemini thành công: "${data.translatedText || data.text_vi}" (${data.modelUsed || appState.geminiModel})`);
+        } else {
+          if (el.testKeyStatusBadge) {
+            el.testKeyStatusBadge.textContent = '❌ Lỗi';
+            el.testKeyStatusBadge.style.color = '#f87171';
+          }
+          showToast(`❌ Lỗi API Key: ${data.error || 'Key không hợp lệ'}`);
+        }
+      } catch (err) {
+        if (el.testKeyStatusBadge) {
+          el.testKeyStatusBadge.textContent = '❌ Lỗi mạng';
+          el.testKeyStatusBadge.style.color = '#f87171';
+        }
+        showToast(`❌ Lỗi kết nối: ${err.message || err}`);
+      }
+    });
+  }
+
+  // TAB 2: Default Font Settings
+  if (el.selectDefaultFont) {
+    el.selectDefaultFont.value = appState.defaultFont;
+    el.selectDefaultFont.addEventListener('change', (e) => {
+      appState.defaultFont = e.target.value;
+      localStorage.setItem('manga_default_font', e.target.value);
+      showToast(`⭐ Đã đặt "${appState.defaultFont}" làm phông mặc định!`);
+    });
+  }
+
+  if (el.btnApplyDefaultFontCurrentPage) {
+    el.btnApplyDefaultFontCurrentPage.addEventListener('click', () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || !page.bubbles || !page.bubbles.length) {
+        showToast('Trang hiện tại chưa có bóng thoại nào.');
+        return;
+      }
+      const font = appState.defaultFont || (el.selectDefaultFont && el.selectDefaultFont.value) || 'Yuki Arenzi';
+      page.bubbles.forEach(b => { b.font = font; });
+      updateInspector();
+      renderCanvas();
+      saveTypesetToDB(page);
+      showToast(`Đã áp dụng phông "${font}" cho toàn bộ ${page.bubbles.length} bóng thoại trang này!`);
+    });
+  }
+
+  if (el.btnApplyDefaultFontAllPages) {
+    el.btnApplyDefaultFontAllPages.addEventListener('click', async () => {
+      if (!appState.pages.length) {
+        showToast('Dự án chưa có trang truyện nào.');
+        return;
+      }
+      const font = appState.defaultFont || (el.selectDefaultFont && el.selectDefaultFont.value) || 'Yuki Arenzi';
+      let totalUpdated = 0;
+      for (const p of appState.pages) {
+        if (p.bubbles && p.bubbles.length) {
+          p.bubbles.forEach(b => { b.font = font; });
+          totalUpdated += p.bubbles.length;
+          await saveTypesetToDB(p);
+        }
+      }
+      updateInspector();
+      renderCanvas();
+      showToast(`Đã áp dụng phông "${font}" cho toàn bộ ${totalUpdated} bóng thoại trong tất cả các trang!`);
+    });
+  }
+
+  // TAB 3: Clean Settings
   document.addEventListener('click', (e) => {
     if (el.aiCleanSettingsPopover && !el.aiCleanSettingsPopover.contains(e.target) && e.target !== el.btnAiCleanSettings && !el.btnAiCleanSettings.contains(e.target)) {
       el.aiCleanSettingsPopover.style.display = 'none';
