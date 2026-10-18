@@ -4,4 +4,5 @@ Do-not-touch/
 __pycache__
 weights/
 *.mp4
-scratch/
+scratch/
+new/
