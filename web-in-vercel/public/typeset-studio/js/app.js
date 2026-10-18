@@ -25,6 +25,10 @@ const appState = {
   initialBubbleRect: null,
   currentImageElement: null,
   displayLang: 'vi', // 'vi' (Vietnamese typeset) or 'jp' (Original Japanese OCR)
+  activeTool: 'select', // 'select' | 'draw'
+  isDrawingBox: false,
+  drawStartCoords: null,
+  tempDrawBox: null,
   isAiProcessing: false,
   defaultFont: localStorage.getItem('manga_default_font') || 'Yuki Arenzi',
   apiKey: localStorage.getItem('manga_api_key') || '',
@@ -142,6 +146,12 @@ const el = {
   btnExportFullZip: document.getElementById('btnExportFullZip'),
   btnSyncFromBatch: document.getElementById('btnSyncFromBatch'),
   inputAddLocalImages: document.getElementById('inputAddLocalImages'),
+  btnToolSelect: document.getElementById('btnToolSelect'),
+  btnToolDraw: document.getElementById('btnToolDraw'),
+  btnSnapBubble: document.getElementById('btnSnapBubble'),
+  btnFitText: document.getElementById('btnFitText'),
+  btnInspectorSnapBubble: document.getElementById('btnInspectorSnapBubble'),
+  btnInspectorFitText: document.getElementById('btnInspectorFitText'),
   btnAddBubble: document.getElementById('btnAddBubble'),
   btnDeleteBubble: document.getElementById('btnDeleteBubble'),
   btnZoomIn: document.getElementById('btnZoomIn'),
@@ -974,6 +984,145 @@ function renderCanvas() {
     const sel = activePage.bubbles[appState.activeBubbleIndex];
     drawSelectionHandles(ctx, sel);
   }
+
+  // Vẽ khung preview khi đang kéo chuột vẽ box thoại
+  if (appState.isDrawingBox && appState.tempDrawBox) {
+    const { x, y, width, height } = appState.tempDrawBox;
+    ctx.save();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(x, y, width, height);
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+    ctx.fillRect(x, y, width, height);
+    ctx.restore();
+  }
+}
+
+/**
+ * Thuật toán tự động co viền bounding box ôm khít bóng thoại manga cục bộ
+ * Ngăn chặn hoàn toàn việc box bị kéo dài tràn qua vạch ngăn cách panel
+ */
+function snapBoxToBubble(bubble, imgEl) {
+  if (!bubble || !imgEl || !imgEl.naturalWidth || !imgEl.naturalHeight) return false;
+
+  const pad = 35;
+  const sx = Math.max(0, Math.floor(bubble.x - pad));
+  const sy = Math.max(0, Math.floor(bubble.y - pad));
+  const sw = Math.min(imgEl.naturalWidth - sx, Math.ceil(bubble.width + pad * 2));
+  const sh = Math.min(imgEl.naturalHeight - sy, Math.ceil(bubble.height + pad * 2));
+  if (sw < 20 || sh < 20) return false;
+
+  const sc = document.createElement('canvas');
+  sc.width = sw;
+  sc.height = sh;
+  const sctx = sc.getContext('2d', { willReadFrequently: true });
+  sctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, sw, sh);
+  const imgData = sctx.getImageData(0, 0, sw, sh);
+  const data = imgData.data;
+
+  const getLum = (lx, ly) => {
+    if (lx < 0 || lx >= sw || ly < 0 || ly >= sh) return 0;
+    const idx = (ly * sw + lx) * 4;
+    return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+  };
+
+  const isWhite = (lum) => lum >= 200;
+  const isDark = (lum) => lum < 85;
+
+  const relX = bubble.x - sx;
+  const relY = bubble.y - sy;
+  const relW = bubble.width;
+  const relH = bubble.height;
+
+  // Tìm điểm hạt giống (seed) màu trắng bên trong bubble
+  const seedCenterX = Math.round(relX + relW / 2);
+  let seedY = Math.round(relY + Math.min(relH * 0.35, 50));
+  let foundSeed = false;
+  let seedX = seedCenterX;
+
+  for (let dy = 0; dy < Math.min(relH, 100); dy += 4) {
+    for (let dx = 0; dx <= 30; dx += 5) {
+      for (const sign of [0, 1, -1]) {
+        const testX = seedCenterX + dx * sign;
+        const testY = seedY + dy;
+        if (isWhite(getLum(testX, testY))) {
+          seedX = testX;
+          seedY = testY;
+          foundSeed = true;
+          break;
+        }
+      }
+      if (foundSeed) break;
+    }
+    if (foundSeed) break;
+  }
+
+  if (!foundSeed) return false;
+
+  // 1. Quét biên trên (Top)
+  let topY = seedY;
+  while (topY > 0) {
+    const lum = getLum(seedX, topY - 1);
+    if (isDark(lum) || !isWhite(lum)) break;
+    topY--;
+  }
+
+  // 2. Quét biên dưới (Bottom) - Dừng ngay khi chạm viền bóng thoại hoặc đường kẻ đen panel
+  let bottomY = seedY;
+  while (bottomY < sh - 1) {
+    const lum = getLum(seedX, bottomY + 1);
+    if (isDark(lum)) break;
+    let darkCount = 0;
+    const checkSpan = Math.min(30, Math.floor(relW / 2));
+    for (let dx = -checkSpan; dx <= checkSpan; dx += 5) {
+      if (isDark(getLum(seedX + dx, bottomY + 1))) darkCount++;
+    }
+    if (darkCount >= 4) break;
+    if (!isWhite(lum)) break;
+    bottomY++;
+  }
+
+  // 3. Quét biên trái và phải (Left / Right)
+  const midScanY = Math.round((topY + bottomY) / 2);
+  let leftX = seedX;
+  while (leftX > 0) {
+    const lum = getLum(leftX - 1, midScanY);
+    if (isDark(lum) || !isWhite(lum)) break;
+    leftX--;
+  }
+
+  let rightX = seedX;
+  while (rightX < sw - 1) {
+    const lum = getLum(rightX + 1, midScanY);
+    if (isDark(lum) || !isWhite(lum)) break;
+    rightX++;
+  }
+
+  // Quét mở rộng theo chiều cao
+  for (let y = topY + 5; y < bottomY - 5; y += 8) {
+    let lx = seedX;
+    while (lx > 0 && isWhite(getLum(lx - 1, y))) lx--;
+    if (lx < leftX && lx > 0) leftX = lx;
+
+    let rx = seedX;
+    while (rx < sw - 1 && isWhite(getLum(rx + 1, y))) rx++;
+    if (rx > rightX && rx < sw - 1) rightX = rx;
+  }
+
+  const snappedW = Math.max(40, (rightX - leftX));
+  const snappedH = Math.max(30, (bottomY - topY));
+
+  const newX = Math.max(0, sx + leftX + 2);
+  const newY = Math.max(0, sy + topY + 2);
+  const newW = Math.max(35, snappedW - 4);
+  const newH = Math.max(25, snappedH - 4);
+
+  bubble.x = newX;
+  bubble.y = newY;
+  bubble.width = newW;
+  bubble.height = newH;
+  return true;
 }
 
 function drawSelectionHandles(ctx, bubble) {
@@ -1108,6 +1257,14 @@ el.viewport.addEventListener('mousedown', (e) => {
     return;
   }
 
+  // Chế độ vẽ box trực tiếp trên Canvas
+  if (appState.activeTool === 'draw') {
+    appState.isDrawingBox = true;
+    appState.drawStartCoords = { x: coords.x, y: coords.y };
+    appState.tempDrawBox = { x: coords.x, y: coords.y, width: 0, height: 0 };
+    return;
+  }
+
   // 1. Check if clicking on an active bubble resize handle
   if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
@@ -1192,10 +1349,25 @@ window.addEventListener('mousemove', (e) => {
   }
 
   const coords = getCanvasCoords(e);
+
+  // Xem trước khi đang kéo chuột vẽ box
+  if (appState.isDrawingBox && appState.drawStartCoords) {
+    const start = appState.drawStartCoords;
+    const x = Math.min(start.x, coords.x);
+    const y = Math.min(start.y, coords.y);
+    const w = Math.abs(coords.x - start.x);
+    const h = Math.abs(coords.y - start.y);
+    appState.tempDrawBox = { x, y, width: w, height: h };
+    renderCanvas();
+    return;
+  }
+
   const page = appState.pages[appState.activePageIndex];
   if (!page || !page.bubbles) return;
 
-  if (appState.activeBubbleIndex >= 0) {
+  if (appState.activeTool === 'draw') {
+    el.canvas.style.cursor = 'crosshair';
+  } else if (appState.activeBubbleIndex >= 0) {
     const activeBubble = page.bubbles[appState.activeBubbleIndex];
     const handle = hitTestHandle(activeBubble, coords.x, coords.y);
     if (handle) {
@@ -1244,6 +1416,52 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mouseup', () => {
+  if (appState.isDrawingBox) {
+    appState.isDrawingBox = false;
+    const box = appState.tempDrawBox;
+    appState.tempDrawBox = null;
+    appState.drawStartCoords = null;
+
+    if (box && box.width >= 20 && box.height >= 20) {
+      const page = appState.pages[appState.activePageIndex];
+      if (page) {
+        if (!page.bubbles) page.bubbles = [];
+        const newBubble = {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          srcText: '',
+          text: '',
+          font: appState.defaultFont || 'Yuki Arenzi',
+          fontSize: 22,
+          autoFit: true,
+          color: '#000000',
+          strokeColor: '#ffffff',
+          strokeWidth: 3,
+          align: 'center',
+          verticalAlign: 'middle',
+          lineHeightRatio: 1.25,
+          padding: 8
+        };
+        page.bubbles.push(newBubble);
+        appState.activeBubbleIndex = page.bubbles.length - 1;
+        appState.activeTool = 'select';
+        updateToolModeUI();
+        saveTypesetToDB(page);
+        updateInspector();
+        renderCanvas();
+        if (el.propText) {
+          el.propText.focus();
+        }
+        showToast('Đã tạo khung thoại mới! Hãy nhập nội dung.');
+      }
+    } else {
+      renderCanvas();
+    }
+    return;
+  }
+
   if (appState.isPanning) {
     appState.isPanning = false;
     el.viewport.classList.remove('panning');
@@ -1710,16 +1928,150 @@ function setupBubbleActions() {
     });
   }
 
-  // Phím tắt bàn phím
-  window.addEventListener('keydown', (e) => {
-    if ((e.key === 'Delete' || e.key === 'Del') && document.activeElement !== el.propText && document.activeElement !== el.propSrcText) {
-      deleteActiveBubble();
-    }
-    if (document.activeElement !== el.propText && document.activeElement !== el.propSrcText) {
-      if (e.key === 'ArrowLeft') switchPage(appState.activePageIndex - 1);
-      if (e.key === 'ArrowRight') switchPage(appState.activePageIndex + 1);
-    }
-  });
+    const duplicateActiveBubble = () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || appState.activeBubbleIndex < 0 || !page.bubbles[appState.activeBubbleIndex]) return;
+
+      const source = page.bubbles[appState.activeBubbleIndex];
+      const clone = {
+        ...source,
+        x: source.x + 20,
+        y: source.y + 20
+      };
+      page.bubbles.push(clone);
+      appState.activeBubbleIndex = page.bubbles.length - 1;
+      updateInspector();
+      renderCanvas();
+      saveTypesetToDB(page);
+      showToast('Đã nhân bản bóng thoại');
+    };
+
+    const snapActiveBubble = () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || appState.activeBubbleIndex < 0 || !page.bubbles[appState.activeBubbleIndex]) {
+        showToast('Vui lòng chọn một bóng thoại trước.');
+        return;
+      }
+      const bubble = page.bubbles[appState.activeBubbleIndex];
+      const ok = snapBoxToBubble(bubble, appState.currentImageElement);
+      if (ok) {
+        updateInspector();
+        renderCanvas();
+        saveTypesetToDB(page);
+        showToast('Đã tự động ôm khít bóng thoại!');
+      } else {
+        showToast('Không quét được biên bóng thoại; hãy thử di chuyển nhẹ khung.');
+      }
+    };
+
+    const fitActiveBubbleToText = () => {
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || appState.activeBubbleIndex < 0 || !page.bubbles[appState.activeBubbleIndex]) {
+        showToast('Vui lòng chọn một bóng thoại trước.');
+        return;
+      }
+      const bubble = page.bubbles[appState.activeBubbleIndex];
+      const fitted = TypesetEngine.computeFittedBox(bubble, ctx, { displayLang: appState.displayLang });
+      if (fitted) {
+        bubble.x = fitted.x;
+        bubble.y = fitted.y;
+        bubble.width = fitted.width;
+        bubble.height = fitted.height;
+        updateInspector();
+        renderCanvas();
+        saveTypesetToDB(page);
+        showToast('Đã thu gọn khung vừa khít chữ!');
+      }
+    };
+
+    const updateToolModeUI = () => {
+      if (el.btnToolSelect) el.btnToolSelect.classList.toggle('active', appState.activeTool === 'select');
+      if (el.btnToolDraw) el.btnToolDraw.classList.toggle('active', appState.activeTool === 'draw');
+      if (el.canvas) {
+        el.canvas.style.cursor = appState.activeTool === 'draw' ? 'crosshair' : 'default';
+      }
+    };
+
+    if (el.btnToolSelect) el.btnToolSelect.addEventListener('click', () => { appState.activeTool = 'select'; updateToolModeUI(); });
+    if (el.btnToolDraw) el.btnToolDraw.addEventListener('click', () => { appState.activeTool = 'draw'; updateToolModeUI(); });
+    if (el.btnSnapBubble) el.btnSnapBubble.addEventListener('click', snapActiveBubble);
+    if (el.btnFitText) el.btnFitText.addEventListener('click', fitActiveBubbleToText);
+    if (el.btnInspectorSnapBubble) el.btnInspectorSnapBubble.addEventListener('click', snapActiveBubble);
+    if (el.btnInspectorFitText) el.btnInspectorFitText.addEventListener('click', fitActiveBubbleToText);
+
+    // Double-click on bubble to focus editor
+    el.canvas.addEventListener('dblclick', (e) => {
+      const coords = getCanvasCoords(e);
+      const page = appState.pages[appState.activePageIndex];
+      if (!page || !page.bubbles) return;
+      const hitIndex = hitTestBubble(page.bubbles, coords.x, coords.y);
+      if (hitIndex >= 0) {
+        appState.activeBubbleIndex = hitIndex;
+        updateInspector();
+        renderCanvas();
+        if (el.propText) {
+          el.propText.focus();
+          el.propText.select();
+        }
+      }
+    });
+
+    // Phím tắt bàn phím
+    window.addEventListener('keydown', (e) => {
+      const isTyping = document.activeElement === el.propText ||
+                       document.activeElement === el.propSrcText ||
+                       (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA'));
+
+      if (!isTyping) {
+        if (e.key === 'v' || e.key === 'V') {
+          appState.activeTool = 'select';
+          updateToolModeUI();
+          showToast('Công cụ: Chọn & Di chuyển (V)');
+          return;
+        }
+        if (e.key === 'w' || e.key === 'W') {
+          appState.activeTool = 'draw';
+          updateToolModeUI();
+          showToast('Công cụ: Vẽ khung thoại (W)');
+          return;
+        }
+
+        const page = appState.pages[appState.activePageIndex];
+        if (page && appState.activeBubbleIndex >= 0 && page.bubbles && page.bubbles[appState.activeBubbleIndex]) {
+          const b = page.bubbles[appState.activeBubbleIndex];
+
+          // Arrow keys nudge
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const step = e.shiftKey ? 10 : 1;
+            if (e.key === 'ArrowLeft') b.x -= step;
+            if (e.key === 'ArrowRight') b.x += step;
+            if (e.key === 'ArrowUp') b.y -= step;
+            if (e.key === 'ArrowDown') b.y += step;
+            renderCanvas();
+            saveTypesetToDB(page);
+            return;
+          }
+
+          // Duplicate: Ctrl+D / Cmd+D
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+            e.preventDefault();
+            duplicateActiveBubble();
+            return;
+          }
+
+          // Delete
+          if (e.key === 'Delete' || e.key === 'Backspace') {
+            e.preventDefault();
+            deleteActiveBubble();
+            return;
+          }
+        }
+
+        if (e.key === 'ArrowLeft' || e.key === 'PageUp') switchPage(appState.activePageIndex - 1);
+        if (e.key === 'ArrowRight' || e.key === 'PageDown') switchPage(appState.activePageIndex + 1);
+      }
+    });
 
   // Nút Tự căn chữ tất cả
   el.btnAutoFitAll.addEventListener('click', () => {

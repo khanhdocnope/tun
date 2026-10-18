@@ -339,6 +339,42 @@
 
       <!-- Floating Canvas Toolbar -->
       <div class="viewport-floating-bar">
+        <button type="button" class="btn-tool active" id="btnToolSelect" title="Công cụ chọn & di chuyển (Phím V)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3l7 18 3-7 7-3L3 3z"></path>
+          </svg>
+          <span>Chọn (V)</span>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnToolDraw" title="Kéo chuột vẽ khung thoại trực tiếp trên ảnh (Phím W)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="12" y1="8" x2="12" y2="16"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          <span>Vẽ box (W)</span>
+        </button>
+
+        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
+
+        <button type="button" class="btn-tool" id="btnSnapBubble" title="Tự động nhận diện và co vừa khít viền bóng thoại manga (Chặn tràn panel)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+          <span>Ôm bóng thoại</span>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnFitText" title="Tự động co khung thoại vừa khít chiều cao dòng chữ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+          <span>Khớp chữ</span>
+        </button>
+
+        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
+
         <button type="button" class="btn-tool" id="btnAddBubble" title="Thêm bóng thoại mới">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -408,6 +444,16 @@
             <span>Lời thoại tiếng Việt (Typeset)</span>
           </label>
           <textarea id="propText" class="prop-input-textarea" placeholder="Nhập lời thoại cần chèn..."></textarea>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <button type="button" class="btn-action btn-secondary" id="btnInspectorSnapBubble" style="flex:1; justify-content:center; padding:5px 8px; font-size:11px;" title="Tự động nhận diện và ôm khít viền bóng thoại manga (chặn tràn vạch panel)">
+              <span style="color:#fbbf24;">⚡</span>
+              <span>Ôm bóng thoại</span>
+            </button>
+            <button type="button" class="btn-action btn-secondary" id="btnInspectorFitText" style="flex:1; justify-content:center; padding:5px 8px; font-size:11px;" title="Co khung vừa vặn chiều cao chữ">
+              <span style="color:#38bdf8;">📏</span>
+              <span>Khớp chữ</span>
+            </button>
+          </div>
         </div>
 
         <!-- Font Family -->

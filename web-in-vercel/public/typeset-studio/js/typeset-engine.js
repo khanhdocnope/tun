@@ -296,10 +296,77 @@ export const TypesetEngine = (function () {
     };
   }
 
+  /**
+   * Tính toán bounding box tối ưu vừa vặn với kích thước chữ thực tế
+   */
+  function computeFittedBox(bubble, ctx, options = {}) {
+    if (!bubble) return null;
+    const {
+      x = 0,
+      y = 0,
+      width = 200,
+      height = 100,
+      text = '',
+      srcText = '',
+      font = 'Yuki Arenzi',
+      fontSize = 22,
+      padding = 8,
+      lineHeightRatio = 1.25,
+      isBold = false,
+      isItalic = false,
+      autoFit = true,
+      verticalAlign = 'middle'
+    } = bubble;
+
+    const displayText = (options.displayLang === 'jp' ? (srcText || text) : (text || srcText)) || '';
+    if (!displayText.trim()) {
+      return { x, y, width, height };
+    }
+
+    const testCtx = ctx || (typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null);
+    if (!testCtx) return { x, y, width, height };
+
+    const actualFontSize = autoFit
+      ? calculateAutoFitFontSize(testCtx, displayText, width, height, font, { padding, lineHeightRatio, isBold, isItalic })
+      : fontSize;
+
+    const availableWidth = Math.max(10, width - padding * 2);
+    const layout = computeTextLayout(testCtx, displayText, availableWidth, actualFontSize, font, lineHeightRatio, { isBold, isItalic });
+
+    let maxLineWidth = 0;
+    layout.lines.forEach(line => {
+      if (line) {
+        const w = testCtx.measureText(line).width;
+        if (w > maxLineWidth) maxLineWidth = w;
+      }
+    });
+
+    const fittedWidth = Math.max(40, Math.ceil(maxLineWidth + padding * 2));
+    const fittedHeight = Math.max(30, Math.ceil(layout.totalHeight + padding * 2));
+
+    const newX = Math.round(x + (width - fittedWidth) / 2);
+    let newY = y;
+    if (verticalAlign === 'top') {
+      newY = y;
+    } else if (verticalAlign === 'bottom') {
+      newY = Math.round(y + height - fittedHeight);
+    } else {
+      newY = Math.round(y + (height - fittedHeight) / 2);
+    }
+
+    return {
+      x: Math.max(0, newX),
+      y: Math.max(0, newY),
+      width: fittedWidth,
+      height: fittedHeight
+    };
+  }
+
   return {
     tokenizeText,
     computeTextLayout,
     calculateAutoFitFontSize,
+    computeFittedBox,
     renderBubble
   };
 })();
