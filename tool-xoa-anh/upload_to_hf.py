@@ -30,6 +30,7 @@ PROJECT_FILES = [
     "README.md",
     "Dockerfile",
     "prompt.txt",
+    "bench_clean.py",
 ]
 PROJECT_FOLDERS = [
     ("examples", "examples"),
