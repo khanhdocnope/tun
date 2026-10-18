@@ -306,10 +306,10 @@ async function loadDataFromIndexedDB() {
                 lineHeightRatio: 1.25,
                 padding: 8,
                 relRect: {
-                  xPct: 0.15,
-                  yPct: 0.1 + (idx * 0.15) % 0.75,
-                  wPct: 0.35,
-                  hPct: 0.12
+                  xPct: 0.2,
+                  yPct: 0.1 + (idx * 0.18) % 0.7,
+                  wPct: 0.22,
+                  hPct: 0.22
                 }
               }));
             }
@@ -954,9 +954,9 @@ function initPageBubblesCoordinates(page, imgW, imgH) {
       delete b.relRect;
     } else if (b.x == null) {
       b.x = Math.round(imgW * 0.2);
-      b.y = Math.round(imgH * (0.15 + (idx * 0.15) % 0.65));
-      b.width = Math.round(imgW * 0.35);
-      b.height = Math.round(imgH * 0.12);
+      b.y = Math.round(imgH * (0.15 + (idx * 0.18) % 0.65));
+      b.width = Math.round(imgW * 0.22);
+      b.height = Math.round(imgH * 0.22);
     }
   });
 }
@@ -1879,8 +1879,8 @@ function setupBubbleActions() {
     const newBubble = {
       x: Math.round(el.canvas.width * 0.35),
       y: Math.round(el.canvas.height * 0.35),
-      width: Math.round(el.canvas.width * 0.3),
-      height: Math.round(el.canvas.height * 0.12),
+      width: Math.round(el.canvas.width * 0.22),
+      height: Math.round(el.canvas.height * 0.22),
       srcText: '新しいテキスト',
       text: 'Lời thoại mới',
       font: appState.defaultFont || 'Yuki Arenzi',

@@ -4,12 +4,14 @@
  */
 
 export const TypesetEngine = (function () {
+  const CJK_REGEX = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/;
+  const NO_LINE_START = /^[)\]}〉〕≫＞］｝｣、。，．・：；？！‼⁇⁈⁉ヽヾゝゞ々‐゠–〜～ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶﾟﾞº°%?!,.:;)]/;
+
   /**
-   * Ngắt từ và xử lý dấu câu cho tiếng Việt
+   * Ngắt từ và xử lý dấu câu cho tiếng Việt & tiếng Nhật/CJK
    */
   function tokenizeText(text) {
     if (!text) return [];
-    // Tách theo dòng trước
     const rawLines = String(text).replace(/\r\n/g, '\n').split('\n');
     const paragraphs = [];
 
@@ -19,30 +21,87 @@ export const TypesetEngine = (function () {
         paragraphs.push([]);
         continue;
       }
-      // Tách từ theo khoảng trắng
-      const words = trimmed.split(/\s+/).filter(Boolean);
+      const words = [];
+      const rawTokens = trimmed.split(/\s+/).filter(Boolean);
+      for (const rawToken of rawTokens) {
+        if (CJK_REGEX.test(rawToken)) {
+          // Với tiếng Nhật/CJK: Tách từng ký tự nhưng giữ ký tự dấu dính liền ký tự trước (Kinsoku Shori)
+          const chars = Array.from(rawToken);
+          let cur = '';
+          for (let i = 0; i < chars.length; i++) {
+            const ch = chars[i];
+            if (cur && NO_LINE_START.test(ch)) {
+              cur += ch;
+              words.push(cur);
+              cur = '';
+              continue;
+            }
+            if (CJK_REGEX.test(ch)) {
+              if (cur) words.push(cur);
+              cur = ch;
+            } else {
+              cur += ch;
+            }
+          }
+          if (cur) words.push(cur);
+        } else {
+          words.push(rawToken);
+        }
+      }
       paragraphs.push(words);
     }
     return paragraphs;
   }
 
+  function joinTokens(tokens) {
+    if (!tokens || !tokens.length) return '';
+    let res = tokens[0];
+    for (let i = 1; i < tokens.length; i++) {
+      const prev = tokens[i - 1];
+      const curr = tokens[i];
+      const isPrevCjk = CJK_REGEX.test(prev.slice(-1));
+      const isCurrCjk = CJK_REGEX.test(curr.charAt(0));
+      if (isPrevCjk || isCurrCjk) {
+        res += curr;
+      } else {
+        res += ' ' + curr;
+      }
+    }
+    return res;
+  }
+
+  function getConnectorWidth(ctx, prevWord, currWord) {
+    const isPrevCjk = CJK_REGEX.test(prevWord.slice(-1));
+    const isCurrCjk = CJK_REGEX.test(currWord.charAt(0));
+    if (isPrevCjk || isCurrCjk) return 0;
+    return ctx.measureText(' ').width;
+  }
+
   /**
-   * Cắt dòng vừa vặn chiều ngang (Word-wrapping) với thuật toán cân bằng dòng
-   * Tránh chữ mồ côi (orphan words) và tạo khối chữ đối xứng hình thoi/oval chuẩn manga
+   * Cắt dòng vừa vặn chiều ngang và cân đối chiều dọc (Word-wrapping)
+   * Tối ưu cho cả văn bản Latin (tiếng Việt/Anh) và chữ tượng hình CJK (tiếng Nhật/Trung)
+   * Tận dụng tối đa không gian chiều dọc của bóng thoại manga thay vì dồn thành 1 dòng ngang chữ nhỏ
    */
-  function wrapParagraph(ctx, words, maxWidth) {
+  function wrapParagraph(ctx, words, maxWidth, maxHeight = null) {
     if (!words.length) return [''];
     if (words.length === 1) return [words[0]];
 
-    const spaceWidth = ctx.measureText(' ').width;
     const wordWidths = words.map(w => ctx.measureText(w).width);
-    const totalSingleWidth = wordWidths.reduce((a, b) => a + b, 0) + (words.length - 1) * spaceWidth;
-    if (totalSingleWidth <= maxWidth) {
-      return [words.join(' ')];
+    let totalSingleWidth = wordWidths[0];
+    for (let i = 1; i < words.length; i++) {
+      totalSingleWidth += getConnectorWidth(ctx, words[i - 1], words[i]) + wordWidths[i];
+    }
+
+    const isTallBox = maxHeight && (maxHeight > maxWidth * 1.3);
+    if (totalSingleWidth <= maxWidth && (!isTallBox || words.length <= 2)) {
+      return [joinTokens(words)];
     }
 
     const n = words.length;
-    const targetLines = Math.max(2, Math.ceil(totalSingleWidth / (maxWidth * 0.92)));
+    let targetLines = Math.max(2, Math.ceil(totalSingleWidth / (maxWidth * 0.92)));
+    if (isTallBox && words.length >= 4) {
+      targetLines = Math.max(targetLines, Math.min(words.length, Math.round((maxHeight / maxWidth) * 1.4)));
+    }
     const targetLineWidth = Math.min(maxWidth, totalSingleWidth / targetLines);
 
     const dp = new Array(n + 1).fill(Infinity);
@@ -56,7 +115,8 @@ export const TypesetEngine = (function () {
       for (let j = i + 1; j <= n; j++) {
         const wIdx = j - 1;
         const wLen = wordWidths[wIdx];
-        currentLen += (j === i + 1 ? wLen : spaceWidth + wLen);
+        const conn = j === i + 1 ? 0 : getConnectorWidth(ctx, words[wIdx - 1], words[wIdx]);
+        currentLen += conn + wLen;
 
         if (currentLen > maxWidth) {
           if (j === i + 1) {
@@ -71,12 +131,13 @@ export const TypesetEngine = (function () {
         const diff = targetLineWidth - currentLen;
         let penalty = diff * diff;
 
-        // Phạt dòng chỉ có 1 từ nếu toàn đoạn có nhiều từ
-        if (wordsInLine === 1 && n > 2) {
+        const isCjk = CJK_REGEX.test(words[wIdx]);
+        // Phạt dòng chỉ có 1 từ nếu toàn đoạn có nhiều từ (cho chữ Latin)
+        if (!isCjk && wordsInLine === 1 && n > 2) {
           penalty += 30000;
         }
         // Phạt cực nặng nếu dòng cuối cùng bị mồ côi 1 từ đơn độc
-        if (isLastLine && wordsInLine === 1 && n > 2) {
+        if (!isCjk && isLastLine && wordsInLine === 1 && n > 2) {
           penalty += 150000;
         }
 
@@ -94,7 +155,7 @@ export const TypesetEngine = (function () {
       if (prev === -1) {
         return wrapParagraphGreedy(ctx, words, maxWidth);
       }
-      lines.unshift(words.slice(prev, curr).join(' '));
+      lines.unshift(joinTokens(words.slice(prev, curr)));
       curr = prev;
     }
 
@@ -103,18 +164,26 @@ export const TypesetEngine = (function () {
 
   function wrapParagraphGreedy(ctx, words, maxWidth) {
     const lines = [];
-    let currentLine = words[0];
+    let currentWords = [words[0]];
+    let currentLen = ctx.measureText(words[0]).width;
+
     for (let i = 1; i < words.length; i++) {
       const word = words[i];
-      const testLine = currentLine + ' ' + word;
-      if (ctx.measureText(testLine).width <= maxWidth) {
-        currentLine = testLine;
+      const conn = getConnectorWidth(ctx, words[i - 1], word);
+      const wLen = ctx.measureText(word).width;
+
+      if (currentLen + conn + wLen <= maxWidth) {
+        currentWords.push(word);
+        currentLen += conn + wLen;
       } else {
-        lines.push(currentLine);
-        currentLine = word;
+        lines.push(joinTokens(currentWords));
+        currentWords = [word];
+        currentLen = wLen;
       }
     }
-    lines.push(currentLine);
+    if (currentWords.length) {
+      lines.push(joinTokens(currentWords));
+    }
     return lines;
   }
 
@@ -132,7 +201,7 @@ export const TypesetEngine = (function () {
         allLines.push('');
         continue;
       }
-      const wrapped = wrapParagraph(ctx, para, maxWidth);
+      const wrapped = wrapParagraph(ctx, para, maxWidth, options.maxHeight);
       allLines.push(...wrapped);
     }
 
@@ -163,10 +232,11 @@ export const TypesetEngine = (function () {
     let bestSize = minSize;
 
     const fontPrefix = (options.isItalic ? 'italic ' : '') + (options.isBold ? 'bold ' : '');
+    const layoutOptions = { ...options, maxHeight: availableHeight };
 
     for (let iter = 0; iter < 10; iter++) {
       const mid = Math.floor((low + high) / 2);
-      const layout = computeTextLayout(ctx, text, availableWidth, mid, fontFamily, lineHeightRatio, options);
+      const layout = computeTextLayout(ctx, text, availableWidth, mid, fontFamily, lineHeightRatio, layoutOptions);
 
       let widthOverflow = false;
       ctx.font = `${fontPrefix}${mid}px "${fontFamily}", "Comic Neue", "Plus Jakarta Sans", sans-serif`;
@@ -241,7 +311,8 @@ export const TypesetEngine = (function () {
       : fontSize;
 
     const availableWidth = Math.max(10, width - padding * 2);
-    const layout = computeTextLayout(ctx, displayText, availableWidth, actualFontSize, font, lineHeightRatio, { isBold, isItalic });
+    const availableHeight = Math.max(10, height - padding * 2);
+    const layout = computeTextLayout(ctx, displayText, availableWidth, actualFontSize, font, lineHeightRatio, { isBold, isItalic, maxHeight: availableHeight });
 
     const fontPrefix = (isItalic ? 'italic ' : '') + (isBold ? 'bold ' : '');
     ctx.font = `${fontPrefix}${actualFontSize}px "${font}", "Comic Neue", "Plus Jakarta Sans", sans-serif`;
@@ -331,7 +402,8 @@ export const TypesetEngine = (function () {
       : fontSize;
 
     const availableWidth = Math.max(10, width - padding * 2);
-    const layout = computeTextLayout(testCtx, displayText, availableWidth, actualFontSize, font, lineHeightRatio, { isBold, isItalic });
+    const availableHeight = Math.max(10, height - padding * 2);
+    const layout = computeTextLayout(testCtx, displayText, availableWidth, actualFontSize, font, lineHeightRatio, { isBold, isItalic, maxHeight: availableHeight });
 
     let maxLineWidth = 0;
     layout.lines.forEach(line => {
