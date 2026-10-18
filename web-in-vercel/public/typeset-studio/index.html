@@ -55,12 +55,69 @@
     </div>
 
     <div class="header-right">
-      <button type="button" class="btn-action btn-ai-clean" id="btnAiCleanAndBox" title="Backend AI tự động xóa chữ bong bóng chat và bóc tách tọa độ box">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-        </svg>
-        <span>⚡ Tẩy & Bắt Box AI</span>
-      </button>
+      <div class="ai-clean-btn-group">
+        <button type="button" class="btn-action btn-ai-clean" id="btnAiCleanAndBox" title="Backend AI tự động xóa chữ bong bóng chat và bóc tách tọa độ box">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+          <span>⚡ Tẩy & Bắt Box AI</span>
+        </button>
+        <button type="button" class="btn-action btn-ai-settings-toggle" id="btnAiCleanSettings" title="Cài đặt tẩy chữ: Dilation, Threshold, Model">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+
+        <!-- AI Clean Settings Popover -->
+        <div class="ai-clean-settings-popover" id="aiCleanSettingsPopover" style="display:none;">
+          <div class="popover-header">
+            <span>⚙️ Cài đặt Tẩy & Bắt Box AI</span>
+            <button type="button" class="btn-icon-xs" id="btnCloseAiSettings">✕</button>
+          </div>
+          <div class="popover-body">
+            <!-- Dilation Slider -->
+            <div class="setting-item">
+              <div class="setting-label-row">
+                <label for="settingDilation">Độ giãn viền nét (Dilation)</label>
+                <span class="setting-badge" id="valSettingDilation">8px</span>
+              </div>
+              <input type="range" id="settingDilation" class="prop-slider" min="1" max="25" value="8" step="1">
+              <div class="setting-hint">Tăng từ 8–14px giúp quét sạch toàn bộ viền chữ, triệt tiêu lem nét và vụn đen.</div>
+            </div>
+
+            <!-- Detection Threshold -->
+            <div class="setting-item">
+              <div class="setting-label-row">
+                <label for="settingThreshold">Ngưỡng phát hiện (Threshold)</label>
+                <span class="setting-badge" id="valSettingThreshold">0.18</span>
+              </div>
+              <input type="range" id="settingThreshold" class="prop-slider" min="0.05" max="0.50" value="0.18" step="0.01">
+              <div class="setting-hint">Giảm &lt; 0.18 để nhận diện cả chữ nhỏ, chữ mờ ngoài bong bóng.</div>
+            </div>
+
+            <!-- Inpaint Model -->
+            <div class="setting-item">
+              <label for="settingInpaintModel" class="setting-label-row">Mô hình AI Inpaint</label>
+              <select id="settingInpaintModel" class="prop-select">
+                <option value="anime-lama" selected>anime-lama (Tối ưu Manga/Anime)</option>
+                <option value="big-lama">big-lama (Độ nét cao cho ảnh lớn)</option>
+              </select>
+            </div>
+
+            <!-- Clean SFX Checkbox -->
+            <div class="setting-checkbox-row" style="display:flex; align-items:center; gap:8px; font-size:12px; margin-top:4px;">
+              <input type="checkbox" id="settingCleanSFX" style="accent-color:var(--primary); cursor:pointer;">
+              <label for="settingCleanSFX" style="cursor:pointer; color:var(--text-main);">Tẩy cả chữ hiệu ứng (SFX) ngoài khung thoại</label>
+            </div>
+          </div>
+          <div class="popover-footer">
+            <button type="button" class="btn-action btn-primary" id="btnSaveAndReClean" style="width:100%; justify-content:center;">
+              <span>Áp dụng & Tẩy lại trang này</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
       <button type="button" class="btn-action btn-secondary" id="btnAutoFitAll" title="Tự động tính cỡ chữ và căn chỉnh cho toàn bộ bóng thoại">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -292,6 +349,39 @@
           </div>
         </div>
 
+        <!-- Text Styling & Formatting Toolbar -->
+        <div class="property-group">
+          <label class="property-label">Kiểu chữ & Căn dọc</label>
+          <div class="format-toolbar-row" style="display:flex; gap:6px; align-items:center;">
+            <button type="button" class="btn-format" id="propBtnBold" title="Chữ đậm (Bold)"><b>B</b></button>
+            <button type="button" class="btn-format" id="propBtnItalic" title="Chữ nghiêng (Italic)"><i>I</i></button>
+            <button type="button" class="btn-format" id="propBtnUppercase" title="Chữ in hoa (ALL CAPS)"><b>AA</b></button>
+            <select id="propVerticalAlign" class="prop-select" style="flex:1; height:32px; font-size:12px;" title="Căn lề dọc">
+              <option value="middle" selected>Căn giữa dọc</option>
+              <option value="top">Căn trên cùng</option>
+              <option value="bottom">Căn dưới cùng</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Padding (Lề trong bóng thoại) -->
+        <div class="property-group">
+          <label class="property-label">Lề trong bóng thoại (Padding)</label>
+          <div class="prop-slider-wrapper">
+            <input type="range" id="propPadding" class="prop-slider" min="0" max="30" value="8" step="1">
+            <span class="prop-num-val" id="valPadding">8px</span>
+          </div>
+        </div>
+
+        <!-- Background Fill (Nền che phủ vết lem) -->
+        <div class="property-group">
+          <label class="property-label">Nền bóng thoại (Che vết lem)</label>
+          <select id="propBgFill" class="prop-select">
+            <option value="transparent" selected>Trong suốt (Giữ nguyên nền ảnh)</option>
+            <option value="#ffffff">Trắng che phủ (Xóa sạch 100% vết lem)</option>
+          </select>
+        </div>
+
         <!-- Text Color & Outline Stroke -->
         <div class="prop-row-2">
           <div class="property-group">
@@ -326,6 +416,17 @@
             <input type="range" id="propLineHeight" class="prop-slider" min="0.8" max="2.0" value="1.25" step="0.05">
             <span class="prop-num-val" id="valLineHeight">1.25</span>
           </div>
+        </div>
+
+        <!-- Delete Current Page Action -->
+        <div class="property-group" style="margin-top:20px; padding-top:14px; border-top:1px dashed var(--border-subtle);">
+          <button type="button" class="btn-action btn-danger-soft" id="btnDeleteCurrentPage" style="width:100%; justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Xóa trang truyện hiện tại</span>
+          </button>
         </div>
       </div>
     </aside>

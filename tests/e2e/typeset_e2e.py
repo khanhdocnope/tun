@@ -150,13 +150,52 @@ def run_tests():
         pg.wait_for_timeout(200)
         check('Chuyển lại chế độ xem bản dịch tiếng Việt (VI)', 'Dịch (VI)' in pg.locator('#viewLangLabel').inner_text())
 
-        # 11. Kiểm tra sự kiện xuất ảnh PNG
+        # 11. Kiểm tra Bảng Cài đặt AI Tẩy Chữ (Dilation, Threshold)
+        check('Nút mở Cài đặt Tẩy chữ có mặt', pg.locator('#btnAiCleanSettings').is_visible())
+        pg.click('#btnAiCleanSettings')
+        pg.wait_for_timeout(200)
+        check('Popover Cài đặt Tẩy chữ hiển thị', pg.locator('#aiCleanSettingsPopover').is_visible())
+        check('Slider Độ giãn viền nét (Dilation) tồn tại', pg.locator('#settingDilation').is_visible())
+        
+        # Thử thay đổi Dilation lên 12px
+        pg.fill('#settingDilation', '12')
+        pg.dispatch_event('#settingDilation', 'input')
+        check('Badge Dilation cập nhật đúng 12px', '12px' in pg.locator('#valSettingDilation').inner_text())
+        pg.click('#btnCloseAiSettings')
+        pg.wait_for_timeout(150)
+        check('Đóng Popover Cài đặt thành công', not pg.locator('#aiCleanSettingsPopover').is_visible())
+
+        # 12. Kiểm tra Bộ định dạng Typography nâng cao
+        check('Nút in hoa ALL CAPS có mặt', pg.locator('#propBtnUppercase').is_visible())
+        check('Nút chữ đậm Bold có mặt', pg.locator('#propBtnBold').is_visible())
+        check('Thanh kéo Padding lề trong bóng thoại có mặt', pg.locator('#propPadding').is_visible())
+        check('Tùy chọn nền che phủ bóng thoại có mặt', pg.locator('#propBgFill').is_visible())
+
+        # Bật In hoa (ALL CAPS)
+        pg.click('#propBtnUppercase')
+        pg.wait_for_timeout(100)
+        check('Nút in hoa kích hoạt trạng thái active', 'active' in pg.locator('#propBtnUppercase').get_attribute('class'))
+
+        # Chọn Nền trắng che phủ bóng thoại
+        pg.select_option('#propBgFill', '#ffffff')
+        check('Chọn nền trắng che phủ vết lem thành công', pg.locator('#propBgFill').input_value() == '#ffffff')
+
+        # 13. Kiểm tra tính năng Xóa pic / xóa trang khi thêm thừa ảnh
+        pg.on('dialog', lambda dialog: dialog.accept())
+        count_before_delete = pg.locator('.page-thumb-card').count()
+        check('Nút xóa trang trên thumbnail thẻ có mặt', pg.locator('.page-thumb-card:nth-child(2) .btn-delete-page').is_visible())
+        pg.click('.page-thumb-card:nth-child(2) .btn-delete-page')
+        pg.wait_for_timeout(600)
+        count_after_delete = pg.locator('.page-thumb-card').count()
+        check('Xóa trang thừa thành công và cập nhật danh sách', count_after_delete == count_before_delete - 1, f'{count_after_delete} trang')
+
+        # 14. Kiểm tra sự kiện xuất ảnh PNG
         with pg.expect_download(timeout=5000) as download_info:
             pg.click('#btnExportCurrentPng')
         download = download_info.value
         check('Nút Xuất PNG tải về tệp ảnh hợp lệ', download.suggested_filename.endswith('.png'), download.suggested_filename)
 
-        # 12. Kiểm tra sự kiện xuất ZIP hoàn chỉnh
+        # 15. Kiểm tra sự kiện xuất ZIP hoàn chỉnh
         with pg.expect_download(timeout=8000) as download_zip_info:
             pg.click('#btnExportFullZip')
         download_zip = download_zip_info.value

@@ -24,7 +24,13 @@ const appState = {
   initialBubbleRect: null,
   currentImageElement: null,
   displayLang: 'vi', // 'vi' (Vietnamese typeset) or 'jp' (Original Japanese OCR)
-  isAiProcessing: false
+  isAiProcessing: false,
+  aiSettings: {
+    dilationPx: parseInt(localStorage.getItem('manga_clean_dilation') || '8', 10),
+    detThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.18'),
+    inpaintModel: localStorage.getItem('manga_clean_model') || 'anime-lama',
+    cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true'
+  }
 };
 
 // DOM Elements
@@ -59,11 +65,32 @@ const el = {
   customFontsOptgroup: document.getElementById('customFontsOptgroup'),
   fontFileInput: document.getElementById('fontFileInput'),
 
+  // Typography Formatting & Bubble Styles
+  propBtnBold: document.getElementById('propBtnBold'),
+  propBtnItalic: document.getElementById('propBtnItalic'),
+  propBtnUppercase: document.getElementById('propBtnUppercase'),
+  propVerticalAlign: document.getElementById('propVerticalAlign'),
+  propPadding: document.getElementById('propPadding'),
+  valPadding: document.getElementById('valPadding'),
+  propBgFill: document.getElementById('propBgFill'),
+  btnDeleteCurrentPage: document.getElementById('btnDeleteCurrentPage'),
+
   // Buttons & Controls
   btnPrevPage: document.getElementById('btnPrevPage'),
   btnNextPage: document.getElementById('btnNextPage'),
   btnAutoFitAll: document.getElementById('btnAutoFitAll'),
   btnAiCleanAndBox: document.getElementById('btnAiCleanAndBox'),
+  btnAiCleanSettings: document.getElementById('btnAiCleanSettings'),
+  aiCleanSettingsPopover: document.getElementById('aiCleanSettingsPopover'),
+  btnCloseAiSettings: document.getElementById('btnCloseAiSettings'),
+  settingDilation: document.getElementById('settingDilation'),
+  valSettingDilation: document.getElementById('valSettingDilation'),
+  settingThreshold: document.getElementById('settingThreshold'),
+  valSettingThreshold: document.getElementById('valSettingThreshold'),
+  settingInpaintModel: document.getElementById('settingInpaintModel'),
+  settingCleanSFX: document.getElementById('settingCleanSFX'),
+  btnSaveAndReClean: document.getElementById('btnSaveAndReClean'),
+
   btnToggleViewLang: document.getElementById('btnToggleViewLang'),
   viewLangLabel: document.getElementById('viewLangLabel'),
   btnExportCurrentPng: document.getElementById('btnExportCurrentPng'),
@@ -406,10 +433,10 @@ async function runBackendCleanAndBox(pageIndex) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: base64,
-          cleanSFX: false,
-          dilationPx: 4,
-          detThreshold: 0.20,
-          inpaintModel: 'anime-lama'
+          cleanSFX: appState.aiSettings.cleanSFX,
+          dilationPx: appState.aiSettings.dilationPx,
+          detThreshold: appState.aiSettings.detThreshold,
+          inpaintModel: appState.aiSettings.inpaintModel
         })
       }).then(r => r.ok ? r.json() : null).catch(() => null),
 
@@ -475,8 +502,13 @@ async function runBackendCleanAndBox(pageIndex) {
           strokeColor: '#ffffff',
           strokeWidth: 3,
           align: 'center',
+          verticalAlign: 'middle',
           lineHeightRatio: 1.25,
-          padding: 8
+          padding: 8,
+          bgFill: 'transparent',
+          isBold: false,
+          isItalic: false,
+          isUppercase: false
         };
       });
       showToast(`Backend AI đã xóa chữ và bắt được ${page.bubbles.length} bóng thoại!`);
@@ -690,6 +722,8 @@ function hitTestBubble(bubbles, mouseX, mouseY) {
 }
 
 el.viewport.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.viewport-floating-bar')) return;
+
   if (e.button === 1 || e.spaceKey || (e.button === 0 && e.target === el.viewport)) {
     appState.isPanning = true;
     appState.panStartX = e.clientX - appState.panX;
@@ -835,6 +869,12 @@ function updateInspector() {
     el.propStrokeColor.disabled = true;
     el.propStrokeWidth.disabled = true;
     el.propLineHeight.disabled = true;
+    if (el.propBtnBold) el.propBtnBold.disabled = true;
+    if (el.propBtnItalic) el.propBtnItalic.disabled = true;
+    if (el.propBtnUppercase) el.propBtnUppercase.disabled = true;
+    if (el.propVerticalAlign) el.propVerticalAlign.disabled = true;
+    if (el.propPadding) el.propPadding.disabled = true;
+    if (el.propBgFill) el.propBgFill.disabled = true;
     return;
   }
 
@@ -852,6 +892,12 @@ function updateInspector() {
   el.propStrokeColor.disabled = false;
   el.propStrokeWidth.disabled = false;
   el.propLineHeight.disabled = false;
+  if (el.propBtnBold) el.propBtnBold.disabled = false;
+  if (el.propBtnItalic) el.propBtnItalic.disabled = false;
+  if (el.propBtnUppercase) el.propBtnUppercase.disabled = false;
+  if (el.propVerticalAlign) el.propVerticalAlign.disabled = false;
+  if (el.propPadding) el.propPadding.disabled = false;
+  if (el.propBgFill) el.propBgFill.disabled = false;
 
   el.propSrcText.value = b.srcText || '';
   el.propText.value = b.text || '';
@@ -876,6 +922,16 @@ function updateInspector() {
   document.querySelectorAll('#alignSegmented .btn-seg').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.align === (b.align || 'center'));
   });
+
+  if (el.propBtnBold) el.propBtnBold.classList.toggle('active', !!b.isBold);
+  if (el.propBtnItalic) el.propBtnItalic.classList.toggle('active', !!b.isItalic);
+  if (el.propBtnUppercase) el.propBtnUppercase.classList.toggle('active', !!b.isUppercase);
+  if (el.propVerticalAlign) el.propVerticalAlign.value = b.verticalAlign || 'middle';
+  if (el.propPadding) {
+    el.propPadding.value = b.padding != null ? b.padding : 8;
+    if (el.valPadding) el.valPadding.textContent = `${b.padding != null ? b.padding : 8}px`;
+  }
+  if (el.propBgFill) el.propBgFill.value = b.bgFill || 'transparent';
 }
 
 function bindInspectorEvents() {
@@ -1010,6 +1066,77 @@ function bindInspectorEvents() {
       saveTypesetToDB(appState.pages[appState.activePageIndex]);
     });
   });
+
+  // Typography Formatting Toolbar Events
+  if (el.propBtnBold) {
+    el.propBtnBold.addEventListener('click', () => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.isBold = !b.isBold;
+      el.propBtnBold.classList.toggle('active', !!b.isBold);
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.propBtnItalic) {
+    el.propBtnItalic.addEventListener('click', () => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.isItalic = !b.isItalic;
+      el.propBtnItalic.classList.toggle('active', !!b.isItalic);
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.propBtnUppercase) {
+    el.propBtnUppercase.addEventListener('click', () => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.isUppercase = !b.isUppercase;
+      el.propBtnUppercase.classList.toggle('active', !!b.isUppercase);
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.propVerticalAlign) {
+    el.propVerticalAlign.addEventListener('change', (e) => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.verticalAlign = e.target.value;
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.propPadding) {
+    el.propPadding.addEventListener('input', (e) => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.padding = parseInt(e.target.value, 10);
+      if (el.valPadding) el.valPadding.textContent = `${b.padding}px`;
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.propBgFill) {
+    el.propBgFill.addEventListener('change', (e) => {
+      const b = getActiveBubble();
+      if (!b) return;
+      b.bgFill = e.target.value;
+      renderCanvas();
+      saveTypesetToDB(appState.pages[appState.activePageIndex]);
+    });
+  }
+
+  if (el.btnDeleteCurrentPage) {
+    el.btnDeleteCurrentPage.addEventListener('click', () => {
+      deletePage(appState.activePageIndex);
+    });
+  }
 }
 
 /* ==========================================================================
@@ -1144,7 +1271,7 @@ function setupBubbleActions() {
 }
 
 /* ==========================================================================
-   UI Updates: Sidebar & Navigation
+   UI Updates: Sidebar & Navigation & Page Deletion
    ========================================================================== */
 function updateNavigationUI() {
   const total = appState.pages.length;
@@ -1152,6 +1279,54 @@ function updateNavigationUI() {
   el.pageCounter.innerHTML = `Trang <b>${current} / ${total}</b>`;
   el.btnPrevPage.disabled = appState.activePageIndex <= 0;
   el.btnNextPage.disabled = appState.activePageIndex >= total - 1;
+}
+
+async function deletePage(idx) {
+  if (idx < 0 || idx >= appState.pages.length) return;
+  const page = appState.pages[idx];
+  const pageName = page.name || `Trang ${idx + 1}`;
+  if (!confirm(`Bạn có chắc muốn xóa "${pageName}" khỏi dự án không?`)) return;
+
+  const db = await openDB();
+  if (db) {
+    try {
+      const tx = db.transaction(['pages', 'state', 'cleaned', 'typeset'], 'readwrite');
+      tx.objectStore('pages').delete(page.id);
+      tx.objectStore('state').delete(page.id);
+      try { tx.objectStore('cleaned').delete(page.id); } catch(e) {}
+      try { tx.objectStore('typeset').delete(page.id); } catch(e) {}
+    } catch (e) {
+      console.warn('DB delete error:', e);
+    }
+  }
+
+  appState.pages.splice(idx, 1);
+  appState.pages.forEach((p, i) => { p.seq = i + 1; });
+
+  if (appState.pages.length === 0) {
+    appState.activePageIndex = 0;
+    appState.activeBubbleIndex = -1;
+    appState.currentImageElement = null;
+    const c = el.canvas.getContext('2d');
+    c.clearRect(0, 0, el.canvas.width, el.canvas.height);
+    updateNavigationUI();
+    renderSidebar();
+    updateInspector();
+    renderCanvas();
+    showToast(`Đã xóa ${pageName}. Hiện không còn trang nào.`);
+    return;
+  }
+
+  let nextIndex = appState.activePageIndex;
+  if (idx <= appState.activePageIndex) {
+    nextIndex = Math.max(0, appState.activePageIndex - 1);
+  }
+  if (nextIndex >= appState.pages.length) {
+    nextIndex = appState.pages.length - 1;
+  }
+
+  showToast(`Đã xóa ${pageName}`);
+  await switchPage(nextIndex);
 }
 
 function renderSidebar() {
@@ -1171,7 +1346,15 @@ function renderSidebar() {
     const info = document.createElement('div');
     info.className = 'page-thumb-info';
     info.innerHTML = `
-      <div class="page-thumb-title">Trang ${idx + 1} (${page.name || ''})</div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="page-thumb-title">Trang ${idx + 1} (${page.name || ''})</div>
+        <button type="button" class="btn-delete-page" title="Xóa trang này" data-index="${idx}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
       <div class="page-thumb-badges">
         ${page.hasCleaned ? '<span class="mini-badge mini-badge-cleaned">Đã tẩy</span>' : ''}
         ${page.hasTranslated ? '<span class="mini-badge mini-badge-translated">Đã dịch</span>' : ''}
@@ -1181,6 +1364,14 @@ function renderSidebar() {
 
     card.appendChild(img);
     card.appendChild(info);
+
+    const btnDel = info.querySelector('.btn-delete-page');
+    if (btnDel) {
+      btnDel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deletePage(idx);
+      });
+    }
 
     card.addEventListener('click', () => switchPage(idx));
     el.pagesList.appendChild(card);
@@ -1289,6 +1480,76 @@ async function exportFullChapterZIP() {
 }
 
 /* ==========================================================================
+   AI Clean Settings Setup & Popover
+   ========================================================================== */
+function setupAiCleanSettings() {
+  if (!el.btnAiCleanSettings || !el.aiCleanSettingsPopover) return;
+
+  el.btnAiCleanSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = el.aiCleanSettingsPopover.style.display === 'none';
+    el.aiCleanSettingsPopover.style.display = isHidden ? 'flex' : 'none';
+  });
+
+  if (el.btnCloseAiSettings) {
+    el.btnCloseAiSettings.addEventListener('click', () => {
+      el.aiCleanSettingsPopover.style.display = 'none';
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (el.aiCleanSettingsPopover && !el.aiCleanSettingsPopover.contains(e.target) && e.target !== el.btnAiCleanSettings && !el.btnAiCleanSettings.contains(e.target)) {
+      el.aiCleanSettingsPopover.style.display = 'none';
+    }
+  });
+
+  if (el.settingDilation) {
+    el.settingDilation.value = appState.aiSettings.dilationPx;
+    if (el.valSettingDilation) el.valSettingDilation.textContent = `${appState.aiSettings.dilationPx}px`;
+    el.settingDilation.addEventListener('input', (e) => {
+      const v = parseInt(e.target.value, 10);
+      appState.aiSettings.dilationPx = v;
+      localStorage.setItem('manga_clean_dilation', String(v));
+      if (el.valSettingDilation) el.valSettingDilation.textContent = `${v}px`;
+    });
+  }
+
+  if (el.settingThreshold) {
+    el.settingThreshold.value = appState.aiSettings.detThreshold;
+    if (el.valSettingThreshold) el.valSettingThreshold.textContent = String(appState.aiSettings.detThreshold);
+    el.settingThreshold.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      appState.aiSettings.detThreshold = v;
+      localStorage.setItem('manga_clean_threshold', String(v));
+      if (el.valSettingThreshold) el.valSettingThreshold.textContent = String(v);
+    });
+  }
+
+  if (el.settingInpaintModel) {
+    el.settingInpaintModel.value = appState.aiSettings.inpaintModel;
+    el.settingInpaintModel.addEventListener('change', (e) => {
+      appState.aiSettings.inpaintModel = e.target.value;
+      localStorage.setItem('manga_clean_model', e.target.value);
+    });
+  }
+
+  if (el.settingCleanSFX) {
+    el.settingCleanSFX.checked = appState.aiSettings.cleanSFX;
+    el.settingCleanSFX.addEventListener('change', (e) => {
+      appState.aiSettings.cleanSFX = e.target.checked;
+      localStorage.setItem('manga_clean_sfx', String(e.target.checked));
+    });
+  }
+
+  if (el.btnSaveAndReClean) {
+    el.btnSaveAndReClean.addEventListener('click', () => {
+      el.aiCleanSettingsPopover.style.display = 'none';
+      runBackendCleanAndBox(appState.activePageIndex);
+    });
+  }
+}
+
+/* ==========================================================================
    App Initialization
    ========================================================================== */
 async function initApp() {
@@ -1296,6 +1557,7 @@ async function initApp() {
   setupCustomFontUpload();
   setupBubbleActions();
   setupDirectUploadEvents();
+  setupAiCleanSettings();
 
   // Navigation Buttons
   el.btnPrevPage.addEventListener('click', () => switchPage(appState.activePageIndex - 1));
