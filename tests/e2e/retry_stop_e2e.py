@@ -1,4 +1,5 @@
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
 from playwright.sync_api import sync_playwright
 BASE='http://localhost:3111'; MOCK=open('mock.js',encoding='utf-8').read()
 res=[]

@@ -1,8 +1,9 @@
-import json, zipfile, io, sys
+import json, zipfile, io, sys, os
 from playwright.sync_api import sync_playwright
 
+sys.stdout.reconfigure(encoding='utf-8')
 BASE = 'http://localhost:3111'
-MOCK = open('mock.js', encoding='utf-8').read()
+MOCK = open(os.path.join(os.path.dirname(__file__), 'mock.js'), encoding='utf-8').read()
 results = []
 def check(name, cond, extra=''):
     results.append((name, bool(cond), extra))
@@ -60,7 +61,7 @@ with sync_playwright() as p:
         ocr: c.querySelector(".badge-status").textContent.trim(), clean: c.querySelector(".badge-clean").textContent.trim()}))''')
     check('Trang 1,2: tẩy XONG + OCR DONE', st[0]['clean'].endswith('XONG') and st[1]['clean'].endswith('XONG') and st[0]['ocr'] == 'DONE' and st[1]['ocr'] == 'DONE', str(st))
     check('Trang 3: tẩy LỖI + OCR ERROR (trạng thái riêng từng bước)', st[2]['clean'].endswith('LỖI') and st[2]['ocr'] == 'ERROR', str(st[2]))
-    pg.screenshot(path='/tmp/p1_after_run1_390.png')
+    pg.screenshot(path='p1_after_run1_390.png')
 
     # --- Reload: dữ liệu IndexedDB còn, chạy tiếp chỉ phần còn lại
     pg.reload(wait_until='domcontentloaded')

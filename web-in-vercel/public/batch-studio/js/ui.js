@@ -182,6 +182,7 @@ import { updateStatBadge, updateProcessAllLabel } from './queue.js';
           <button class="btn-row-action btn-row-ocr">OCR</button>
           <button class="btn-row-action btn-row-trans">Dịch</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
+          <a href="/typeset-studio/" class="btn-row-action btn-row-typeset" title="Mở trang này trong Typeset Studio" style="color:#818cf8; text-decoration:none; display:inline-flex; align-items:center;">🎨 Chèn chữ</a>
           <button class="btn-row-action btn-row-proofread" title="Soát bản dịch trang này">Soát</button>
           <button class="btn-row-delete" title="Xóa trang này">&times;</button>
         </div>

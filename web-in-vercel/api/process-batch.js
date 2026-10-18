@@ -144,7 +144,8 @@ module.exports = async (req, res) => {
       missingTranslation: missing,
       lineCount: ocrTextBlock ? ocrTextBlock.split("\n").length : 0,
       ocrTextBlock,
-      viTextBlock
+      viTextBlock,
+      bubbles: parsed && Array.isArray(parsed.lines) ? parsed.lines : []
     });
   } catch (error) {
     console.error("Batch process error:", error);

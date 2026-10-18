@@ -15,9 +15,19 @@ test('parseCombinedOutput: parses clean JSON array', () => {
   const res = parseCombinedOutput(raw);
   assert.notEqual(res, null);
   assert.equal(res.lines.length, 2);
-  assert.deepEqual(res.lines[0], { src: 'こんにちは', tgt: 'Xin chào' });
-  assert.deepEqual(res.lines[1], { src: 'ありがとう', tgt: 'Cảm ơn' });
+  assert.deepEqual(res.lines[0], { src: 'こんにちは', tgt: 'Xin chào', box: null });
+  assert.deepEqual(res.lines[1], { src: 'ありがとう', tgt: 'Cảm ơn', box: null });
   assert.deepEqual(res.missing, []);
+});
+
+test('parseCombinedOutput: parses box_2d coordinates correctly', () => {
+  const raw = JSON.stringify([
+    { n: 1, box_2d: [150, 200, 350, 400], src: 'テスト', tgt: 'Thử nghiệm' }
+  ]);
+  const res = parseCombinedOutput(raw);
+  assert.notEqual(res, null);
+  assert.equal(res.lines.length, 1);
+  assert.deepEqual(res.lines[0], { src: 'テスト', tgt: 'Thử nghiệm', box: [150, 200, 350, 400] });
 });
 
 test('parseCombinedOutput: handles markdown fences and think tags', () => {
@@ -27,7 +37,7 @@ test('parseCombinedOutput: handles markdown fences and think tags', () => {
   const res = parseCombinedOutput(raw);
   assert.notEqual(res, null);
   assert.equal(res.lines.length, 1);
-  assert.deepEqual(res.lines[0], { src: '誰だ？', tgt: 'Ai thế?' });
+  assert.deepEqual(res.lines[0], { src: '誰だ？', tgt: 'Ai thế?', box: null });
 });
 
 test('parseCombinedOutput: flags missing translations and falls back to src', () => {
@@ -54,7 +64,7 @@ test('parseCombinedOutput: ignores empty/blank src bubbles', () => {
   const res = parseCombinedOutput(raw);
   assert.notEqual(res, null);
   assert.equal(res.lines.length, 1);
-  assert.deepEqual(res.lines[0], { src: 'valid', tgt: 'hợp lệ' });
+  assert.deepEqual(res.lines[0], { src: 'valid', tgt: 'hợp lệ', box: null });
 });
 
 test('parseCombinedOutput: returns null on unparseable input', () => {

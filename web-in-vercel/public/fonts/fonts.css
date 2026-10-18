@@ -1,0 +1,101 @@
+/* Manga Việt hóa Fonts Collection */
+@font-face {
+  font-family: 'Yuki Arenzi';
+  src: url('/fonts/Yuki-Arenzi.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Burobu';
+  src: url('/fonts/Yuki-Burobu.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Marian Journal';
+  src: url('/fonts/Yuki-CCMarianChurchlandJournal.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Starstreak';
+  src: url('/fonts/Yuki-CDX%20Starstreak.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Chicken Pie';
+  src: url('/fonts/Yuki-CHICKEN%20Pie.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Crash Landing';
+  src: url('/fonts/Yuki-CrashLanding%20BB.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Downhill Dive';
+  src: url('/fonts/Yuki-Downhill%20Dive.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Gingerline';
+  src: url('/fonts/Yuki-Gingerline%20DEMO%20Regular.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Gorillaz Story';
+  src: url('/fonts/Yuki-Gorrilaz_Story.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Only Angel';
+  src: url('/fonts/Yuki-KG%20Only%20Angel.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Swands Hand';
+  src: url('/fonts/Yuki-LF%20SwandsHand.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki La Belle Aurore';
+  src: url('/fonts/Yuki-La%20Belle%20Aurore.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Little Cupcakes';
+  src: url('/fonts/Yuki-Little%20Cupcakes.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Nagurigaki Crayon';
+  src: url('/fonts/Yuki-Nagurigaki%20Crayon.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Ripsnort';
+  src: url('/fonts/Yuki-Ripsnort%20BB.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Roasthink';
+  src: url('/fonts/Yuki-Roasthink.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Screwball';
+  src: url('/fonts/Yuki-Screwball.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Skulduggery';
+  src: url('/fonts/Yuki-Skulduggery.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Superscratchy';
+  src: url('/fonts/Yuki-Superscratchy.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Yuki Tea And Oranges';
+  src: url('/fonts/Yuki-Tea%20And%20Oranges%20Regular.ttf') format('truetype');
+  font-display: swap;
+}

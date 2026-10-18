@@ -361,7 +361,8 @@ ${sfxInstruction}
 
 === OUTPUT FORMAT (STRICT) ===
 Return ONLY a JSON array, with no markdown fences and no commentary. One element per bubble, in reading order:
-[{"n":1,"src":"<original text of bubble 1, ONE line>","tgt":"<${targetName} translation of bubble 1, ONE line>"}]
+[{"n":1,"box_2d":[ymin,xmin,ymax,xmax],"src":"<original text of bubble 1, ONE line>","tgt":"<${targetName} translation of bubble 1, ONE line>"}]
+- "box_2d": normalized coordinates [ymin, xmin, ymax, xmax] of the speech bubble / text area as 4 integers scaled 0 to 1000 (top, left, bottom, right).
 - "n" starts at 1 and increases by 1 with no gaps.
 - "src" and "tgt" must each be a single line (never contain a line break).
 - Every element MUST have a non-empty "tgt" that translates exactly its own "src".
@@ -380,7 +381,7 @@ function isBlankCell(v) {
   return !v || BLANK_MARKER_RE.test(v);
 }
 
-// Trả về { lines: [{src, tgt}], missing: [1-based index dòng thiếu bản dịch] } hoặc null nếu không parse được.
+// Trả về { lines: [{src, tgt, box}], missing: [1-based index dòng thiếu bản dịch] } hoặc null nếu không parse được.
 function parseCombinedOutput(raw) {
   let text = String(raw || "")
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -414,7 +415,15 @@ function parseCombinedOutput(raw) {
       tgt = src; // thiếu bản dịch -> giữ dòng gốc đúng vị trí, số dòng vẫn khớp
       missing.push(lines.length + 1);
     }
-    lines.push({ src, tgt });
+    let box = null;
+    const rawBox = item.box_2d || item.box || item.bbox || null;
+    if (Array.isArray(rawBox) && rawBox.length === 4) {
+      const nums = rawBox.map(Number);
+      if (nums.every((n) => !isNaN(n))) {
+        box = nums;
+      }
+    }
+    lines.push({ src, tgt, box });
   }
   return { lines, missing };
 }

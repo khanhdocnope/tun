@@ -1,4 +1,5 @@
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
 from playwright.sync_api import sync_playwright
 BASE='http://localhost:3111'; res=[]
 def check(n,c,e=''):
@@ -21,7 +22,7 @@ with sync_playwright() as p:
         sw=pg.evaluate('[document.documentElement.scrollWidth,document.documentElement.clientWidth]'); check(f'Tab Xóa chữ không cuộn ngang ở {w}px',sw[0]<=sw[1],str(sw))
         pg.click('button[data-tab="tab-script-retrans"]'); pg.wait_for_timeout(300)
         sw=pg.evaluate('[document.documentElement.scrollWidth,document.documentElement.clientWidth]'); check(f'Tab Dịch lại script không cuộn ngang ở {w}px',sw[0]<=sw[1],str(sw))
-        if w==390: pg.screenshot(path='/tmp/p1_main_retrans_390.png')
+        if w==390: pg.screenshot(path='p1_main_retrans_390.png')
         link=pg.evaluate('(()=>{const a=document.querySelector(".nav-batch-link"); return [a.getAttribute("href"),a.getAttribute("target"),a.innerText.trim()]})()')
         if w==390: check('Link header → /batch-studio, cùng tab',link[0]=='/batch-studio' and link[1] is None,str(link))
         if w==390: check('Không còn iframe/target=_blank tới Batch Studio',pg.evaluate('document.querySelectorAll("iframe").length')==0 and pg.evaluate('document.querySelectorAll("a[target=_blank][href*=batch-studio]").length')==0)

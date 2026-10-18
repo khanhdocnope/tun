@@ -6,12 +6,13 @@ import { state, el, showToast, bufferToDataUrl } from './state.js';
 
   export const store = (function () {
     const DB_NAME = 'manga_studio_batch';
-    const DB_VERSION = 2; // v2: thêm kho "cleaned" (ảnh đã tẩy) và "originals" (ảnh gốc khi bản hiển thị đã bị nén)
+    const DB_VERSION = 3; // v3: thêm kho "typeset" cho Giai đoạn 4 (Chèn chữ)
     const PAGES = 'pages';
     const STATE = 'state';
     const CLEANED = 'cleaned';
     const ORIGINALS = 'originals';
-    const ALL = [PAGES, STATE, CLEANED, ORIGINALS];
+    const TYPESET = 'typeset';
+    const ALL = [PAGES, STATE, CLEANED, ORIGINALS, TYPESET];
     let dbPromise = null;
     let dbHandle = null;
 
@@ -95,6 +96,15 @@ import { state, el, showToast, bufferToDataUrl } from './state.js';
       async putState(rec) { return (await run('readwrite', [STATE], (tx) => { tx.objectStore(STATE).put(rec); })).ok; },
       async putCleaned(rec) { return (await run('readwrite', [CLEANED], (tx) => { tx.objectStore(CLEANED).put(rec); })).ok; },
       async putOriginal(rec) { return (await run('readwrite', [ORIGINALS], (tx) => { tx.objectStore(ORIGINALS).put(rec); })).ok; },
+      async putTypeset(rec) { return (await run('readwrite', [TYPESET], (tx) => { tx.objectStore(TYPESET).put(rec); })).ok; },
+      async getTypeset(id) {
+        const r = await run('readonly', [TYPESET], (tx) => tx.objectStore(TYPESET).get(id));
+        return r.ok ? (r.result.result || null) : null;
+      },
+      async getAllTypeset() {
+        const r = await run('readonly', [TYPESET], (tx) => tx.objectStore(TYPESET).getAll());
+        return r.ok ? (r.result.result || []) : [];
+      },
       async getCleaned(id) {
         const r = await run('readonly', [CLEANED], (tx) => tx.objectStore(CLEANED).get(id));
         return r.ok ? (r.result.result || null) : null;
@@ -148,6 +158,8 @@ import { state, el, showToast, bufferToDataUrl } from './state.js';
       stage: item.stage || 0, // 0: chưa làm gì | 1: đã OCR | 2: đã dịch
       ocrText: item.ocrText || '',
       viText: item.viText || '',
+      bubbles: Array.isArray(item.bubbles) ? item.bubbles : [],
+      typesetStatus: item.typesetStatus || 'idle',
       // Bước tẩy chữ có trạng thái riêng (độc lập với stage OCR/dịch)
       cleanStatus: item.cleanStatus === 'processing' ? (item.hasCleaned ? 'done' : 'idle') : (item.cleanStatus || 'idle'),
       hasCleaned: !!item.hasCleaned,

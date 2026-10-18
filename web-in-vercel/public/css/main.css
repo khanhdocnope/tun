@@ -1000,6 +1000,7 @@ details.modern-details[open] summary::after {
   .lbl-full { display: none; }
   .lbl-short { display: inline; }
   .nav-batch-link { padding: 0 0.6rem; min-height: 44px; font-size: 0.8rem; }
+  .nav-typeset-link { display: none !important; }
   .status-pill { padding: 0 0.55rem; min-height: 44px; }
   #server-status-text { display: none; }
   .btn-icon { width: 44px; height: 44px; }

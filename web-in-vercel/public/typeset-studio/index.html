@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manga Studio Typeset Pro | Chèn Chữ Tự Động & Xuất Bản Manga</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="/assets/ico/web.ico">
+  <link rel="shortcut icon" href="/assets/ico/web.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/ico/web.png">
+
+  <!-- Google Fonts & Manga Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Bangers&family=Comic+Neue:ital,wght@0,400;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- 20 Yuki Manga Việt hóa Fonts -->
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  
+  <!-- Typeset Studio Styles -->
+  <link rel="stylesheet" href="/typeset-studio/css/typeset.css">
+</head>
+<body>
+  <!-- Top Header Navigation -->
+  <header class="studio-header">
+    <div class="header-left">
+      <a href="/batch-studio/" class="btn-nav-back" title="Quay lại Batch Studio">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Batch Studio</span>
+      </a>
+      <div class="studio-title">
+        <span>Manga Typeset</span>
+        <span class="studio-badge">Pro</span>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="page-navigator">
+        <button type="button" class="btn-icon-sm" id="btnPrevPage" title="Trang trước (Phím ←)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+        <span class="page-counter-label" id="pageCounterLabel">Trang <b>0 / 0</b></span>
+        <button type="button" class="btn-icon-sm" id="btnNextPage" title="Trang kế (Phím →)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <button type="button" class="btn-action btn-secondary" id="btnAutoFitAll" title="Tự động tính cỡ chữ và căn chỉnh cho toàn bộ bóng thoại">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span>Tự căn chữ</span>
+      </button>
+
+      <button type="button" class="btn-action btn-secondary" id="btnExportCurrentPng" title="Xuất ảnh trang hiện tại định dạng PNG chất lượng gốc">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <span>Xuất ảnh (PNG)</span>
+      </button>
+
+      <button type="button" class="btn-action btn-success" id="btnExportFullZip" title="Xuất toàn bộ truyện thành file ZIP chứa các ảnh đã chèn chữ hoàn chỉnh">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Xuất ZIP hoàn chỉnh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Studio Main Work Area -->
+  <main class="studio-body">
+    <!-- Left Sidebar: Pages List -->
+    <aside class="sidebar-pages">
+      <div class="sidebar-header">
+        <span class="sidebar-title">Danh sách trang</span>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="btn-icon-sm" id="btnSyncFromBatch" title="Tải lại dữ liệu mới nhất từ Batch Studio">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+          <label class="btn-icon-sm" for="inputAddLocalImages" title="Thêm ảnh từ máy tính" style="cursor:pointer;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </label>
+          <input type="file" id="inputAddLocalImages" multiple accept="image/*" style="display:none">
+        </div>
+      </div>
+      <div class="pages-scroll-list" id="pagesList">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+
+    <!-- Center Canvas Viewport -->
+    <section class="canvas-viewport-container" id="viewportContainer">
+      <div class="canvas-wrapper" id="canvasWrapper">
+        <canvas id="typesetCanvas"></canvas>
+      </div>
+
+      <!-- Floating Canvas Toolbar -->
+      <div class="viewport-floating-bar">
+        <button type="button" class="btn-tool" id="btnAddBubble" title="Thêm bóng thoại mới">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>Thêm thoại</span>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnDeleteBubble" title="Xóa bóng thoại đang chọn (Phím Delete)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          <span>Xóa</span>
+        </button>
+
+        <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.15);"></div>
+
+        <button type="button" class="btn-icon-sm" id="btnZoomOut" title="Thu nhỏ">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        <span class="zoom-indicator" id="zoomIndicator">100%</span>
+
+        <button type="button" class="btn-icon-sm" id="btnZoomIn" title="Phóng to">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        <button type="button" class="btn-tool" id="btnFitScreen" title="Khớp vừa khung hình">
+          <span>Vừa khung</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Right Inspector: Bubble Properties & Typography -->
+    <aside class="inspector-panel" id="inspectorPanel">
+      <div class="inspector-header">
+        <span class="inspector-title">Thuộc tính bóng thoại</span>
+        <span id="activeBubbleBadge" style="font-size:11px; color:var(--text-muted);">Chưa chọn</span>
+      </div>
+
+      <div class="inspector-body" id="inspectorBody">
+        <!-- Text Area -->
+        <div class="property-group">
+          <label class="property-label" for="propText">
+            <span>Lời thoại tiếng Việt</span>
+          </label>
+          <textarea id="propText" class="prop-input-textarea" placeholder="Nhập lời thoại cần chèn..."></textarea>
+        </div>
+
+        <!-- Font Family -->
+        <div class="property-group">
+          <label class="property-label" for="propFont">
+            <span>Font chữ Manga</span>
+          </label>
+          <select id="propFont" class="prop-select">
+            <optgroup label="Bộ Font Manga Việt Hóa">
+              <option value="Yuki Arenzi" selected>Yuki Arenzi</option>
+              <option value="Yuki Burobu">Yuki Burobu</option>
+              <option value="Yuki Marian Journal">Yuki Marian Journal</option>
+              <option value="Yuki Starstreak">Yuki Starstreak</option>
+              <option value="Yuki Chicken Pie">Yuki Chicken Pie</option>
+              <option value="Yuki Crash Landing">Yuki Crash Landing</option>
+              <option value="Yuki Downhill Dive">Yuki Downhill Dive</option>
+              <option value="Yuki Gingerline">Yuki Gingerline</option>
+              <option value="Yuki Gorillaz Story">Yuki Gorillaz Story</option>
+              <option value="Yuki Only Angel">Yuki Only Angel</option>
+              <option value="Yuki Swands Hand">Yuki Swands Hand</option>
+              <option value="Yuki La Belle Aurore">Yuki La Belle Aurore</option>
+              <option value="Yuki Little Cupcakes">Yuki Little Cupcakes</option>
+              <option value="Yuki Nagurigaki Crayon">Yuki Nagurigaki Crayon</option>
+              <option value="Yuki Ripsnort">Yuki Ripsnort</option>
+              <option value="Yuki Roasthink">Yuki Roasthink</option>
+              <option value="Yuki Screwball">Yuki Screwball</option>
+              <option value="Yuki Skulduggery">Yuki Skulduggery</option>
+              <option value="Yuki Superscratchy">Yuki Superscratchy</option>
+              <option value="Yuki Tea And Oranges">Yuki Tea And Oranges</option>
+            </optgroup>
+            <optgroup label="Font Comic Phổ Biến">
+              <option value="Comic Neue">Comic Neue</option>
+              <option value="Bangers">Bangers</option>
+              <option value="Baloo 2">Baloo 2</option>
+              <option value="Plus Jakarta Sans">Plus Jakarta Sans</option>
+            </optgroup>
+            <optgroup label="Font Người Dùng Nạp" id="customFontsOptgroup">
+              <!-- Dynamically added -->
+            </optgroup>
+          </select>
+
+          <!-- Upload Custom Font File -->
+          <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none">
+          <button type="button" class="btn-upload-font" id="btnUploadFontTrigger">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span>Tải font .TTF / .OTF từ máy</span>
+          </button>
+        </div>
+
+        <!-- Auto-fit & Font Size -->
+        <div class="property-group">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <label class="property-label" style="margin-bottom:0;">
+              <span>Tự căn kích thước (Auto-fit)</span>
+            </label>
+            <input type="checkbox" id="propAutoFit" checked style="accent-color:var(--primary); cursor:pointer;">
+          </div>
+          <div class="prop-slider-wrapper" id="fontSizeRow">
+            <input type="range" id="propFontSize" class="prop-slider" min="10" max="80" value="22" step="1">
+            <span class="prop-num-val" id="valFontSize">22px</span>
+          </div>
+        </div>
+
+        <!-- Text Alignment -->
+        <div class="property-group">
+          <label class="property-label">Căn lề chữ</label>
+          <div class="btn-group-segmented" id="alignSegmented">
+            <button type="button" class="btn-seg" data-align="left" title="Căn trái">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="17" y1="10" x2="3" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="17" y1="18" x2="3" y2="18"></line>
+              </svg>
+            </button>
+            <button type="button" class="btn-seg active" data-align="center" title="Căn giữa">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="10" x2="6" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="18" y1="18" x2="6" y2="18"></line>
+              </svg>
+            </button>
+            <button type="button" class="btn-seg" data-align="right" title="Căn phải">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="21" y1="10" x2="7" y2="10"></line>
+                <line x1="21" y1="6" x2="3" y2="6"></line>
+                <line x1="21" y1="14" x2="3" y2="14"></line>
+                <line x1="21" y1="18" x2="7" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Text Color & Outline Stroke -->
+        <div class="prop-row-2">
+          <div class="property-group">
+            <label class="property-label">Màu chữ</label>
+            <div class="color-picker-box">
+              <input type="color" id="propTextColor" class="color-input-native" value="#000000">
+              <span class="color-hex-label" id="valTextColor">#000000</span>
+            </div>
+          </div>
+          <div class="property-group">
+            <label class="property-label">Màu viền (Stroke)</label>
+            <div class="color-picker-box">
+              <input type="color" id="propStrokeColor" class="color-input-native" value="#ffffff">
+              <span class="color-hex-label" id="valStrokeColor">#ffffff</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stroke Width Slider -->
+        <div class="property-group">
+          <label class="property-label">Độ dày viền chữ</label>
+          <div class="prop-slider-wrapper">
+            <input type="range" id="propStrokeWidth" class="prop-slider" min="0" max="10" value="3" step="0.5">
+            <span class="prop-num-val" id="valStrokeWidth">3px</span>
+          </div>
+        </div>
+
+        <!-- Line Height Slider -->
+        <div class="property-group">
+          <label class="property-label">Khoảng cách dòng</label>
+          <div class="prop-slider-wrapper">
+            <input type="range" id="propLineHeight" class="prop-slider" min="0.8" max="2.0" value="1.25" step="0.05">
+            <span class="prop-num-val" id="valLineHeight">1.25</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="/js/jszip.min.js"></script>
+  <script type="module" src="/typeset-studio/js/app.js"></script>
+</body>
+</html>

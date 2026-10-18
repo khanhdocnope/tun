@@ -217,6 +217,9 @@ import { getPrevContext } from './queue.js';
       if (mode === 'all' || mode === 'translate_only') {
         item.viText = data.viTextBlock || '';
       }
+      if (Array.isArray(data.bubbles) && data.bubbles.length) {
+        item.bubbles = data.bubbles;
+      }
       item.stage = (mode === 'ocr_only') ? Math.max(item.stage || 0, 1) : 2;
 
       updateCardDOM(item);
