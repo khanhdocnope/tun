@@ -14,6 +14,7 @@ import gc
 import logging
 import math
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -387,6 +388,10 @@ class MangaCleanerPipeline:
         bubble_threshold: float = 0.30,
         inpaint_model: str = "anime-lama",
     ) -> Tuple[Image.Image, Image.Image, Dict[str, Any]]:
+        _t_total = time.perf_counter()
+
+        # ---- decode input
+        _t0 = time.perf_counter()
         if isinstance(image_input, np.ndarray):
             arr = image_input
             if arr.ndim == 3 and arr.shape[2] == 4:
@@ -401,6 +406,7 @@ class MangaCleanerPipeline:
             img_rgb = np.array(img_pil)
         h, w = img_rgb.shape[:2]
         img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+        _decode_ms = (time.perf_counter() - _t0) * 1000.0
 
         # ---- manual brush mode: user mask replaces detection entirely
         if user_mask is not None:
@@ -413,10 +419,15 @@ class MangaCleanerPipeline:
                 um = cv2.dilate(um, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
             if not um.any():
                 return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), {"status": "Empty mask", "inpaint_model": inpaint_model}
+            _t_inp = time.perf_counter()
             out, tag, n_reg = self._inpaint_masked(img_rgb, um, force_cpu, model_name=inpaint_model)
+            _inpaint_ms = (time.perf_counter() - _t_inp) * 1000.0
+            _total_ms = (time.perf_counter() - _t_total) * 1000.0
             return (Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB)),
                     Image.fromarray(np.stack([np.zeros_like(um), um, np.zeros_like(um)], -1)),
-                    {"engine": tag, "mode": "Manual brush", "inpaint_model": inpaint_model, "inpaint_regions": n_reg})
+                    {"engine": tag, "mode": "Manual brush", "inpaint_model": inpaint_model, "inpaint_regions": n_reg,
+                     "timings_ms": {"decode": round(_decode_ms, 2), "inpaint": round(_inpaint_ms, 2),
+                                    "total": round(_total_ms, 2), "regions": n_reg, "engine": tag}})
 
         # ---- auto mode
         if not self.bubbles.ready:
@@ -426,10 +437,21 @@ class MangaCleanerPipeline:
                      "status": "Bubble detector unavailable", "error": self.bubbles.error}
             return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
 
+        _t_det = time.perf_counter()
         dets = self._detect_regions(img_rgb, bubble_threshold, force_cpu)
+        _detect_ms = (time.perf_counter() - _t_det) * 1000.0
+
+        _seg_ms = 0.0
+        _masks_ms = 0.0
         if any(d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE) for d in dets):
+            _t_seg = time.perf_counter()
             seg = self.ctd.seg_map(img_bgr)
+            _seg_ms = (time.perf_counter() - _t_seg) * 1000.0
+
+            _t_mask = time.perf_counter()
             ms = build_masks(img_bgr, seg, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
+            _masks_ms = (time.perf_counter() - _t_mask) * 1000.0
+
             color_mask = Image.fromarray(self._color_mask(ms, h, w))
             target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
             n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
@@ -449,13 +471,30 @@ class MangaCleanerPipeline:
             "height": h,
         }
         if not target.any():
+            _total_ms = (time.perf_counter() - _t_total) * 1000.0
             stats.update(status="No text detected", engine="none")
+            stats["timings_ms"] = {
+                "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
+                "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
+                "inpaint": 0.0, "total": round(_total_ms, 2),
+                "regions": 0, "engine": "none",
+            }
             return img_pil, color_mask, stats
 
         # Inpaint only around the erased text (crops with context), paste back under the mask
+        _t_inp = time.perf_counter()
         out_bgr, tag, n_reg = self._inpaint_masked(img_rgb, target, force_cpu, model_name=inpaint_model)
+        _inpaint_ms = (time.perf_counter() - _t_inp) * 1000.0
+        _total_ms = (time.perf_counter() - _t_total) * 1000.0
+
         stats["engine"] = f"Inpaint ({tag})"
         stats["inpaint_regions"] = n_reg
+        stats["timings_ms"] = {
+            "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
+            "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
+            "inpaint": round(_inpaint_ms, 2), "total": round(_total_ms, 2),
+            "regions": n_reg, "engine": tag,
+        }
         return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
 
 

@@ -564,7 +564,15 @@ async def get_open_api_endpoint():
 @api_router.post("/api/clean_page")
 async def api_clean_page(req: CleanPagePayload):
     try:
+        _t_api = time.perf_counter()
+
+        # Decode incoming base64
+        _t_dec = time.perf_counter()
         img_pil = b64_to_pil(req.imageBase64)
+        _decode_ms = (time.perf_counter() - _t_dec) * 1000.0
+
+        payload_in_bytes = len(req.imageBase64)
+
         cleaned_pil, color_mask_pil, stats = await run_in_threadpool(
             cleaner_pipeline.clean_image,
             image_input=img_pil,
@@ -573,10 +581,37 @@ async def api_clean_page(req: CleanPagePayload):
             det_threshold=float(req.detThreshold or 0.20),
             inpaint_model=str(req.inpaintModel or "anime-lama"),
         )
+
+        # Encode results to base64
+        _t_enc1 = time.perf_counter()
+        cleaned_b64 = await run_in_threadpool(pil_to_b64, cleaned_pil)
+        _encode1_ms = (time.perf_counter() - _t_enc1) * 1000.0
+
+        _t_enc2 = time.perf_counter()
+        mask_b64 = await run_in_threadpool(pil_to_b64, color_mask_pil)
+        _encode2_ms = (time.perf_counter() - _t_enc2) * 1000.0
+
+        _total_api_ms = (time.perf_counter() - _t_api) * 1000.0
+
+        response_bytes = len(cleaned_b64) + len(mask_b64)
+
+        # Merge API-level timings into stats
+        api_timings = {
+            "decode_ms": round(_decode_ms, 2),
+            "encode_cleaned_ms": round(_encode1_ms, 2),
+            "encode_mask_ms": round(_encode2_ms, 2),
+            "payload_in_bytes": payload_in_bytes,
+            "response_bytes": response_bytes,
+            "total_ms": round(_total_api_ms, 2),
+        }
+        if "timings_ms" not in stats:
+            stats["timings_ms"] = {}
+        stats["timings_ms"].update(api_timings)
+
         return {
             "success": True,
-            "cleanedImageBase64": await run_in_threadpool(pil_to_b64, cleaned_pil),
-            "colorMaskBase64": await run_in_threadpool(pil_to_b64, color_mask_pil),
+            "cleanedImageBase64": cleaned_b64,
+            "colorMaskBase64": mask_b64,
             "stats": stats,
         }
     except Exception as exc:

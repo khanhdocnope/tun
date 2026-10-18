@@ -358,7 +358,15 @@ import { getPrevContext } from './queue.js';
     updateCardDOM(item);
     try {
       const src = await getCleanSourceDataUrl(item);
+      const _cleanStart = performance.now();
+      const _bodySize = src.length;
       const data = await requestClean(src);
+      const _roundTrip = performance.now() - _cleanStart;
+      // Log performance stats (console only, no UI)
+      try {
+        const timings = data && data.stats && data.stats.timings_ms;
+        console.info('[clean]', item.name, timings || '(no timings)', 'round-trip:', Math.round(_roundTrip) + 'ms', 'body:', _bodySize, 'bytes');
+      } catch (_) { /* ignore logging errors */ }
       if (!data || !data.cleanedImageBase64) throw new Error('Backend không trả về ảnh đã tẩy.');
       const { mime, buffer } = dataUrlToBuffer(data.cleanedImageBase64);
       const saved = await store.putCleaned({ id: item.id, mime, data: buffer });
