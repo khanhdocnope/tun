@@ -96,3 +96,32 @@ test('buildCombinedPrompt: includes previous context if provided', () => {
   assert.match(withContext, /Anh đã tới rồi/);
   assert.match(withContext, /Thật không thể tin được/);
 });
+
+test('process-batch handler: exports valid handler and handles parsed variable in outer scope', async () => {
+  const handler = require(path.join(__dirname, '../../web-in-vercel/api/process-batch.js'));
+  assert.equal(typeof handler, 'function');
+
+  // Verify that calling with missing image returns status 400 without ReferenceError
+  let statusCode = 200;
+  let responseData = null;
+  const mockReq = {
+    method: 'POST',
+    body: {},
+    headers: {}
+  };
+  const mockRes = {
+    setHeader() {},
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(data) {
+      responseData = data;
+      return this;
+    }
+  };
+
+  await handler(mockReq, mockRes);
+  assert.equal(statusCode, 400);
+  assert.match(responseData.error, /imageBase64/i);
+});

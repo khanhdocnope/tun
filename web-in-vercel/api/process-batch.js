@@ -77,6 +77,7 @@ module.exports = async (req, res) => {
     let apiCalls = 0;
     let missing = [];
     let usedFallback = false;
+    let parsed = null;
 
     const imagePart = { inline_data: { mime_type: mimeType, data: base64Image } };
 
@@ -116,7 +117,7 @@ module.exports = async (req, res) => {
         buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext }),
         { temperature: 0.6, responseMimeType: "application/json" }
       );
-      const parsed = parseCombinedOutput(raw);
+      parsed = parseCombinedOutput(raw);
 
       if (parsed) {
         ocrTextBlock = parsed.lines.map((l) => l.src).join("\n");
