@@ -3,6 +3,7 @@
  */
 
 import { TypesetEngine } from './typeset-engine.js';
+import { detectBoxesClient, isModelCached, initClientDetector } from './client-detector.js';
 
 // Global State
 const appState = {
@@ -89,6 +90,15 @@ const el = {
   btnPrevPage: document.getElementById('btnPrevPage'),
   btnNextPage: document.getElementById('btnNextPage'),
   btnAutoFitAll: document.getElementById('btnAutoFitAll'),
+  btnClientDetectBox: document.getElementById('btnClientDetectBox'),
+  btnClientDetectIcon: document.getElementById('btnClientDetectIcon'),
+  btnClientDetectText: document.getElementById('btnClientDetectText'),
+  valWebGpuStatus: document.getElementById('valWebGpuStatus'),
+  webGpuCacheStatus: document.getElementById('webGpuCacheStatus'),
+  webGpuProgressWrapper: document.getElementById('webGpuProgressWrapper'),
+  webGpuProgressBar: document.getElementById('webGpuProgressBar'),
+  webGpuProgressText: document.getElementById('webGpuProgressText'),
+  btnInitWebGpuDetector: document.getElementById('btnInitWebGpuDetector'),
   btnAiCleanAndBox: document.getElementById('btnAiCleanAndBox'),
   btnAiCleanIcon: document.getElementById('btnAiCleanIcon'),
   btnAiCleanText: document.getElementById('btnAiCleanText'),
@@ -691,6 +701,38 @@ async function callCleanApi(base64, settings) {
   }
 }
 
+async function callDetectBoxesApi(base64, settings) {
+  const t0 = performance.now();
+  try {
+    const res = await fetch('/api/detect-boxes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: base64,
+        readingOrder: 'manga',
+        chatOnly: true,
+        detThreshold: settings ? settings.detThreshold : 0.20
+      })
+    });
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.error || errMsg;
+      } catch (e) {
+        try { errMsg = await res.text(); } catch (e2) {}
+      }
+      return { ok: false, error: errMsg, duration };
+    }
+    const data = await res.json();
+    return { ok: true, data, duration };
+  } catch (err) {
+    const duration = ((performance.now() - t0) / 1000).toFixed(1);
+    return { ok: false, error: err.message || 'Lỗi mạng / Không thể kết nối server', duration };
+  }
+}
+
 async function callOcrApi(base64, settings) {
   const t0 = performance.now();
   try {
@@ -760,7 +802,7 @@ async function runBackendCleanAndBox(pageIndex) {
       throw new Error('Không tìm thấy dữ liệu ảnh gốc để xử lý.');
     }
 
-    // 2. Chạy song song Clean & OCR với phản hồi tiến độ thời gian thực
+    // 2. Chạy song song Clean & Detect Boxes (Ưu tiên /api/detect-boxes siêu tốc 0.3s, fallback sang /api/ocr)
     const cleanPromise = callCleanApi(base64, appState.aiSettings).then(async (cleanRes) => {
       updateAiCleanStepStatus(cleanRes);
       if (cleanRes.ok && cleanRes.data && cleanRes.data.cleanedImageBase64) {
@@ -787,34 +829,49 @@ async function runBackendCleanAndBox(pageIndex) {
       return cleanRes;
     });
 
-    const ocrPromise = callOcrApi(base64, appState.aiSettings).then((ocrRes) => {
-      const count = (ocrRes.ok && ocrRes.data && Array.isArray(ocrRes.data.data)) ? ocrRes.data.data.length : 0;
-      updateAiOcrStepStatus({ ok: ocrRes.ok, duration: ocrRes.duration, count, error: ocrRes.error });
-      return ocrRes;
+    const ocrPromise = callDetectBoxesApi(base64, appState.aiSettings).then(async (boxRes) => {
+      if (boxRes.ok && boxRes.data && (boxRes.data.boxes || boxRes.data.data)) {
+        const list = boxRes.data.boxes || boxRes.data.data;
+        updateAiOcrStepStatus({ ok: true, duration: boxRes.duration, count: list.length, error: null });
+        return boxRes;
+      }
+      // Fallback sang OCR cũ nếu endpoint detect-boxes chưa khả dụng
+      return callOcrApi(base64, appState.aiSettings).then((ocrRes) => {
+        const count = (ocrRes.ok && ocrRes.data && Array.isArray(ocrRes.data.data)) ? ocrRes.data.data.length : 0;
+        updateAiOcrStepStatus({ ok: ocrRes.ok, duration: ocrRes.duration, count, error: ocrRes.error });
+        return ocrRes;
+      });
     });
 
     const [cleanRes, ocrRes] = await Promise.all([cleanPromise, ocrPromise]);
 
-    // 3. Xử lý tọa độ bóng thoại và chữ nhận diện được từ OCR
+    // 3. Xử lý tọa độ bóng thoại và chữ nhận diện được từ OCR / Box Detector
     const imgW = el.canvas.width || 1000;
     const imgH = el.canvas.height || 1400;
 
-    if (ocrRes.ok && ocrRes.data && Array.isArray(ocrRes.data.data) && ocrRes.data.data.length) {
-      page.bubbles = ocrRes.data.data.map((item, idx) => {
-        const box = item.box || [0, 0, 0, 0];
-        const [ymin, xmin, ymax, xmax] = box;
-
+    const rawBoxes = ocrRes.data && (ocrRes.data.boxes || ocrRes.data.data);
+    if (ocrRes.ok && Array.isArray(rawBoxes) && rawBoxes.length) {
+      page.bubbles = rawBoxes.map((item, idx) => {
         let x, y, width, height;
-        if (ymax <= 1000 && xmax <= 1000 && ymin >= 0 && xmin >= 0 && (imgW > 1000 || imgH > 1000)) {
-          x = Math.round((xmin / 1000) * imgW);
-          y = Math.round((ymin / 1000) * imgH);
-          width = Math.max(30, Math.round(((xmax - xmin) / 1000) * imgW));
-          height = Math.max(25, Math.round(((ymax - ymin) / 1000) * imgH));
+        if (item.x !== undefined && item.width !== undefined && item.y !== undefined && item.height !== undefined) {
+          x = Math.round(item.x);
+          y = Math.round(item.y);
+          width = Math.max(30, Math.round(item.width));
+          height = Math.max(25, Math.round(item.height));
         } else {
-          x = Math.round(xmin);
-          y = Math.round(ymin);
-          width = Math.max(30, Math.round(xmax - xmin));
-          height = Math.max(25, Math.round(ymax - ymin));
+          const box = item.box || item.bbox || [0, 0, 0, 0];
+          const [ymin, xmin, ymax, xmax] = box;
+          if (ymax <= 1000 && xmax <= 1000 && ymin >= 0 && xmin >= 0 && (imgW > 1000 || imgH > 1000)) {
+            x = Math.round((xmin / 1000) * imgW);
+            y = Math.round((ymin / 1000) * imgH);
+            width = Math.max(30, Math.round(((xmax - xmin) / 1000) * imgW));
+            height = Math.max(25, Math.round(((ymax - ymin) / 1000) * imgH));
+          } else {
+            x = Math.round(xmin);
+            y = Math.round(ymin);
+            width = Math.max(30, Math.round(xmax - xmin));
+            height = Math.max(25, Math.round(ymax - ymin));
+          }
         }
 
         return {
@@ -875,6 +932,115 @@ async function runBackendCleanAndBox(pageIndex) {
     if (el.btnAiCleanText) el.btnAiCleanText.textContent = 'Tẩy & Bắt Box AI';
   }
 }
+
+async function runClientWebGpuDetect(pageIndex) {
+  const page = appState.pages[pageIndex];
+  if (!page) {
+    showToast('Vui lòng chọn trang truyện trước khi bóc box.');
+    return;
+  }
+
+  if (appState.isAiProcessing) {
+    showToast('Đang có tác vụ AI đang chạy, vui lòng chờ...');
+    return;
+  }
+
+  appState.isAiProcessing = true;
+  if (el.btnClientDetectBox) {
+    el.btnClientDetectBox.disabled = true;
+    el.btnClientDetectBox.classList.add('processing');
+    if (el.btnClientDetectIcon) el.btnClientDetectIcon.innerHTML = '<span class="spin-inline">⏳</span>';
+    if (el.btnClientDetectText) el.btnClientDetectText.textContent = 'Đang bóc box...';
+  }
+
+  const pageName = page.name || `Trang ${pageIndex + 1}`;
+  showToast(`[${pageName}] Đang chạy AI WebGPU phát hiện bóng thoại trên máy...`, 2500);
+
+  try {
+    let imgSource = appState.currentImageElement;
+    if (!imgSource) {
+      let b64 = page.base64;
+      if (!b64 && page.displayBlob) {
+        b64 = await blobToBase64(page.displayBlob);
+      }
+      if (!b64) {
+        const blobOrB64 = await getPageImageBlob(page.id);
+        b64 = blobOrB64 instanceof Blob ? await blobToBase64(blobOrB64) : blobOrB64;
+      }
+      if (b64) {
+        imgSource = await loadImageElement(b64);
+      }
+    }
+
+    if (!imgSource) {
+      throw new Error('Chưa có hình ảnh trang truyện để bóc box.');
+    }
+
+    // Callback thanh tiến trình nếu tải model lần đầu
+    const onProgress = (p) => {
+      if (el.webGpuProgressWrapper) el.webGpuProgressWrapper.style.display = 'block';
+      if (el.webGpuProgressBar) el.webGpuProgressBar.style.width = `${p.percent}%`;
+      if (el.webGpuProgressText) el.webGpuProgressText.textContent = p.status || `${p.percent}%`;
+      if (p.cached && el.webGpuCacheStatus) el.webGpuCacheStatus.textContent = '✅ Đã lưu cache (Sẵn sàng 0ms)';
+    };
+
+    const res = await detectBoxesClient(imgSource, {
+      readingOrder: 'manga',
+      detThreshold: appState.aiSettings.detThreshold || 0.20,
+      chatOnly: true,
+      onProgress
+    });
+
+    if (res.success && Array.isArray(res.boxes) && res.boxes.length) {
+      page.bubbles = res.boxes.map((item, idx) => ({
+        id: item.id || idx + 1,
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+        srcText: '',
+        text: '',
+        font: appState.defaultFont || 'Yuki Arenzi',
+        fontSize: 22,
+        autoFit: true,
+        color: '#000000',
+        strokeColor: '#ffffff',
+        strokeWidth: 3,
+        align: 'center',
+        verticalAlign: 'middle',
+        lineHeightRatio: 1.25,
+        padding: 8,
+        bgFill: 'transparent',
+        isBold: false,
+        isItalic: false,
+        isUppercase: false
+      }));
+
+      await saveTypesetToDB(page);
+      appState.activeBubbleIndex = 0;
+      updateSidebarCard(pageIndex);
+      updateInspector();
+      renderCanvas();
+
+      if (el.webGpuCacheStatus) el.webGpuCacheStatus.textContent = '✅ Đã nạp WebGPU (Sẵn sàng 0ms)';
+      showToast(`[${pageName}] 🚀 WebGPU bóc thành công ${res.boxes.length} box trong ${res.meta.execution_time_ms}ms!`, 4000);
+    } else {
+      showToast(`[${pageName}] Không tìm thấy bóng thoại nào trên trang này.`, 3000);
+    }
+  } catch (err) {
+    console.error('WebGPU detect error:', err);
+    showToast(`Lỗi WebGPU: ${err.message}`, 4000);
+  } finally {
+    appState.isAiProcessing = false;
+    if (el.btnClientDetectBox) {
+      el.btnClientDetectBox.disabled = false;
+      el.btnClientDetectBox.classList.remove('processing');
+      if (el.btnClientDetectIcon) el.btnClientDetectIcon.textContent = '🚀';
+      if (el.btnClientDetectText) el.btnClientDetectText.textContent = 'Bóc Box WebGPU';
+    }
+  }
+}
+
 
 /* ==========================================================================
    Image Loader & Canvas Rendering
@@ -2329,6 +2495,42 @@ function setupBubbleActions() {
       runBackendCleanAndBox(appState.activePageIndex);
     });
   }
+
+  // Nút Bóc Box WebGPU (Client Offline)
+  if (el.btnClientDetectBox) {
+    el.btnClientDetectBox.addEventListener('click', () => {
+      runClientWebGpuDetect(appState.activePageIndex);
+    });
+  }
+
+  // Nút Tải & Nạp Model WebGPU trước
+  if (el.btnInitWebGpuDetector) {
+    el.btnInitWebGpuDetector.addEventListener('click', async () => {
+      el.btnInitWebGpuDetector.disabled = true;
+      if (el.webGpuProgressWrapper) el.webGpuProgressWrapper.style.display = 'block';
+      showToast('Đang tải mô hình Comic-Text-Detector (WebGPU)...', 3000);
+      try {
+        await initClientDetector((p) => {
+          if (el.webGpuProgressBar) el.webGpuProgressBar.style.width = `${p.percent}%`;
+          if (el.webGpuProgressText) el.webGpuProgressText.textContent = p.status || `${p.percent}%`;
+        });
+        if (el.webGpuCacheStatus) el.webGpuCacheStatus.textContent = '✅ Đã lưu vào máy (Sẵn sàng 0ms)';
+        showToast('🎉 Đã tải và lưu model WebGPU thành công vào máy!', 4000);
+      } catch (err) {
+        showToast(`Lỗi tải model WebGPU: ${err.message}`, 4000);
+      } finally {
+        el.btnInitWebGpuDetector.disabled = false;
+      }
+    });
+  }
+
+  // Kiểm tra trạng thái cache ban đầu
+  isModelCached().then(cached => {
+    if (cached) {
+      if (el.webGpuCacheStatus) el.webGpuCacheStatus.textContent = '✅ Đã lưu trong Cache (0ms)';
+      if (el.valWebGpuStatus) el.valWebGpuStatus.textContent = 'Đã lưu Cache';
+    }
+  });
 }
 
 /* ==========================================================================

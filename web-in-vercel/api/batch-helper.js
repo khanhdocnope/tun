@@ -274,7 +274,18 @@ function buildPrevBlock(prevContext) {
   return `PREVIOUS PAGE (already translated). Use it ONLY for story context and consistency of names, pronouns and tone. Do NOT translate it again and do NOT include it in your output:\n${lines.join("\n")}\n\n`;
 }
 
-function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural", readingOrder = "manga", prevContext = []) {
+function buildGlossaryBlock(glossary) {
+  if (!glossary) return "";
+  const trimmed = String(glossary).trim();
+  if (!trimmed) return "";
+  return `=== CHARACTER GLOSSARY & PRONOUN RULES (MANDATORY) ===
+Strictly adhere to the following character names, relationships, pronouns, and terms throughout your translation.
+They take absolute priority over default style choices:
+${trimmed}
+======================================================\n\n`;
+}
+
+function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone = "natural", readingOrder = "manga", prevContext = [], glossary = "") {
   const sourceName = LANG_NAMES[sourceLang] || sourceLang;
   const targetName = LANG_NAMES[targetLang] || targetLang;
   const isWebtoon = readingOrder === "webtoon";
@@ -285,7 +296,7 @@ function buildTranslatePrompt(text, sourceLang = "ja", targetLang = "vi", tone =
 
 Below is the OCR text scanned from a ${isWebtoon ? 'Webtoon (vertical scroll, read top-to-bottom)' : 'traditional Manga (read top-to-bottom, right-to-left)'} page, along with the image of that same page. EACH LINE is a separate speech bubble / text box in reading sequence.
 
-${buildPrevBlock(prevContext)}OCR text:
+${buildGlossaryBlock(glossary)}${buildPrevBlock(prevContext)}OCR text:
 ${text}
 
 TRANSLATION INSTRUCTIONS:
@@ -330,7 +341,8 @@ function buildCombinedPrompt({
   skipSfx = true,
   readingOrder = "manga",
   tone = "natural",
-  prevContext = []
+  prevContext = [],
+  glossary = ""
 } = {}) {
   const { isWebtoon, orderDirective, bubbleRule, sfxInstruction } = getOcrRuleBlocks(skipSfx, readingOrder);
   const sourceName = LANG_NAMES[sourceLang] || sourceLang;
@@ -345,7 +357,7 @@ This image is one page of a ${sourceName} ${isWebtoon ? "webtoon / vertical stri
   A) OCR the text of every speech bubble / caption box exactly as written.
   B) Translate each of those bubbles into natural ${targetName}.
 
-${buildPrevBlock(prevContext)}=== OCR RULES ===
+${buildGlossaryBlock(glossary)}${buildPrevBlock(prevContext)}=== OCR RULES ===
 ${orderDirective}
 ${bubbleRule}
 ${sfxInstruction}

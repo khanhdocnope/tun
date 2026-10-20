@@ -66,6 +66,7 @@ module.exports = async (req, res) => {
     const skipSFX = req.body && (req.body.skipSFX === true || req.body.skipSFX === "true");
     const mode = (req.body && req.body.mode) || "all"; // 'all', 'ocr_only', 'translate_only'
     const readingOrder = (req.body && (req.body.readingOrder || req.body.comicType)) || "manga";
+    const glossary = (req.body && req.body.glossary) || "";
 
     const prevContext = sanitizePrevContext(req.body && req.body.prevContext);
 
@@ -103,7 +104,7 @@ module.exports = async (req, res) => {
 
     async function runTranslateStep() {
       const raw = await callGemini(
-        buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone, readingOrder, prevContext),
+        buildTranslatePrompt(ocrTextBlock, sourceLang, targetLang, tone, readingOrder, prevContext, glossary),
         { temperature: 0.6 }
       );
       viTextBlock = stripEmptyLines(
@@ -114,7 +115,7 @@ module.exports = async (req, res) => {
     if (mode === "all") {
       // OCR + dịch trong MỘT lần gọi -> mỗi trang tốn 1 request thay vì 2
       const raw = await callGemini(
-        buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext }),
+        buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext, glossary }),
         { temperature: 0.6, responseMimeType: "application/json" }
       );
       parsed = parseCombinedOutput(raw);

@@ -18,6 +18,7 @@ const ocrHandler = require("./api/ocr");
 const batchZipHandler = require("./api/batch-zip");
 const translateHandler = require("./api/translate");
 const visionHandler = require("./api/vision");
+const detectBoxesHandler = require("./api/detect-boxes");
 
 // Serverless API handlers (Batch Studio Pro Sub-Web)
 const configHandler = require("./api/config");
@@ -28,6 +29,7 @@ const downloadScriptHandler = require("./api/download-script");
 app.all("/api/health", (req, res) => healthHandler(req, res));
 app.all("/api/clean", (req, res) => cleanHandler(req, res));
 app.all("/api/ocr", (req, res) => ocrHandler(req, res));
+app.all("/api/detect-boxes", (req, res) => detectBoxesHandler(req, res));
 app.all("/api/batch-zip", (req, res) => batchZipHandler(req, res));
 app.all("/api/translate", (req, res) => translateHandler(req, res));
 app.all("/api/vision", (req, res) => visionHandler(req, res));

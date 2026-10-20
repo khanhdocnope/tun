@@ -32,7 +32,8 @@ module.exports = async (req, res) => {
       sourceLang = "ja",
       targetLang = "vi",
       imageBase64,
-      prevContext
+      prevContext,
+      glossary = ""
     } = req.body || {};
 
     const inputPromptText = (text_jp || req.body?.text || "").trim();
@@ -54,7 +55,7 @@ module.exports = async (req, res) => {
 
     const modelName = model || "gemini-3.1-flash-lite";
     const order = readingOrder || comicType || "manga";
-    const prompt = buildTranslatePrompt(inputPromptText, sourceLang, targetLang, tone, order, prevContext);
+    const prompt = buildTranslatePrompt(inputPromptText, sourceLang, targetLang, tone, order, prevContext, glossary);
 
     const parts = [{ text: prompt }];
 

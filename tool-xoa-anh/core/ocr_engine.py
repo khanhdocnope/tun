@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -453,3 +454,72 @@ def process_page_ocr(
         for n, it in enumerate(items, start=1)
     ]
     return len(results), results
+
+
+def detect_page_boxes(
+    image: Union[Image.Image, np.ndarray],
+    reading_order: Literal["manga", "webtoon"] = "manga",
+    det_threshold: float = 0.20,
+    chat_only: bool = True,
+) -> Tuple[int, List[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Siêu tốc: Chỉ phát hiện Bounding Box & sắp xếp Reading Order.
+    KHÔNG chạy manga-ocr, KHÔNG chạy PaddleOCR, KHÔNG inpaint!
+    Thời gian thực thi: ~50ms - 150ms.
+    """
+    start_t = time.perf_counter()
+    if isinstance(image, np.ndarray):
+        img_bgr = image if image.ndim == 3 and image.shape[2] == 3 else cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        img_pil = Image.fromarray(img_rgb)
+    else:
+        img_pil = image.convert("RGB")
+        img_rgb = np.array(img_pil)
+        img_bgr = None
+
+    h, w = img_rgb.shape[:2]
+
+    # 1. Tìm box: chat_only -> RT-DETR text_bubble; ngược lại / dự phòng -> CTD
+    raw_boxes: Optional[List[Tuple[int, int, int, int]]] = None
+    engine_name = "bubble_detector"
+    if chat_only:
+        raw_boxes = _bubble_text_boxes(img_rgb)
+    if not raw_boxes:
+        det = _get_detector()
+        if img_bgr is None:
+            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+        raw_boxes = det.detect_boxes(img_bgr, det_threshold=det_threshold)
+        engine_name = "comic_text_detector"
+
+    if not raw_boxes:
+        elapsed_ms = round((time.perf_counter() - start_t) * 1000.0, 1)
+        return 0, [], {"width": w, "height": h, "execution_time_ms": elapsed_ms, "engine": engine_name}
+
+    # 2. Sắp xếp thứ tự đọc
+    items = sort_reading_order([{"bbox": list(b)} for b in raw_boxes], mode=reading_order)
+
+    # 3. Format box results cho cả Canvas typeset & Gemini integration
+    results = []
+    for n, it in enumerate(items, start=1):
+        ymin, xmin, ymax, xmax = it["bbox"]
+        results.append({
+            "id": n,
+            "bbox": [ymin, xmin, ymax, xmax],
+            "box": [ymin, xmin, ymax, xmax],
+            "x": int(xmin),
+            "y": int(ymin),
+            "width": max(10, int(xmax - xmin)),
+            "height": max(10, int(ymax - ymin)),
+            "cls": "chat" if chat_only else "text"
+        })
+
+    elapsed_ms = round((time.perf_counter() - start_t) * 1000.0, 1)
+    meta = {
+        "width": w,
+        "height": h,
+        "execution_time_ms": elapsed_ms,
+        "engine": engine_name,
+        "reading_order": reading_order,
+    }
+    return len(results), results, meta
+

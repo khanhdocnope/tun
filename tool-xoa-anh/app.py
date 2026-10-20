@@ -36,7 +36,7 @@ from fastapi.openapi.utils import get_openapi
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
-from core.ocr_engine import process_page_ocr
+from core.ocr_engine import process_page_ocr, detect_page_boxes
 from core.translator import MangaTranslator
 from download_models import ensure_models
 from manga_cleaner import cleaner_pipeline
@@ -534,6 +534,13 @@ class CleanPagePayload(BaseModel):
     inpaintModel: Optional[str] = "anime-lama"
 
 
+class DetectBoxesPayload(BaseModel):
+    imageBase64: str = Field(..., description="Dữ liệu ảnh dạng Base64")
+    readingOrder: Optional[str] = Field("manga", description="'manga' (RTL) hoặc 'webtoon' (TTB)")
+    chatOnly: Optional[bool] = Field(True, description="Chỉ lấy bóng thoại chat (bỏ SFX)")
+    detThreshold: Optional[float] = Field(0.20, description="Ngưỡng tin cậy của detector (0.1 - 0.5)")
+
+
 @api_router.get("/health")
 @api_router.get("/api/v1/health")
 def health():
@@ -831,6 +838,39 @@ async def api_clean_page(req: CleanPagePayload):
         }
     except Exception as exc:
         logger.error("API error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@api_router.post(
+    "/detect_boxes",
+    tags=["Bounding Box Detection"],
+    summary="Phát hiện Bounding Box siêu tốc (JSON)",
+    description="Nhận Base64 ảnh, trả về tọa độ Bounding Box và thứ tự đọc chỉ trong ~50-150ms mà không chạy OCR hay Inpaint.",
+)
+@api_router.post("/api/v1/detect-boxes")
+async def api_detect_boxes(req: DetectBoxesPayload):
+    try:
+        if not req.imageBase64:
+            raise HTTPException(status_code=400, detail="Thiếu dữ liệu ảnh (imageBase64).")
+        img_pil = b64_to_pil(req.imageBase64)
+        order_val = "webtoon" if (req.readingOrder or "").lower() in ("webtoon", "manhwa") else "manga"
+
+        total_boxes, boxes, meta = await run_in_threadpool(
+            detect_page_boxes,
+            image=img_pil,
+            reading_order=order_val,
+            det_threshold=float(req.detThreshold or 0.20),
+            chat_only=bool(req.chatOnly if req.chatOnly is not None else True),
+        )
+        return {
+            "success": True,
+            "total_boxes": total_boxes,
+            "boxes": boxes,
+            "data": boxes,  # bí danh tương thích cho typeset studio
+            "meta": meta,
+        }
+    except Exception as exc:
+        logger.error("api_detect_boxes error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
 

@@ -24,7 +24,8 @@
       cleanSFX: localStorage.getItem('manga_clean_sfx') === 'true',
       cleanDilation: parseInt(localStorage.getItem('manga_clean_dilation') || '4', 10),
       cleanThreshold: parseFloat(localStorage.getItem('manga_clean_threshold') || '0.20'),
-      backendUrl: localStorage.getItem('manga_backend_url') || 'https://dobietdc-backe-manga-remove.hf.space'
+      backendUrl: localStorage.getItem('manga_backend_url') || 'https://dobietdc-backe-manga-remove.hf.space',
+      glossary: localStorage.getItem('manga_glossary') || ''
     },
     // Giai đoạn 2: Mobile UI State
     currentFilter: 'all',
@@ -180,6 +181,7 @@
     inputGeminiApiKey: document.getElementById('inputGeminiApiKey'),
     inputGeminiApiKey2: document.getElementById('inputGeminiApiKey2'),
     selectTone: document.getElementById('selectTone'),
+    inputGlossary: document.getElementById('inputGlossary'),
     envKeyBadge: document.getElementById('envKeyBadge'),
     envKeyBadge2: document.getElementById('envKeyBadge2'),
     quotaSpeedText: document.getElementById('quotaSpeedText'),

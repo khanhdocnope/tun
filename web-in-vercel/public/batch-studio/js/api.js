@@ -201,6 +201,7 @@ import { getPrevContext } from './queue.js';
         readingOrder: state.settings.readingOrder,
         sourceLang: 'ja',
         targetLang: 'vi',
+        glossary: state.settings.glossary || '',
         prevContext: mode === 'ocr_only' ? [] : getPrevContext(item)
       };
 
@@ -274,6 +275,7 @@ import { getPrevContext } from './queue.js';
           readingOrder: state.settings.readingOrder,
           sourceLang: 'ja',
           targetLang: 'vi',
+          glossary: state.settings.glossary || '',
           prevContext: getPrevContext(item)
         })
       });

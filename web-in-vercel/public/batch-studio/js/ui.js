@@ -91,6 +91,7 @@ export function unloadCardImage(card) {
     el.inputGeminiApiKey.value = state.settings.apiKey;
     if (el.inputGeminiApiKey2) el.inputGeminiApiKey2.value = state.settings.apiKey2;
     el.selectTone.value = state.settings.tone;
+    if (el.inputGlossary) el.inputGlossary.value = state.settings.glossary || '';
     el.toggleSkipSFX.checked = state.settings.skipSFX;
     if (el.selectReadingOrder) el.selectReadingOrder.value = state.settings.readingOrder;
 
@@ -139,6 +140,10 @@ export function unloadCardImage(card) {
       state.settings.apiKey2 = el.inputGeminiApiKey2.value.trim();
     }
     state.settings.tone = el.selectTone.value;
+    if (el.inputGlossary) {
+      state.settings.glossary = el.inputGlossary.value.trim();
+      localStorage.setItem('manga_glossary', state.settings.glossary);
+    }
     if (el.selectReadingOrder) {
       state.settings.readingOrder = el.selectReadingOrder.value;
       localStorage.setItem('manga_reading_order', state.settings.readingOrder);

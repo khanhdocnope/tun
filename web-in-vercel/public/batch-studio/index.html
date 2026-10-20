@@ -375,6 +375,22 @@
             </select>
           </div>
 
+          <!-- Collapsible Character Glossary & Notes (Optional & Minimalist) -->
+          <div class="form-group" style="margin-top: 6px;">
+            <details style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; cursor: pointer;">
+              <summary style="font-weight: 600; font-size: 0.83rem; color: #a5b4fc; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                <span>📖 Ghi chú xưng hô & Thuật ngữ (Tùy chọn)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">Thu gọn ▾</span>
+              </summary>
+              <div style="margin-top: 8px; cursor: default;">
+                <textarea id="inputGlossary" class="form-control" rows="3" style="font-size: 0.82rem; resize: vertical; line-height: 1.45;" placeholder="Ví dụ:&#10;- A gọi B là: anh / em (thân thiết)&#10;- Tên giữ nguyên: Satoru, Sukuna&#10;- Chiêu thức: Chidori (không dịch nghĩa)"></textarea>
+                <small class="form-hint" style="margin-top: 4px; display: block; font-size: 0.72rem; color: var(--text-muted);">
+                  Để trống nếu không dùng. Khi điền, Gemini sẽ ưu tiên áp dụng các xưng hô này xuyên suốt chapter.
+                </small>
+              </div>
+            </details>
+          </div>
+
           <div class="form-group">
             <label for="selectReadingOrder">Định dạng & Thứ tự đọc (Manga / Webtoon)</label>
             <select id="selectReadingOrder" class="form-control">
