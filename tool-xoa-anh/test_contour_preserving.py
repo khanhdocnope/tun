@@ -103,9 +103,29 @@ class TestContourPreservingDilation(unittest.TestCase):
         barrier = extract_contour_barrier(gray, chat_text, barrier_grow=2)
         chat_erase = contour_preserving_dilate(chat_text, barrier, dilation_px=4)
 
-        filled_img, done = flat_fill_uniform_paper(self.img1, chat_erase, boxes, max_std=8.5)
+        filled_img, done = flat_fill_uniform_paper(self.img1, chat_erase, boxes, max_std=5.0)
         filled_count = np.count_nonzero(done)
         self.assertGreater(filled_count, 1000, "Flat-fill should have filled dialogue strokes on uniform white paper")
+
+    def test_white_halo_snapping_on_tinted_bg(self):
+        h, w = 150, 200
+        img = np.full((h, w, 3), (190, 185, 205), dtype=np.uint8)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        core_mask = np.zeros((h, w), np.uint8)
+        cv2.putText(core_mask, "TEST", (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1.2, 255, 2)
+
+        white_stroke = np.zeros((h, w), np.uint8)
+        cv2.putText(white_stroke, "TEST", (30, 90), cv2.FONT_HERSHEY_SIMPLEX, 1.2, 255, 8)
+        gray[white_stroke > 0] = 255
+        gray[core_mask > 0] = 20
+
+        from mask_logic import snap_white_halo
+        boxes = [(20, 40, 180, 110)]
+        snapped = snap_white_halo(core_mask, gray, boxes, max_halo_radius=8)
+
+        uncovered_white = (white_stroke > 0) & (snapped == 0)
+        self.assertEqual(np.count_nonzero(uncovered_white), 0, "White-halo snapping must cover 100% of the white outline")
 
 
 if __name__ == "__main__":

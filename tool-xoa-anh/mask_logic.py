@@ -143,6 +143,68 @@ def contour_preserving_dilate(
     return cur
 
 
+def snap_white_halo(
+    text_mask: np.ndarray,
+    gray: np.ndarray,
+    boxes: Sequence[Box],
+    max_halo_radius: int = 8,
+    bright_thr: int = 215,
+    bg_dark_thr: int = 225,
+) -> np.ndarray:
+    """
+    White-Halo Snapping for Color Comics (Manhwa/Webtoon):
+    In color/tinted bubbles or background art, text often has a thick white stroke/halo
+    around dark glyphs. Because ComicTextDetector only detects the dark glyph core,
+    the white outline is left behind, causing ghost text or white blotches.
+
+    This function automatically snaps connected bright pixels (>= bright_thr) that touch
+    the text glyphs into the text mask, ensuring both the letter core and its white stroke
+    are cleanly covered and erased by inpainting without needing excessive dilation.
+    """
+    if not text_mask.any() or not boxes:
+        return text_mask
+
+    h, w = text_mask.shape[:2]
+    out_mask = text_mask.copy()
+
+    for x1, y1, x2, y2 in boxes:
+        bx1, by1 = max(0, int(x1) - 10), max(0, int(y1) - 10)
+        bx2, by2 = min(w, int(x2) + 10), min(h, int(y2) + 10)
+
+        roi_mask = text_mask[by1:by2, bx1:bx2]
+        if not roi_mask.any():
+            continue
+
+        roi_gray = gray[by1:by2, bx1:bx2]
+
+        # Check background brightness outside text in this box:
+        # If the background is already pure white paper (median >= bg_dark_thr), no white stroke needed
+        non_text = roi_gray[roi_mask == 0]
+        if len(non_text) < 20 or float(np.median(non_text)) >= bg_dark_thr:
+            continue
+
+        # Background is tinted / colored / gray, and text has potential white halo!
+        bright_candidates = (roi_gray >= bright_thr).astype(np.uint8) * 255
+
+        # Only bright pixels within `max_halo_radius` of the text
+        reach = cv2.dilate(roi_mask, _ellipse(2 * max_halo_radius + 1))
+        local_bright = cv2.bitwise_and(bright_candidates, reach)
+
+        # Keep only bright components connected to the text glyphs
+        combined = cv2.bitwise_or(roi_mask, local_bright)
+        n, lab, _, _ = cv2.connectedComponentsWithStats(combined, connectivity=8)
+        if n <= 1:
+            continue
+
+        text_labels = np.unique(lab[roi_mask > 0])
+        text_labels = text_labels[text_labels != 0]
+
+        snapped_roi = np.isin(lab, text_labels).astype(np.uint8) * 255
+        out_mask[by1:by2, bx1:bx2] = cv2.bitwise_or(out_mask[by1:by2, bx1:bx2], snapped_roi)
+
+    return out_mask
+
+
 def build_masks(
     img_bgr: np.ndarray,
     seg_map: np.ndarray,
@@ -170,6 +232,10 @@ def build_masks(
     seg_bin = (seg_map > seg_thr).astype(np.uint8) * 255
     chat_text = remove_specks(cv2.bitwise_and(seg_bin, chat_region), min_speck)
     sfx_text = remove_specks(cv2.bitwise_and(seg_bin, sfx_region), max(min_speck, 12))
+
+    # Auto-snap white halo / stroke around text in colored/tinted bubbles
+    chat_text = snap_white_halo(chat_text, gray, chat_boxes, max_halo_radius=8)
+    sfx_text = snap_white_halo(sfx_text, gray, sfx_boxes, max_halo_radius=8)
 
     # All text strokes
     all_text = cv2.bitwise_or(chat_text, sfx_text)
