@@ -206,8 +206,8 @@ def flat_fill_uniform_paper(
     boxes: Sequence[Box],
     margin: int = 24,
     own_pad: int = 10,
-    paper_min: int = 190,
-    max_std: float = 8.5,
+    paper_min: int = 180,
+    max_std: float = 16.0,
     min_ring: int = 50,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
