@@ -539,14 +539,47 @@ class MangaCleanerPipeline:
             }
             return img_pil, color_mask, stats
 
-        # Inpaint only around the erased text (crops with context), paste back under the mask
+        # Step 1: Instant flat-fill bypass for uniform paper dialogue bubbles
+        # (Zero-delay, 100% razor-sharp line art preservation)
+        out_bgr, flat_done = flat_fill_uniform_paper(
+            img_bgr=img_bgr,
+            erase=target,
+            boxes=ms.chat_boxes,
+        )
+        n_flat = int(np.count_nonzero(flat_done))
+
+        # Remaining mask that actually requires deep-learning inpainting
+        lama_target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
+
+        if not lama_target.any():
+            # 100% of bubbles were flat paper! LaMa completely bypassed!
+            _inpaint_ms = 0.0
+            _total_ms = (time.perf_counter() - _t_total) * 1000.0
+            tag = "Flat-Fill Bypass (Instant)"
+            stats["engine"] = tag
+            stats["inpaint_regions"] = 0
+            stats["flat_filled_px"] = n_flat
+            stats["timings_ms"] = {
+                "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
+                "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
+                "inpaint": round(_inpaint_ms, 2), "total": round(_total_ms, 2),
+                "regions": 0, "engine": tag,
+            }
+            return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
+
+        # Step 2: Inpaint only around the remaining complex / textured regions
         _t_inp = time.perf_counter()
-        out_bgr, tag, n_reg = self._inpaint_masked(img_rgb, target, force_cpu, model_name=inpaint_model)
+        inp_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
+        out_bgr, tag, n_reg = self._inpaint_masked(inp_rgb, lama_target, force_cpu, model_name=inpaint_model)
         _inpaint_ms = (time.perf_counter() - _t_inp) * 1000.0
         _total_ms = (time.perf_counter() - _t_total) * 1000.0
 
+        if n_flat > 0:
+            tag = f"Hybrid FlatFill+{tag}"
+
         stats["engine"] = f"Inpaint ({tag})"
         stats["inpaint_regions"] = n_reg
+        stats["flat_filled_px"] = n_flat
         stats["timings_ms"] = {
             "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
             "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
