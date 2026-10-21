@@ -206,17 +206,20 @@ def flat_fill_uniform_paper(
     boxes: Sequence[Box],
     margin: int = 24,
     own_pad: int = 10,
-    paper_min: int = 180,
-    max_std: float = 16.0,
+    paper_min: int = 225,
+    max_std: float = 5.0,
     min_ring: int = 50,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    For each dialogue box: if the paper just around the erased strokes is a flat
-    colour (typical white/light bubble), paint it with that colour instead of calling
-    LaMa. Instant (0.001s), artifact-free, 100% razor-sharp line art preservation.
-    Anything textured / toned falls through to LaMa.
+    For each dialogue box: if the paper just around the erased strokes is an
+    actual flat, opaque white paper bubble, paint it with that colour instead of
+    calling LaMa.
     
-    Returns (image, mask_of_pixels_already_filled).
+    CRITICAL SAFETY GATE:
+    If the bubble is transparent, semi-transparent, tinted, or has artwork/lines passing
+    through (typical in color manhwa / webtoons), this function returns done=0,
+    ensuring it falls through to Big-LaMa for deep-learning reconstruction instead
+    of stamping an ugly opaque white patch over the line art.
     """
     h, w = erase.shape
     out = img_bgr.copy()
@@ -232,6 +235,7 @@ def flat_fill_uniform_paper(
         if not m.any():
             continue
         ring = cv2.bitwise_and(cv2.dilate(m, k_out), cv2.bitwise_not(cv2.dilate(m, k_in)))
+        # Only true white paper pixels in the ring
         ok = (ring > 0) & (gray[Y1:Y2, X1:X2] >= paper_min)
         if int(ok.sum()) < min_ring:
             continue
@@ -239,6 +243,10 @@ def flat_fill_uniform_paper(
         if float(px.std(axis=0).max()) > max_std:
             continue
         color = np.median(px, axis=0).astype(np.uint8)
+        # Safety Gate: Paper must be bright opaque white (>= 230 on all channels)
+        # If the background is tinted, pastel, or semi-transparent, reject flat fill!
+        if float(color.min()) < 230:
+            continue
         sel = m > 0
         roi_out = out[Y1:Y2, X1:X2]
         roi_out[sel] = color
