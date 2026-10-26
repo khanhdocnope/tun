@@ -42,6 +42,11 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_REPO = os.environ.get("HF_SPACE_ID", "dobietdc/manga-text-cleaner")
 DEFAULT_DIR = "backend"
 
+# The Xet chunk cache can hit Windows ACL/permission issues (spawn staging
+# files under %USERPROFILE%\.cache\huggingface\xet).  Falling back to regular
+# HTTP upload is slower but far more reliable for this 20 MB Space.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 # Không đẩy lên Space: môi trường ảo, cache, bí mật, dữ liệu tạm
 IGNORE_PATTERNS = [
     ".git/*",

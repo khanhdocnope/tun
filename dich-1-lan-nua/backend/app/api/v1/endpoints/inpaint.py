@@ -1,9 +1,12 @@
 import io
 import json
-from typing import Optional, Union
+import time
+from typing import Optional
+
+import numpy as np
 from fastapi import APIRouter, File, Form, Request, Response, UploadFile
 from PIL import Image
-import numpy as np
+from starlette.concurrency import run_in_threadpool
 
 from app.core.errors import InvalidImageException
 from app.schemas.inpaint import InpaintRegionRequest, MaskGenerateRequest
@@ -12,6 +15,39 @@ from app.services.inpainting.manager import inpainting_manager
 from app.services.inpainting.mask_generator import MaskGenerator
 
 router = APIRouter(tags=["Inpainting & Text Erasure"])
+
+
+def _build_mask_and_inpaint(
+    image_bytes: bytes,
+    mask_bytes: Optional[bytes],
+    regions_payload: Optional[str],
+    width: int,
+    height: int,
+    dilation: int,
+    engine_name: str,
+    radius: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """CPU-bound part of /inpaint/process (executed in the threadpool)."""
+
+    with Image.open(io.BytesIO(image_bytes)) as pil_img:
+        img_rgb = np.array(pil_img.convert("RGB"))
+
+    if mask_bytes is not None:
+        binary_mask = MaskGenerator.bytes_to_mask(mask_bytes, width, height)
+    elif regions_payload:
+        parsed = json.loads(regions_payload)
+        parsed_regions = [InpaintRegionRequest(**item) for item in parsed]
+        binary_mask = MaskGenerator.create_mask_from_regions(
+            width, height, parsed_regions, global_dilation_px=dilation
+        )
+    else:
+        raise InvalidImageException(
+            "Either 'mask' binary file or 'regions_json' coordinate array must be provided."
+        )
+
+    engine = inpainting_manager.get_engine(engine_name)
+    cleaned_rgb = engine.inpaint(img_rgb, binary_mask, radius=radius)
+    return cleaned_rgb, binary_mask
 
 
 @router.post("/inpaint/process")
@@ -34,45 +70,45 @@ async def process_inpaint(
     effective_regions_str = regions or regions_json
     effective_dilation = dilation if dilation is not None else (dilation_px if dilation_px is not None else 3)
 
-    # 1. Validate source image
-    validation_info = await validate_image_upload(upload_file)
+    # 1. Validate source image (header/size/bounds; the worker decodes it once)
+    validation_info = await validate_image_upload(upload_file, full_decode=False)
     width = validation_info.width
     height = validation_info.height
 
     await upload_file.seek(0)
     image_bytes = await upload_file.read()
+    mask_bytes = await mask.read() if mask is not None else None
 
-    # Load source image into RGB array
-    with Image.open(io.BytesIO(image_bytes)) as pil_img:
-        img_rgb = np.array(pil_img.convert("RGB"))
-
-    # 2. Resolve or generate binary mask
-    if mask is not None:
-        mask_bytes = await mask.read()
-        binary_mask = MaskGenerator.bytes_to_mask(mask_bytes, width, height)
-    elif effective_regions_str:
-        try:
-            parsed = json.loads(effective_regions_str)
-            parsed_regions = [InpaintRegionRequest(**item) for item in parsed]
-        except Exception as exc:
-            raise InvalidImageException(f"Invalid regions JSON format: {exc}") from exc
-        binary_mask = MaskGenerator.create_mask_from_regions(
-            width, height, parsed_regions, global_dilation_px=effective_dilation
-        )
-    else:
+    if not effective_regions_str and mask_bytes is None:
         raise InvalidImageException(
             "Either 'mask' binary file or 'regions_json' coordinate array must be provided."
         )
 
-    # 3. Execute inpainting via selected engine
-    inpaint_engine = inpainting_manager.get_engine(engine)
-    cleaned_rgb = inpaint_engine.inpaint(img_rgb, binary_mask, radius=inpaint_radius)
+    started = time.perf_counter()
+    try:
+        cleaned_rgb, _binary_mask = await run_in_threadpool(
+            _build_mask_and_inpaint,
+            image_bytes,
+            mask_bytes,
+            effective_regions_str,
+            width,
+            height,
+            effective_dilation,
+            engine,
+            inpaint_radius,
+        )
+    except InvalidImageException:
+        raise
+    except Exception as exc:
+        raise InvalidImageException(f"Invalid regions JSON format: {exc}") from exc
 
-    # 4. Encode cleaned image to PNG
+    # Encode cleaned image to PNG.  Level 1 is much faster than optimize=True
+    # on full comic pages and visually lossless.
     cleaned_pil = Image.fromarray(cleaned_rgb, mode="RGB")
     out_buf = io.BytesIO()
-    cleaned_pil.save(out_buf, format="PNG", optimize=True)
+    cleaned_pil.save(out_buf, format="PNG", compress_level=1)
     cleaned_bytes = out_buf.getvalue()
+    duration_ms = round((time.perf_counter() - started) * 1000.0, 2)
 
     return Response(
         content=cleaned_bytes,
@@ -80,8 +116,8 @@ async def process_inpaint(
         headers={
             "X-Cleaned-Width": str(width),
             "X-Cleaned-Height": str(height),
-            "X-Inpaint-Engine": inpaint_engine.name,
-            "X-Inpaint-Duration-Ms": "0",
+            "X-Inpaint-Engine": inpainting_manager.get_engine(engine).name,
+            "X-Inpaint-Duration-Ms": str(int(round(duration_ms))),
         },
     )
 

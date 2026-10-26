@@ -1,14 +1,29 @@
+import json
 import time
 from typing import Optional
+
 from fastapi import APIRouter, File, Form, UploadFile
-from PIL import Image
-import io
+from starlette.concurrency import run_in_threadpool
 
 from app.schemas.ocr import OCRDetectResponse
 from app.services.image_validator import validate_image_upload
 from app.services.ocr.manager import ocr_manager
 
 router = APIRouter(tags=["OCR & Text Detection"])
+
+
+def _parse_languages(raw: Optional[str]) -> Optional[list[str]]:
+    if not raw:
+        return None
+    raw = raw.strip()
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except Exception:
+            pass
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 @router.post("/ocr/detect", response_model=OCRDetectResponse)
@@ -19,25 +34,30 @@ async def detect_text(
     engine: Optional[str] = Form(None),
     languages: Optional[str] = Form(None),
 ) -> OCRDetectResponse:
-    """Run real OCR detection and dialogue text extraction on a comic image page."""
+    """Run OCR detection and dialogue text extraction on a comic image page.
+
+    CPU-heavy inference runs in the threadpool so the API event loop stays
+    responsive (health checks and concurrent erase requests keep working).
+    """
+
     start_time = time.perf_counter()
     effective_direction = reading_order or reading_direction or "rtl"
 
-    # Reuse Phase 1 validated upload pipeline (checks 50MB stream limit, bounds 10..16384, format)
+    # Reuse Phase 1 validated upload pipeline (50MB stream limit, bounds, format)
     validation_info = await validate_image_upload(file)
-
-    # Reset file cursor to read bytes for OCR
     await file.seek(0)
     image_bytes = await file.read()
 
-    selected_engine = ocr_manager.get_engine(engine)
-    lang_list = [lang.strip() for lang in languages.split(",")] if languages else None
+    # Model initialisation can download/cache weights on first use; do it off
+    # the event loop as well.
+    selected_engine = await run_in_threadpool(ocr_manager.get_engine, engine)
+    lang_list = _parse_languages(languages)
 
-    # Execute OCR detection and recognition
-    regions = selected_engine.detect_and_recognize(
-        image_bytes=image_bytes,
-        reading_direction=effective_direction,
-        languages=lang_list,
+    regions = await run_in_threadpool(
+        selected_engine.detect_and_recognize,
+        image_bytes,
+        effective_direction,
+        lang_list,
     )
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0

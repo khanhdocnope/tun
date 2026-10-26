@@ -23,11 +23,17 @@ MIN_DIMENSION = 10
 MAX_DIMENSION = 16384
 
 
-async def validate_image_upload(file: UploadFile) -> ImageValidationResponse:
+async def validate_image_upload(
+    file: UploadFile, full_decode: bool = True
+) -> ImageValidationResponse:
     """Validate an uploaded image file for size, format, dimensions, and integrity.
 
     Args:
         file: UploadFile from multipart/form-data request.
+        full_decode: When True (default, used by /images/validate) the complete
+            raster is decoded to reject truncated bitstreams.  OCR and inpainting
+            callers set this to False because they decode the image once themselves,
+            which avoids a redundant full-image decode on large webtoon pages.
 
     Returns:
         ImageValidationResponse containing image metadata if valid.
@@ -90,16 +96,19 @@ async def validate_image_upload(file: UploadFile) -> ImageValidationResponse:
             "Invalid or corrupt image file. Only PNG, JPEG, and WebP are allowed."
         ) from exc
 
-    # Perform full raster decode to detect corrupt/truncated bitstreams
-    try:
-        with Image.open(io.BytesIO(file_bytes)) as full_img:
-            full_img.load()
-    except AppException:
-        raise
-    except Exception as exc:
-        raise InvalidImageException(
-            "Invalid or corrupt image file. Only PNG, JPEG, and WebP are allowed."
-        ) from exc
+    # Perform full raster decode to detect corrupt/truncated bitstreams.  The
+    # OCR/inpaint endpoints skip this step because they decode the image again
+    # in their own worker anyway.
+    if full_decode:
+        try:
+            with Image.open(io.BytesIO(file_bytes)) as full_img:
+                full_img.load()
+        except AppException:
+            raise
+        except Exception as exc:
+            raise InvalidImageException(
+                "Invalid or corrupt image file. Only PNG, JPEG, and WebP are allowed."
+            ) from exc
 
     filename = file.filename or "unknown_image"
     content_type = FORMAT_TO_MIME[img_format]

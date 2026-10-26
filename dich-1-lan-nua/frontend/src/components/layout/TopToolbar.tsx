@@ -25,7 +25,7 @@ import { ToolType } from '../../types/canvas';
 import { ReaderMode } from '../../types/reader';
 import { usePage, useTextRegions } from '../../db/hooks';
 import { db } from '../../db';
-import { detectOCR, processInpaint } from '../../services/api';
+import { detectOCR, eraseTextInRegion } from '../../services/api';
 import { generateUUID } from '../../db/importExport';
 import { TextRegion } from '../../types/region';
 import { ServerSettingsModal } from './ServerSettingsModal';
@@ -187,7 +187,6 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
     }
   };
 
-  // Erase text via Inpainting
   const handleRunInpaint = async () => {
     if (!page || !page.sourceBlob || isInpaintingLoading) return;
     const currentRegions = regions || [];
@@ -200,19 +199,20 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
     }
 
     setIsInpaintingLoading(true);
-    setStatusMessage({ text: 'Inpainting and erasing dialogue bubbles...', type: 'info' });
+    setStatusMessage({ text: 'Erasing text regions...', type: 'info' });
 
     try {
-      const inpaintRegions = currentRegions.map((r) => ({
-        x: r.box.x,
-        y: r.box.y,
-        width: r.box.width,
-        height: r.box.height,
-        polygon: r.polygon,
-      }));
+      const currentBlob: Blob = page.sourceBlob;
 
-      const res = await processInpaint(page.sourceBlob, {
-        regions: inpaintRegions,
+      const regionsInput: [number, number, number, number][] = currentRegions.map((r) => [
+        r.box.x,
+        r.box.y,
+        r.box.width,
+        r.box.height,
+      ]);
+
+      const res = await eraseTextInRegion(currentBlob, {
+        regions: regionsInput,
         dilation: maskDilation,
         engine: selectedInpaintEngine,
       });
@@ -224,12 +224,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
 
       setActiveLayer('split');
       setStatusMessage({
-        text: `Inpainting complete (${res.engine}, ${res.durationMs}ms). Showing Split view.`,
+        text: `Erasing complete (${res.textBoxes} text box(es), ${res.engine}). Showing Split view.`,
         type: 'success',
       });
     } catch (err: any) {
       setStatusMessage({
-        text: `Inpainting failed: ${err.message || 'Processing error'}`,
+        text: `Erasing failed: ${err.message || 'Processing error'}`,
         type: 'error',
       });
     } finally {

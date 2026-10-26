@@ -1,3 +1,7 @@
+import logging
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,12 +17,42 @@ from app.core.errors import (
     validation_exception_handler,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _warm_ocr_in_background() -> None:
+    """Load OCR/ONNX sessions before the first user request.
+
+    Runs in a daemon thread so a slow model download never delays startup or
+    blocks the health endpoint on Hugging Face Spaces.
+    """
+
+    try:
+        from app.services.ocr.manager import ocr_manager
+
+        engine = ocr_manager.get_engine("rapidocr")
+        warmup = getattr(engine, "warmup", None)
+        if callable(warmup):
+            warmup()
+    except Exception as exc:  # pragma: no cover - optional warmup
+        logger.warning("Background OCR warmup skipped: %s", exc)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    threading.Thread(
+        target=_warm_ocr_in_background, name="ocr-warmup", daemon=True
+    ).start()
+    yield
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    lifespan=lifespan,
 )
 
 # Configure CORS Middleware

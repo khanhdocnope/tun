@@ -13,10 +13,10 @@ license: mit
 # Comic Translation Studio — Backend API (Hugging Face Space)
 
 FastAPI + Gradio ASGI server (100% Free Tier Compatible on Hugging Face Spaces):
-- High-speed Multilingual Comic OCR (RapidOCR ONNX: Japanese, Korean, Chinese, English)
-- Automated Speech Bubble & Text Detection with Reading Order calculation (RTL for Manga, LTR for Webtoon)
-- Morphological Mask Generation with customizable padding/dilation
-- CPU-Optimized Inpainting (OpenCV Fast Marching `TELEA` & Navier-Stokes `NS`)
+- Manga-tuned RapidOCR ONNX (detector recall 7 → 27+ lines on the sample page, vertical columns rotated, PP-OCRv5 multilingual recognition)
+- Automated Speech Bubble & Text Detection with bubble-aware reading order (RTL for Manga, LTR for Webtoon)
+- Pixel-accurate text masks + flat-bubble fill (no grey ghosting, no 200 MB LaMa download on the hot path)
+- CPU-Optimized Inpainting (OpenCV `TELEA` & `NS`, optional pre-installed LaMa)
 - Streaming Image Validation (whitelisting PNG/JPEG/WebP, bounds 10–16384px, 50MB ceiling)
 
 ## Free Hugging Face Spaces Deployment (Gradio SDK)
@@ -31,5 +31,6 @@ FastAPI + Gradio ASGI server (100% Free Tier Compatible on Hugging Face Spaces):
 - `GET /api/v1/capabilities` — Available engines and system limits
 - `POST /api/v1/upload/validate` — Image upload & raster decode validation
 - `POST /api/v1/ocr/detect` — Real OCR detection and text extraction
-- `POST /api/v1/inpaint/process` — Text erasure and background inpainting
+- `POST /api/v1/inpaint/process` — Rectangle-mask inpainting (legacy API)
+- `POST /api/v1/erase-text-in-region` — Pixel-mask smart erase (PNG lossless by default; `output_format=webp` lossless or `jpeg` q98)
 - `POST /api/v1/mask/generate` — Binary mask preview generation

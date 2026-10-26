@@ -30,7 +30,14 @@ export interface StudioState {
   splitSliderPos: number; // 0 to 100 percentage
   maskDilation: number; // 0 to 20 px
   selectedOcrEngine: string;
-  selectedInpaintEngine: 'opencv_telea' | 'opencv_ns';
+  selectedInpaintEngine:
+    | 'auto'
+    | 'flat'
+    | 'texture'
+    | 'flatten'
+    | 'lama'
+    | 'opencv_telea'
+    | 'opencv_ns';
   readingOrderDirection: 'rtl' | 'ltr';
   statusMessage: StatusMessage | null;
 
@@ -60,7 +67,16 @@ export interface StudioState {
   setSplitSliderPos: (pos: number) => void;
   setMaskDilation: (dilation: number) => void;
   setSelectedOcrEngine: (engine: string) => void;
-  setSelectedInpaintEngine: (engine: 'opencv_telea' | 'opencv_ns') => void;
+  setSelectedInpaintEngine: (
+    engine:
+      | 'auto'
+      | 'flat'
+      | 'texture'
+      | 'flatten'
+      | 'lama'
+      | 'opencv_telea'
+      | 'opencv_ns'
+  ) => void;
   setReadingOrderDirection: (direction: 'rtl' | 'ltr') => void;
   setStatusMessage: (msg: StatusMessage | null) => void;
 }
@@ -83,9 +99,9 @@ const initialState = {
   isInpaintingLoading: false,
   activeLayer: 'original' as LayerMode,
   splitSliderPos: 50,
-  maskDilation: 3,
+  maskDilation: 5,
   selectedOcrEngine: 'rapidocr',
-  selectedInpaintEngine: 'opencv_telea' as const,
+  selectedInpaintEngine: 'auto' as const,
   readingOrderDirection: 'rtl' as const,
   statusMessage: null as StatusMessage | null,
 };

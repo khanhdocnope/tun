@@ -296,8 +296,79 @@ export async function processInpaint(
 }
 
 /**
- * Generate binary mask from regions
+ * Smart erase: detect text inside a user-selected region and erase only text pixels.
+ * Uses backend /api/v1/erase-text-in-region (LaMa/OpenCV + contour-preserving mask).
  */
+export async function eraseTextInRegion(
+  imageBlob: Blob,
+  options: {
+    regions: [number, number, number, number][]; // list of [x, y, w, h]
+    dilation?: number;
+    engine?:
+      | 'auto'
+      | 'flat'
+      | 'texture'
+      | 'flatten'
+      | 'lama'
+      | 'opencv_telea'
+      | 'opencv_ns';
+    outputFormat?: 'png' | 'webp' | 'jpeg';
+    baseUrl?: string;
+  }
+): Promise<{
+  cleanedBlob: Blob;
+  engine: string;
+  textBoxes: number;
+  maskCoverage: number;
+  elapsedMs: number;
+  status: string;
+}> {
+  const baseUrl = options.baseUrl || getBackendUrl();
+  const formData = new FormData();
+  const filename = (imageBlob as File).name || 'comic_page.png';
+  formData.append('file', imageBlob, filename);
+  formData.append('regions', JSON.stringify(options.regions));
+  // Default to lossless PNG so the cleaned artwork keeps every pixel.  Clients
+  // can explicitly request 'webp' (lossless) or 'jpeg' (q98, lossy) to save
+  // bandwidth when quality is less critical.
+  formData.append('output_format', options.outputFormat || 'png');
+  if (options.dilation !== undefined) {
+    formData.append('dilation', options.dilation.toString());
+  }
+  if (options.engine) {
+    formData.append('engine', options.engine);
+  }
+
+  const res = await fetch(`${baseUrl}/api/v1/erase-text-in-region`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let errorDetail = `HTTP ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.error?.message) {
+        errorDetail = errJson.error.message;
+      } else if (errJson?.detail) {
+        errorDetail = errJson.detail;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(`Smart erase failed: ${errorDetail}`);
+  }
+
+  const cleanedBlob = await res.blob();
+  return {
+    cleanedBlob,
+    engine: res.headers.get('X-SmartErase-Engine') || options.engine || 'auto',
+    textBoxes: Number(res.headers.get('X-SmartErase-Text-Boxes') || 0),
+    maskCoverage: Number(res.headers.get('X-SmartErase-Mask-Coverage') || 0),
+    elapsedMs: Number(res.headers.get('X-SmartErase-Elapsed-Ms') || 0),
+    status: res.headers.get('X-SmartErase-Status') || 'ok',
+  };
+}
 export async function generateMask(
   width: number,
   height: number,

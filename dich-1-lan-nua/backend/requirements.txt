@@ -4,7 +4,10 @@ pydantic>=2.6.0
 pillow>=10.2.0
 numpy>=1.26.0
 opencv-python-headless>=4.9.0
-rapidocr-onnxruntime>=1.3.0
+# Pinned: the tuned engine imports the stable ch_ppocr_v3_det/rec modules.
+# A newer wheel can move those internals; the engine falls back gracefully but
+# with lower recognition quality, so keep the validated version.
+rapidocr-onnxruntime==1.2.3
 onnxruntime>=1.17.0
 httpx>=0.27.0
 pytest>=8.1.0

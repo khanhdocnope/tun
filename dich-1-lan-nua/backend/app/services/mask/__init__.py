@@ -1,0 +1,1 @@
+"""Mask helpers for smart erase (contour-preserving dilation, white-halo snap)."""

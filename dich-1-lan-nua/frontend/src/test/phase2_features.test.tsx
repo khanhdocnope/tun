@@ -109,6 +109,41 @@ describe('Phase 2 Frontend Features & Studio Integration', () => {
       expect(result.durationMs).toBe(15);
       expect(result.cleanedBlob).toBeInstanceOf(Blob);
     });
+
+    it('eraseTextInRegion calls smart erase endpoint and parses headers', async () => {
+      const cleanedPngBytes = new Uint8Array([137, 80, 78, 71]);
+      vi.spyOn(global, 'fetch').mockImplementationOnce(async (url, init) => {
+        expect(url).toContain('/api/v1/erase-text-in-region');
+        const body = init?.body as FormData;
+        expect(body.get('region')).toBeNull();
+        expect(body.get('regions')).toBe(JSON.stringify([[10, 10, 40, 30]]));
+        return new Response(cleanedPngBytes, {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/png',
+            'X-SmartErase-Engine': 'lama',
+            'X-SmartErase-Text-Boxes': '2',
+            'X-SmartErase-Mask-Coverage': '1.5',
+            'X-SmartErase-Elapsed-Ms': '100',
+            'X-SmartErase-Status': 'ok',
+          },
+        });
+      });
+
+      const fakeBlob = new Blob(['fake image bytes'], { type: 'image/png' });
+      const result = await api.eraseTextInRegion(fakeBlob, {
+        regions: [[10, 10, 40, 30]],
+        dilation: 6,
+        engine: 'lama',
+      });
+
+      expect(result.engine).toBe('lama');
+      expect(result.textBoxes).toBe(2);
+      expect(result.maskCoverage).toBe(1.5);
+      expect(result.elapsedMs).toBe(100);
+      expect(result.status).toBe('ok');
+      expect(result.cleanedBlob).toBeInstanceOf(Blob);
+    });
   });
 
   describe('ServerSettingsModal Component', () => {

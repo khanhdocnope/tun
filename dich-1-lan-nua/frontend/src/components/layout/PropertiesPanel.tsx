@@ -21,7 +21,7 @@ import { usePage, useTextRegions } from '../../db/hooks';
 import { db } from '../../db';
 import { TextRegion, TextRegionStatus, ReadingDirectionType } from '../../types/region';
 import { PageStatus } from '../../types/project';
-import { processInpaint } from '../../services/api';
+import { processInpaint, eraseTextInRegion } from '../../services/api';
 
 export const PropertiesPanel: React.FC = () => {
   const {
@@ -134,18 +134,15 @@ export const PropertiesPanel: React.FC = () => {
     });
 
     try {
-      const singleRegionInput = [
-        {
-          x: selectedRegion.box.x,
-          y: selectedRegion.box.y,
-          width: selectedRegion.box.width,
-          height: selectedRegion.box.height,
-          polygon: selectedRegion.polygon,
-        },
+      const region: [number, number, number, number] = [
+        selectedRegion.box.x,
+        selectedRegion.box.y,
+        selectedRegion.box.width,
+        selectedRegion.box.height,
       ];
 
-      const res = await processInpaint(page.cleanedBlob || page.sourceBlob, {
-        regions: singleRegionInput,
+      const res = await eraseTextInRegion(page.cleanedBlob || page.sourceBlob, {
+        regions: [region],
         dilation: maskDilation,
         engine: selectedInpaintEngine,
       });
@@ -157,7 +154,7 @@ export const PropertiesPanel: React.FC = () => {
 
       setActiveLayer('split');
       setStatusMessage({
-        text: `Bubble #${selectedRegion.orderIndex} erased successfully (${res.engine}).`,
+        text: `Bubble #${selectedRegion.orderIndex} erased (${res.engine}, ${res.textBoxes} text box(es)).`,
         type: 'success',
       });
     } catch (err: any) {

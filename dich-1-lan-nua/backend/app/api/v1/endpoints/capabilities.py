@@ -17,7 +17,15 @@ router = APIRouter(tags=["Capabilities"])
 async def get_capabilities() -> CapabilitiesResponse:
     """Return configured and available engines, providers, and upload constraints."""
     ocr_avail = list(dict.fromkeys(["rapidocr", "easyocr", "contour"] + ocr_manager.get_available_engines()))
-    inpaint_avail = inpainting_manager.get_available_engines()
+    # "auto" and "flat" are mask/fill strategies used by /erase-text-in-region;
+    # they are listed alongside the classical inpainting engines for the UI.
+    inpaint_avail = list(
+        dict.fromkeys(
+            ["auto", "flat", "texture", "flatten"]
+            + inpainting_manager.get_available_engines()
+            + ["lama"]
+        )
+    )
 
     return CapabilitiesResponse(
         ocr=OCROptions(

@@ -10,3 +10,6 @@ build
 storage/temp/*
 !storage/temp/.gitkeep
 .agents
+raw-test/
+.tmp-lama/
+*.onnx

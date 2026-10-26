@@ -144,7 +144,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <span>Hugging Face Free Tier Optimizations</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              The backend uses CPU-friendly ONNXRuntime RapidOCR and OpenCV Inpainting algorithms (Telea & Navier-Stokes) designed for 2 vCPU / 16 GB free spaces with zero cold-boot crashes.
+              The backend uses a manga-tuned ONNXRuntime OCR pipeline and pixel-accurate flat-bubble erasing, with OpenCV Telea/Navier-Stokes as optional fallbacks for textured artwork. Designed for 2 vCPU / 16 GB free spaces.
             </p>
           </div>
 
@@ -175,6 +175,11 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 onChange={(e) => setSelectedInpaintEngine(e.target.value as any)}
                 className="w-full bg-[#121316] border border-[#272930] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
               >
+                <option value="auto">Auto (flat fill + flatten transparent bubbles)</option>
+                <option value="flat">Flat fill (fastest, clean bubbles)</option>
+                <option value="texture">Texture fill (preserve grid/pattern)</option>
+                <option value="flatten">Flatten bubble (solid clean background)</option>
+                <option value="lama">LaMa (AI, optional)</option>
                 <option value="opencv_telea">Telea (Fast Marching)</option>
                 <option value="opencv_ns">Navier-Stokes (Fluid PDE)</option>
               </select>

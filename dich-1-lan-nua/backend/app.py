@@ -96,8 +96,20 @@ with gr.Blocks(
 # - block_thread() giu process song tren HF
 if __name__ == "__main__":
     import os
+    import threading
 
     from app.api.v1.router import api_v1_router
+
+    def _warm_models() -> None:
+        try:
+            engine = ocr_manager.get_engine("rapidocr")
+            warmup = getattr(engine, "warmup", None)
+            if callable(warmup):
+                warmup()
+        except Exception:
+            pass
+
+    threading.Thread(target=_warm_models, name="ocr-warmup", daemon=True).start()
 
     port = int(os.getenv("PORT", "7860"))
 
