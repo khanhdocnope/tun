@@ -21,11 +21,14 @@ async def test_health_check_success(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_root_endpoint_success(client: AsyncClient) -> None:
-    """Test that GET / returns service information and docs URL."""
+    """GET / serves the built-in UI, GET /status returns the JSON service info."""
     response = await client.get("/")
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
 
-    data = response.json()
+    status = await client.get("/status")
+    assert status.status_code == 200
+    data = status.json()
     assert data["service"] == "Comic Translation Studio"
     assert data["status"] == "online"
     assert data["docs"] == "/docs"

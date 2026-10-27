@@ -19,11 +19,12 @@ async def get_capabilities() -> CapabilitiesResponse:
     ocr_avail = list(dict.fromkeys(["rapidocr", "easyocr", "contour"] + ocr_manager.get_available_engines()))
     # "auto" and "flat" are mask/fill strategies used by /erase-text-in-region;
     # they are listed alongside the classical inpainting engines for the UI.
+    # "lama" is contributed by the manager only when torch + the checkpoint are
+    # installed, so the UI never offers an engine that cannot run.
     inpaint_avail = list(
         dict.fromkeys(
             ["auto", "flat", "texture", "flatten"]
             + inpainting_manager.get_available_engines()
-            + ["lama"]
         )
     )
 

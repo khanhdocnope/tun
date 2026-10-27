@@ -24,7 +24,9 @@ from app.services.inpainting.smart_erase import smart_erase  # noqa: E402
 from app.services.ocr.manager import ocr_manager  # noqa: E402
 
 
-def run_page(path: Path, out_dir: Path, direction: str = "rtl") -> dict:
+def run_page(
+    path: Path, out_dir: Path, direction: str = "rtl", engine_name: str = "auto"
+) -> dict:
     image_bytes = path.read_bytes()
     engine = ocr_manager.get_engine("rapidocr")
 
@@ -39,12 +41,14 @@ def run_page(path: Path, out_dir: Path, direction: str = "rtl") -> dict:
 
     started = time.perf_counter()
     cleaned_png, stats = smart_erase(
-        image_bytes, boxes, dilation=5, engine_name="auto"
+        image_bytes, boxes, dilation=5, engine_name=engine_name
     )
     erase_ms = (time.perf_counter() - started) * 1000.0
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / f"{path.stem}_cleaned.png").write_bytes(cleaned_png)
+    (out_dir / f"{path.stem}_{stats.get('engine_used')}_cleaned.png").write_bytes(
+        cleaned_png
+    )
 
     print(f"\n=== {path.name} ({len(image_bytes)/1024:.0f} KB) ===")
     print(
@@ -65,7 +69,7 @@ def run_page(path: Path, out_dir: Path, direction: str = "rtl") -> dict:
         f"mask={stats.get('mask_coverage_pct')}%  "
         f"flat={stats.get('flat_regions')} textured={stats.get('textured_regions')}"
     )
-    print(f"wrote {out_dir / (path.stem + '_cleaned.png')}")
+    print(f"wrote {out_dir / (path.stem + '_' + str(stats.get('engine_used')) + '_cleaned.png')}")
     return {
         "page": path.name,
         "ocr_ms": round(ocr_ms, 1),
@@ -93,6 +97,11 @@ def main() -> int:
         choices=["rtl", "ltr"],
         help="Reading order for manga (rtl) or webtoon (ltr)",
     )
+    parser.add_argument(
+        "--engine",
+        default="auto",
+        help="smart_erase engine: auto | lama | texture | flat | opencv_telea",
+    )
     args = parser.parse_args()
 
     root = BACKEND_DIR.parent
@@ -106,7 +115,9 @@ def main() -> int:
         return 1
 
     out_dir = root / args.out
-    summaries = [run_page(path, out_dir, args.direction) for path in images]
+    summaries = [
+        run_page(path, out_dir, args.direction, args.engine) for path in images
+    ]
     print("\nSummary")
     for item in summaries:
         print(

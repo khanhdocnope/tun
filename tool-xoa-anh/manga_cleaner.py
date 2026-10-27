@@ -1,11 +1,15 @@
 """
-Manga Cleaner core (v2).
+Manga Cleaner core (v3) - chat/SFX aware text removal.
 
-Chat vs SFX is decided by a dedicated region detector (ogkalu RT-DETR-v2:
-text_bubble vs text_free), NOT by colour / ray-casting heuristics.
-Pixels come from ComicTextDetector's `seg` head, limited to those regions.
-Bubble outlines are protected by a connected-component barrier, uniform white
-bubbles are flat-filled (no AI), everything else goes through Big-LaMa.
+Pipeline per page:
+  1. RT-DETR region gate (ogkalu/comic-text-bubble-detector) -> chat vs SFX boxes. GPU.
+  2. ONE ZeroGPU window runs the whole page: region detect (unless already done), the
+     ComicTextDetector `seg` head and the LaMa inpainting crops. The old layout moved the
+     detectors to CPU and paid ~40 s per page for `seg`.
+  3. Low-resolution `seg` first: if every bubble sits on bright paper, flat-fill paints them
+     with a solid colour and the full-resolution `seg` pass is skipped entirely.
+  4. Bubble outlines are protected by the ink barrier in `mask_logic`; anything that is not
+     flat paper goes through LaMa on small crops around the erased strokes.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import gc
 import logging
 import math
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -24,7 +29,7 @@ import torch
 from PIL import Image, ImageOps
 
 from bubble_detector import BubbleTextDetector
-from mask_logic import CLS_TEXT_BUBBLE, CLS_TEXT_FREE, Det, MaskSet, build_masks, flat_fill_uniform_paper
+from mask_logic import CLS_TEXT_BUBBLE, CLS_TEXT_FREE, Det, MaskSet, build_masks, flat_fill_uniform_paper, flat_paper_hint
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("manga_cleaner.core")
@@ -52,6 +57,7 @@ ANIME_LAMA_PT_PATH = MODEL_DIR / "anime-manga-big-lama.pt"
 BIG_LAMA_PT_PATH = MODEL_DIR / "big-lama.pt"
 
 _LAMA_CPU_MODELS: Dict[str, Any] = {}
+
 
 def _detect_cpu_threads() -> int:
     env_threads = os.getenv("CPU_THREADS")
@@ -100,11 +106,17 @@ def _detect_cpu_threads() -> int:
 # ------------------------------------------------------------------ tuning knobs (env overridable)
 CPU_THREADS = _detect_cpu_threads()
 torch.set_num_threads(CPU_THREADS)
-INPAINT_CTX_PX = int(os.getenv("INPAINT_CONTEXT_PX", "96"))      # context kept around every erased region
+INPAINT_CTX_PX = int(os.getenv("INPAINT_CONTEXT_PX", "64"))       # context kept around every erased region
 INPAINT_MOD = 32                                                  # pad crops to a multiple of 32 (fewer distinct shapes)
-FULL_PAGE_RATIO = 0.6                                             # crops cover >= 60% of page -> just do the page
-DETECT_ON_GPU = os.getenv("DETECT_ON_GPU", "auto").lower()        # "0" | "1" | "auto" (GPU only for tall strips)
-TALL_DETECT_RATIO = 3.0
+FULL_PAGE_RATIO = float(os.getenv("FULL_PAGE_RATIO", "0.35"))      # crops cover >= 35% of page -> just do the page
+SEG_DEVICE = os.getenv("SEG_DEVICE", "auto").lower()               # "auto" | "gpu" | "cpu"
+SEG_SIZE = int(os.getenv("SEG_SIZE", "1024"))                     # ComicTextDetector input size
+SEG_LOW_SIZE = int(os.getenv("SEG_LOW_SIZE", "512"))              # cheap paper-check pass before the full-res seg
+GPU_DURATION = int(os.getenv("GPU_DURATION", "30"))               # ZeroGPU window per page (seconds)
+
+# One page at a time: the detectors / LaMa are process-wide singletons and moving them
+# between devices while another request is mid-flight corrupts results.
+MODEL_LOCK = threading.Lock()
 
 
 # ----------------------------------------------------------------------------- Multi-model Inpainting
@@ -153,40 +165,22 @@ def norm_img(a: np.ndarray) -> np.ndarray:
     return np.transpose(a, (2, 0, 1)).astype("float32") / 255.0
 
 
-def _inpaint_forward(img_rgb: np.ndarray, mask: np.ndarray, dev: str, model_name: str = "anime-lama") -> np.ndarray:
-    # 1. OpenCV Classical Methods (Fast & Instant CPU)
-    if "telea" in model_name.lower():
-        img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-        return cv2.inpaint(img_bgr, mask, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
-    elif "ns" in model_name.lower():
-        img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-        return cv2.inpaint(img_bgr, mask, inpaintRadius=3, flags=cv2.INPAINT_NS)
-
-    # 2. Deep Learning TorchScript LaMa Models
-    model = get_lama_model(model_name).to(dev)
+def _cpu_lama_jobs(jobs: List[Tuple[np.ndarray, np.ndarray]], model_name: str) -> List[np.ndarray]:
+    """CPU path for LaMa (no GPU available / ZeroGPU refused the job). Returns BGR crops."""
+    model = get_lama_model(model_name)
+    out: List[np.ndarray] = []
     try:
-        img_t = torch.from_numpy(norm_img(img_rgb)).unsqueeze(0).to(dev)
-        msk_t = torch.from_numpy((norm_img(mask) > 0).astype(np.float32)).unsqueeze(0).to(dev)
         with torch.inference_mode():
-            out = model(img_t, msk_t)
-        res = np.clip(out[0].permute(1, 2, 0).cpu().numpy() * 255.0, 0, 255).astype(np.uint8)
-        return cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
+            for img, mask in jobs:
+                ch, cw = mask.shape[:2]
+                pi, pm = pad_img_to_modulo(img, INPAINT_MOD), pad_img_to_modulo(mask, INPAINT_MOD)
+                img_t = torch.from_numpy(norm_img(pi)).unsqueeze(0)
+                msk_t = torch.from_numpy((norm_img(pm) > 0).astype(np.float32)).unsqueeze(0)
+                res = np.clip(model(img_t, msk_t)[0].permute(1, 2, 0).cpu().numpy() * 255.0, 0, 255)
+                out.append(cv2.cvtColor(res.astype(np.uint8)[:ch, :cw], cv2.COLOR_RGB2BGR))
     finally:
-        if dev != "cpu":
-            model.to("cpu")
-            torch.cuda.empty_cache()
         gc.collect()
-
-
-def cpu_lama_forward(img_rgb: np.ndarray, mask: np.ndarray, model_name: str = "anime-lama") -> np.ndarray:
-    return _inpaint_forward(img_rgb, mask, "cpu", model_name=model_name)
-
-
-@spaces.GPU(duration=15)
-def zero_gpu_lama_forward(img_rgb: np.ndarray, mask: np.ndarray, model_name: str = "anime-lama") -> np.ndarray:
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
-    return _inpaint_forward(img_rgb, mask, dev, model_name=model_name)
-
+    return out
 
 
 # ------------------------------------------------------------------ region-based inpainting
@@ -234,7 +228,7 @@ def _plan_crops(mask: np.ndarray, ctx: int = INPAINT_CTX_PX, ds: int = 4) -> Lis
     return [tuple(r) for r in rects]  # type: ignore[misc]
 
 
-def _inpaint_crop(model, img_rgb: np.ndarray, mask: np.ndarray, dev: str) -> np.ndarray:
+def _lama_crop(model, img_rgb: np.ndarray, mask: np.ndarray, dev: str) -> np.ndarray:
     ch, cw = mask.shape[:2]
     pi, pm = pad_img_to_modulo(img_rgb, INPAINT_MOD), pad_img_to_modulo(mask, INPAINT_MOD)
     img_t = torch.from_numpy(norm_img(pi)).unsqueeze(0).to(dev)
@@ -245,39 +239,20 @@ def _inpaint_crop(model, img_rgb: np.ndarray, mask: np.ndarray, dev: str) -> np.
     return cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
 
 
-def _inpaint_jobs_forward(jobs: List[Tuple[np.ndarray, np.ndarray]], dev: str, model_name: str) -> List[np.ndarray]:
-    """Inpaint every (crop_rgb, crop_mask) job. Returns BGR crops. One model move per page, not per crop."""
-    low = model_name.lower()
-    if "telea" in low or "ns" in low:
-        flag = cv2.INPAINT_TELEA if "telea" in low else cv2.INPAINT_NS
-        return [cv2.inpaint(cv2.cvtColor(im, cv2.COLOR_RGB2BGR), mk, inpaintRadius=3, flags=flag) for im, mk in jobs]
-    model = get_lama_model(model_name).to(dev)
-    try:
-        return [_inpaint_crop(model, im, mk, dev) for im, mk in jobs]
-    finally:
-        if dev != "cpu":
-            model.to("cpu")
-            torch.cuda.empty_cache()
-        gc.collect()
+def _cpu_classical_jobs(jobs: List[Tuple[np.ndarray, np.ndarray]], model_name: str) -> List[np.ndarray]:
+    flag = cv2.INPAINT_TELEA if "telea" in model_name.lower() else cv2.INPAINT_NS
+    return [cv2.inpaint(cv2.cvtColor(im, cv2.COLOR_RGB2BGR), mk, inpaintRadius=3, flags=flag) for im, mk in jobs]
 
 
-@spaces.GPU(duration=20)
-def zero_gpu_inpaint_jobs(jobs: List[Tuple[np.ndarray, np.ndarray]], model_name: str = "anime-lama") -> List[np.ndarray]:
-    """ONE ZeroGPU allocation per page, however many regions it has."""
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
-    return _inpaint_jobs_forward(jobs, dev, model_name)
-
-
-# ---------------------------------------------------------------- bubble detector (GPU-capable)
+# ---------------------------------------------------------------- bubble detector (shared instances)
 _BUBBLE = BubbleTextDetector()
 
 
-@spaces.GPU(duration=10)
-def zero_gpu_detect(img_rgb: np.ndarray, thr: float) -> List[Det]:
-    return _BUBBLE.detect(img_rgb, "cuda" if torch.cuda.is_available() else "cpu", thr)
+def _gpu_device() -> str:
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-# ------------------------------------------------------------------ CTD: seg head only
+# ------------------------------------------------------------------ CTD: seg head
 class ComicTextDetectorEngine:
     """ComicTextDetector used ONLY for its pixel-level `seg` head (character strokes)."""
 
@@ -329,14 +304,8 @@ class ComicTextDetectorEngine:
         except Exception as exc:  # noqa: BLE001
             logger.warning("ComicTextDetector init failed: %s", exc)
 
-    def seg_map(self, img_bgr: np.ndarray, size: int = 1024) -> np.ndarray:
-        h, w = img_bgr.shape[:2]
-        if not self.ready:
-            return np.zeros((h, w), np.float32)
-        r = min(size / h, size / w)
-        nw, nh = max(1, int(round(w * r))), max(1, int(round(h * r)))
-        im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR)
-        im = cv2.copyMakeBorder(im, 0, size - nh, 0, size - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+    def _forward(self, im: np.ndarray, size: int) -> np.ndarray:
+        """Raw seg/det probabilities for a padded `im` (side 1, size, size), squeezed to HxW."""
         if self.session is not None:
             blob = np.ascontiguousarray(im.transpose(2, 0, 1)[None], dtype=np.float32)
             blob *= (1.0 / 255.0)
@@ -353,14 +322,113 @@ class ComicTextDetectorEngine:
             elif out.ndim == 4 and out.shape[1] == 2:
                 det_prob = out[0, 0]
         if seg_prob is not None and det_prob is not None:
-            comb = np.maximum(seg_prob, det_prob)
-        elif seg_prob is not None:
-            comb = seg_prob
-        elif det_prob is not None:
-            comb = det_prob
-        else:
+            return np.maximum(seg_prob, det_prob)
+        if seg_prob is not None:
+            return seg_prob
+        if det_prob is not None:
+            return det_prob
+        return np.zeros((size, size), np.float32)
+
+    def seg_map(self, img_bgr: np.ndarray, size: int = SEG_SIZE) -> np.ndarray:
+        h, w = img_bgr.shape[:2]
+        if not self.ready:
             return np.zeros((h, w), np.float32)
+        r = min(size / h, size / w)
+        nw, nh = max(1, int(round(w * r))), max(1, int(round(h * r)))
+        im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR)
+        im = cv2.copyMakeBorder(im, 0, size - nh, 0, size - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        comb = self._forward(im, size)
         return cv2.resize(comb[:nh, :nw], (w, h), interpolation=cv2.INTER_LINEAR)
+
+    def seg_strokes(self, img_bgr: np.ndarray, dets: List[Det], size: int = SEG_LOW_SIZE) -> np.ndarray:
+        """Boolean stroke map at low resolution, restricted to the detector boxes (cheap gate)."""
+        if not self.ready or not dets:
+            return np.zeros(img_bgr.shape[:2], np.bool_)
+        h, w = img_bgr.shape[:2]
+        r = min(size / h, size / w)
+        nw, nh = max(1, int(round(w * r))), max(1, int(round(h * r)))
+        size_n = max(nw, nh)
+        im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA)
+        im = cv2.copyMakeBorder(im, 0, size_n - nh, 0, size_n - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        seg = self._forward(im, size_n)[:nh, :nw]
+        ok = seg > 0.5
+        mask = np.zeros((nh, nw), np.bool_)
+        for d in dets:
+            x1, y1 = max(0, int(d.box[0] * r)), max(0, int(d.box[1] * r))
+            x2, y2 = min(nw, int(math.ceil(d.box[2] * r))), min(nh, int(math.ceil(d.box[3] * r)))
+            if x2 > x1 and y2 > y1:
+                mask[y1:y2, x1:x2] = ok[y1:y2, x1:x2]
+        return mask
+
+    @property
+    def device(self) -> str:
+        return "cpu"
+
+
+def _assert_model_depth(model, expected: str) -> None:
+    """Catch a silently CPU-bound model: this is what made `seg` cost ~40 s per page."""
+    try:
+        param = next(model.parameters())
+    except (StopIteration, AttributeError):
+        return
+    actual = str(param.device)
+    if expected.startswith("cuda") and not actual.startswith("cuda"):
+        raise RuntimeError(f"model is on {actual}, expected {expected}")
+
+
+# ------------------------------------------------------------- one ZeroGPU window = one page
+@spaces.GPU(duration=GPU_DURATION)
+def _gpu_page_job(
+    img_rgb: np.ndarray,
+    jobs: List[Tuple[np.ndarray, np.ndarray]],
+    model_name: str,
+    bubble_thr: float,
+) -> Tuple[List[np.ndarray], List[Det], Dict[str, Any]]:
+    """
+    Everything a page needs from the GPU, in ONE allocation:
+      - region detection (RT-DETR `ogkalu/comic-text-bubble-detector`),
+      - LaMa inpainting for the crops planned from those boxes.
+
+    Models stay on the device for the whole call and go back to CPU at the end (ZeroGPU is a
+    single-GPU tenant), so the per-stage `.to()` round-trips of the old code disappear.
+    Crop planning needs the boxes, hence detection must run here, before the inpaint jobs.
+    """
+    dev = _gpu_device()
+    dets: List[Det] = []
+    lama_out: List[np.ndarray] = []
+    meta: Dict[str, Any] = {"device": dev}
+
+    try:
+        _BUBBLE.model.to(dev)
+        _assert_model_depth(_BUBBLE.model, dev)
+        dets = _BUBBLE.predict_boxes(img_rgb, dev, bubble_thr)
+        _BUBBLE.model.cpu()
+
+        if jobs:
+            model = get_lama_model(model_name).to(dev)
+            try:
+                lama_out = [_lama_crop(model, im, mk, dev) for im, mk in jobs]
+            finally:
+                model.cpu()
+    finally:
+        if dev != "cpu" and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+    return lama_out, dets, meta
+
+
+@spaces.GPU(duration=GPU_DURATION)
+def _gpu_lama_only(jobs: List[Tuple[np.ndarray, np.ndarray]], model_name: str) -> List[np.ndarray]:
+    """LaMa only (manual brush / known-region path). No detector call, no wasted GPU seconds."""
+    dev = _gpu_device()
+    model = get_lama_model(model_name).to(dev)
+    try:
+        return [_lama_crop(model, im, mk, dev) for im, mk in jobs]
+    finally:
+        model.cpu()
+        if dev != "cpu" and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
 
 
 # ----------------------------------------------------------------------------- pipeline
@@ -380,56 +448,49 @@ class MangaCleanerPipeline:
         return bool(self.ctd.ready and self.bubbles.ready)
 
     # -- helpers
-    def _detect_regions(self, img_rgb: np.ndarray, thr: float, force_cpu: bool) -> List[Det]:
-        h, w = img_rgb.shape[:2]
-        if DETECT_ON_GPU == "1":
-            use_gpu = True
-        elif DETECT_ON_GPU == "0":
-            use_gpu = False
-        else:  # auto: a GPU allocation costs more than CPU RT-DETR on a normal page; strips need many tiles
-            use_gpu = (h / max(w, 1)) > TALL_DETECT_RATIO
-        if force_cpu or not HAS_ZEROGPU or not use_gpu:
-            return self.bubbles.detect(img_rgb, "cpu", thr)
-        try:
-            return zero_gpu_detect(img_rgb, thr)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("ZeroGPU detect failed (%s), CPU fallback", exc)
-            return self.bubbles.detect(img_rgb, "cpu", thr)
-
-    def _inpaint_masked(self, img_rgb: np.ndarray, mask: np.ndarray, force_cpu: bool,
-                        model_name: str = "anime-lama") -> Tuple[np.ndarray, str, int]:
-        """
-        Inpaint only the regions around `mask` pixels and paste them back.
-        Returns (final BGR page, engine tag, number of regions). Pixels outside the mask are untouched.
-        """
-        model_name = (model_name or "anime-lama").strip()
-        low = model_name.lower()
-        classical = "telea" in low or "ns" in low
+    def _plan_jobs(self, img_rgb: np.ndarray, mask: np.ndarray) -> Tuple[List[Tuple[int, int, int, int]], List[Tuple[np.ndarray, np.ndarray]]]:
         rects = _plan_crops(mask)
         jobs = [(np.ascontiguousarray(img_rgb[y1:y2, x1:x2]), np.ascontiguousarray(mask[y1:y2, x1:x2]))
                 for (x1, y1, x2, y2) in rects]
+        return rects, jobs
 
-        if classical:
-            results = _inpaint_jobs_forward(jobs, "cpu", "opencv-telea" if "telea" in low else "opencv-ns")
-            tag = "OpenCV Telea (CPU)" if "telea" in low else "OpenCV Navier-Stokes (CPU)"
-        elif force_cpu or not HAS_ZEROGPU:
-            results, tag = _inpaint_jobs_forward(jobs, "cpu", model_name), f"{model_name} (CPU)"
-        else:
-            try:
-                results, tag = zero_gpu_inpaint_jobs(jobs, model_name), f"{model_name} (ZeroGPU)"
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("ZeroGPU LaMa failed (%s), CPU fallback", exc)
-                results, tag = _inpaint_jobs_forward(jobs, "cpu", model_name), f"{model_name} (CPU fallback)"
-
+    def _paste(self, img_rgb: np.ndarray, mask: np.ndarray, rects: List[Tuple[int, int, int, int]],
+               results: List[np.ndarray]) -> np.ndarray:
         out = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
         for (x1, y1, x2, y2), res in zip(rects, results):
             sel = mask[y1:y2, x1:x2] > 0
             out[y1:y2, x1:x2][sel] = res[sel]
-        return out, tag, len(rects)
+        return out
+
+    def _inpaint_only(self, img_rgb: np.ndarray, mask: np.ndarray, force_cpu: bool,
+                      model_name: str) -> Tuple[np.ndarray, str, int]:
+        """Inpaint a known `mask` (manual brush). Never calls the region detector."""
+        rects, jobs = self._plan_jobs(img_rgb, mask)
+        low = model_name.lower()
+        if not jobs:
+            return cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR), "none", 0
+
+        if "telea" in low or "ns" in low:
+            results = _cpu_classical_jobs(jobs, model_name)
+            tag = "OpenCV Telea (CPU)" if "telea" in low else "OpenCV Navier-Stokes (CPU)"
+        elif force_cpu or not HAS_ZEROGPU:
+            results = _cpu_lama_jobs(jobs, model_name)
+            tag = f"{model_name} (CPU)"
+        else:
+            try:
+                results = _gpu_lama_only(jobs, model_name)
+                tag = f"{model_name} (ZeroGPU)"
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ZeroGPU LaMa failed (%s), CPU fallback", exc)
+                results = _cpu_lama_jobs(jobs, model_name)
+                tag = f"{model_name} (CPU fallback)"
+        return self._paste(img_rgb, mask, rects, results), tag, len(rects)
 
     @staticmethod
-    def _color_mask(ms: MaskSet, h: int, w: int) -> np.ndarray:
+    def _color_mask(ms: Optional[MaskSet], h: int, w: int) -> np.ndarray:
         cm = np.zeros((h, w, 3), np.uint8)
+        if ms is None:
+            return cm
         cm[ms.chat_text > 0] = (0, 255, 0)   # green = Chat
         cm[ms.sfx_text > 0] = (255, 0, 0)    # red   = SFX
         return cm
@@ -446,6 +507,13 @@ class MangaCleanerPipeline:
         bubble_threshold: float = 0.30,
         inpaint_model: str = "anime-lama",
     ) -> Tuple[Image.Image, Image.Image, Dict[str, Any]]:
+        """Clean one page. Thread-safe: the whole call is serialised (models are shared)."""
+        with MODEL_LOCK:
+            return self._clean_locked(image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
+                                      user_mask, bubble_threshold, inpaint_model)
+
+    def _clean_locked(self, image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
+                      user_mask, bubble_threshold, inpaint_model):
         _t_total = time.perf_counter()
 
         # ---- decode input
@@ -478,7 +546,7 @@ class MangaCleanerPipeline:
             if not um.any():
                 return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), {"status": "Empty mask", "inpaint_model": inpaint_model}
             _t_inp = time.perf_counter()
-            out, tag, n_reg = self._inpaint_masked(img_rgb, um, force_cpu, model_name=inpaint_model)
+            out, tag, n_reg = self._inpaint_only(img_rgb, um, force_cpu, inpaint_model)
             _inpaint_ms = (time.perf_counter() - _t_inp) * 1000.0
             _total_ms = (time.perf_counter() - _t_total) * 1000.0
             return (Image.fromarray(cv2.cvtColor(out, cv2.COLOR_BGR2RGB)),
@@ -495,98 +563,173 @@ class MangaCleanerPipeline:
                      "status": "Bubble detector unavailable", "error": self.bubbles.error}
             return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
 
+        timings: Dict[str, Any] = {"decode": round(_decode_ms, 2), "detect": 0.0, "seg": 0.0,
+                                   "masks": 0.0, "inpaint": 0.0}
+        tag = "none"
+        gpu_used = False
+
+        # ONE GPU window per page: region detection and the LaMa crops run back to back, and
+        # crop planning needs the boxes, so both happen inside `_gpu_page_job`.
+        dets: List[Det] = []
+        lama_jobs: List[Tuple[np.ndarray, np.ndarray]] = []
+        used_gpu_window = False
+
         _t_det = time.perf_counter()
-        dets = self._detect_regions(img_rgb, bubble_threshold, force_cpu)
-        _detect_ms = (time.perf_counter() - _t_det) * 1000.0
+        if not force_cpu and HAS_ZEROGPU:
+            try:
+                lama_jobs, dets, _ = _gpu_page_job(img_rgb, [], "anime-lama", bubble_threshold)
+                used_gpu_window = True
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("ZeroGPU detect failed (%s), CPU fallback", exc)
+        if not used_gpu_window:
+            dets = self.bubbles.detect(img_rgb, "cpu", bubble_threshold)
+        timings["detect"] = round((time.perf_counter() - _t_det) * 1000.0, 2)
 
-        _seg_ms = 0.0
-        _masks_ms = 0.0
-        if any(d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE) for d in dets):
-            _t_seg = time.perf_counter()
-            seg = self.ctd.seg_map(img_bgr)
-            _seg_ms = (time.perf_counter() - _t_seg) * 1000.0
+        if not any(d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE) for d in dets):
+            stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, 0, 0, timings, "No text detected", "none")
+            timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+            return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
 
+        # Cheap gate: low-resolution strokes decide whether the full-resolution `seg` pass is
+        # needed at all. Every bubble on plain paper -> flat-fill can paint them outright.
+        _t_seg = time.perf_counter()
+        strokes = self.ctd.seg_strokes(img_bgr, dets)
+        all_boxes = [d.box for d in dets if d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE)]
+        flat_paper = flat_paper_hint(img_bgr, strokes, all_boxes)
+        seg_ms = (time.perf_counter() - _t_seg) * 1000.0
+        timings["seg"] = round(seg_ms, 2)
+
+        color_mask = Image.fromarray(np.zeros((h, w, 3), np.uint8))
+        n_chat = sum(1 for d in dets if d.cls == CLS_TEXT_BUBBLE)
+        n_sfx = sum(1 for d in dets if d.cls == CLS_TEXT_FREE)
+        flat_done = np.zeros((h, w), np.uint8)
+        out_rgb = img_rgb
+
+        if flat_paper:
+            # Paint the low-res strokes that sit on plain paper; no full-res seg, no LaMa for them.
+            chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
+            target = cv2.resize(strokes.astype(np.uint8) * 255, (w, h), interpolation=cv2.INTER_NEAREST)
+            target = cv2.bitwise_and(target, rect_all(h, w, all_boxes if clean_sfx else chat_boxes))
+            target = cv2.dilate(target, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+            out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=chat_boxes)
+            out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB) if target.any() else img_rgb
+            rects: List[Tuple[int, int, int, int]] = []
+            jobs: List[Tuple[np.ndarray, np.ndarray]] = []
+        else:
             _t_mask = time.perf_counter()
-            ms = build_masks(img_bgr, seg, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
-            _masks_ms = (time.perf_counter() - _t_mask) * 1000.0
-
-            color_mask = Image.fromarray(self._color_mask(ms, h, w))
+            seg_full = self.ctd.seg_map(img_bgr)
+            ms = build_masks(img_bgr, seg_full, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
+            timings["seg"] = round(seg_ms + (time.perf_counter() - _t_mask) * 1000.0, 2)
             target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
+            color_mask = Image.fromarray(self._color_mask(ms, h, w))
             n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
-        else:  # blank page / splash art: no text regions -> skip the 1024px CTD pass entirely
-            color_mask = Image.fromarray(np.zeros((h, w, 3), np.uint8))
-            target = np.zeros((h, w), np.uint8)
-            n_chat = n_sfx = 0
+            timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
+            if not target.any():
+                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
+                return img_pil, color_mask, stats
+            out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=ms.chat_boxes)
+            target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
+            if not target.any():
+                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx,
+                                    timings, "No text detected", "Flat-Fill Bypass (Instant)")
+                stats["flat_filled_px"] = int(np.count_nonzero(flat_done))
+                return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
+            out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
+            rects, jobs = self._plan_jobs(out_rgb, target)
 
+        n_flat = int(np.count_nonzero(flat_done))
+        if jobs:
+            _t_inp = time.perf_counter()
+            low = inpaint_model.lower()
+            if "telea" in low or "ns" in low:
+                results = _cpu_classical_jobs(jobs, inpaint_model)
+                tag = "OpenCV Telea (CPU)" if "telea" in low else "OpenCV Navier-Stokes (CPU)"
+            elif force_cpu or not HAS_ZEROGPU:
+                results = _cpu_lama_jobs(jobs, inpaint_model)
+                tag = f"{inpaint_model} (CPU)"
+            else:
+                try:
+                    results, dets, _ = _gpu_page_job(out_rgb, jobs, inpaint_model, bubble_threshold)
+                    tag, gpu_used = f"{inpaint_model} (ZeroGPU)", True
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("ZeroGPU LaMa failed (%s), CPU fallback", exc)
+                    results = _cpu_lama_jobs(jobs, inpaint_model)
+                    tag = f"{inpaint_model} (CPU fallback)"
+            final = self._paste(out_rgb, target, rects, results)
+            timings["inpaint"] = round((time.perf_counter() - _t_inp) * 1000.0, 2)
+        else:  # flat paper covered everything
+            final = cv2.cvtColor(out_rgb, cv2.COLOR_RGB2BGR)
+            tag = "Flat-Fill Bypass (paper)"
+
+        if n_flat > 0 and "FlatFill" not in tag:
+            tag = f"Hybrid FlatFill+{tag}"
+        timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+        timings["regions"] = len(rects)
+        stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, None, tag)
+        stats["flat_filled_px"] = n_flat
+        stats["device"] = "gpu" if (gpu_used or used_gpu_window) else "cpu"
+        return Image.fromarray(cv2.cvtColor(final, cv2.COLOR_BGR2RGB)), color_mask, stats
+
+    @staticmethod
+    def _stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, status, engine):
         stats: Dict[str, Any] = {
             "mode": "Xóa cả Chat & SFX" if clean_sfx else "Chỉ xóa Chat (giữ SFX)",
-            "chat_count": n_chat,
-            "sfx_count": n_sfx,
-            "clean_sfx": clean_sfx,
+            "chat_count": int(n_chat),
+            "sfx_count": int(n_sfx),
+            "clean_sfx": bool(clean_sfx),
             "dilation_px": dilation_px,
             "inpaint_model": inpaint_model,
-            "width": w,
-            "height": h,
+            "width": int(w),
+            "height": int(h),
+            "engine": engine,
+            "timings_ms": timings,
         }
-        if not target.any():
-            _total_ms = (time.perf_counter() - _t_total) * 1000.0
-            stats.update(status="No text detected", engine="none")
-            stats["timings_ms"] = {
-                "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
-                "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
-                "inpaint": 0.0, "total": round(_total_ms, 2),
-                "regions": 0, "engine": "none",
-            }
-            return img_pil, color_mask, stats
-
-        # Step 1: Instant flat-fill bypass for uniform paper dialogue bubbles
-        # (Zero-delay, 100% razor-sharp line art preservation)
-        out_bgr, flat_done = flat_fill_uniform_paper(
-            img_bgr=img_bgr,
-            erase=target,
-            boxes=ms.chat_boxes,
-        )
-        n_flat = int(np.count_nonzero(flat_done))
-
-        # Remaining mask that actually requires deep-learning inpainting
-        lama_target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
-
-        if not lama_target.any():
-            # 100% of bubbles were flat paper! LaMa completely bypassed!
-            _inpaint_ms = 0.0
-            _total_ms = (time.perf_counter() - _t_total) * 1000.0
-            tag = "Flat-Fill Bypass (Instant)"
-            stats["engine"] = tag
-            stats["inpaint_regions"] = 0
-            stats["flat_filled_px"] = n_flat
-            stats["timings_ms"] = {
-                "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
-                "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
-                "inpaint": round(_inpaint_ms, 2), "total": round(_total_ms, 2),
-                "regions": 0, "engine": tag,
-            }
-            return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
-
-        # Step 2: Inpaint only around the remaining complex / textured regions
-        _t_inp = time.perf_counter()
-        inp_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
-        out_bgr, tag, n_reg = self._inpaint_masked(inp_rgb, lama_target, force_cpu, model_name=inpaint_model)
-        _inpaint_ms = (time.perf_counter() - _t_inp) * 1000.0
-        _total_ms = (time.perf_counter() - _t_total) * 1000.0
-
-        if n_flat > 0:
-            tag = f"Hybrid FlatFill+{tag}"
-
-        stats["engine"] = f"Inpaint ({tag})"
-        stats["inpaint_regions"] = n_reg
-        stats["flat_filled_px"] = n_flat
-        stats["timings_ms"] = {
-            "decode": round(_decode_ms, 2), "detect": round(_detect_ms, 2),
-            "seg": round(_seg_ms, 2), "masks": round(_masks_ms, 2),
-            "inpaint": round(_inpaint_ms, 2), "total": round(_total_ms, 2),
-            "regions": n_reg, "engine": tag,
-        }
-        return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
+        if status:
+            stats["status"] = status
+        return stats
 
 
-cleaner_pipeline = MangaCleanerPipeline()
+def rect_all(h: int, w: int, boxes) -> np.ndarray:
+    m = np.zeros((h, w), np.uint8)
+    for x1, y1, x2, y2 in boxes:
+        m[max(0, int(y1)):min(h, int(y2) + 1), max(0, int(x1)):min(w, int(x2) + 1)] = 255
+    return m
+
+
+_PIPELINE: Optional[MangaCleanerPipeline] = None
+_PIPELINE_LOCK = threading.Lock()
+
+
+class _LazyPipeline:
+    """Proxy so `from manga_cleaner import cleaner_pipeline` still works without loading models."""
+
+    def __init__(self):
+        self._obj: Optional[MangaCleanerPipeline] = None
+
+    def _get(self) -> MangaCleanerPipeline:
+        if self._obj is None:
+            self._obj = get_pipeline()
+        return self._obj
+
+    def __getattr__(self, item):
+        return getattr(self._get(), item)
+
+    @property
+    def ready(self) -> bool:
+        return self._get().ready
+
+
+def get_pipeline() -> MangaCleanerPipeline:
+    """Lazy singleton: importing this module must not download/load models."""
+    global _PIPELINE
+    if _PIPELINE is None:
+        with _PIPELINE_LOCK:
+            if _PIPELINE is None:
+                _PIPELINE = MangaCleanerPipeline()
+    return _PIPELINE
+
+
+# Backwards-compatible attribute used by app.py / bench_clean.py.
+cleaner_pipeline = _LazyPipeline()

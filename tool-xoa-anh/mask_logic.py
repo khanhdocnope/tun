@@ -16,7 +16,7 @@ Upgrades implemented:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -205,6 +205,63 @@ def snap_white_halo(
     return out_mask
 
 
+def flat_paper_hint(
+    img_bgr: np.ndarray,
+    strokes: np.ndarray,
+    boxes: Sequence[Box],
+    paper_min: int = 225,
+    min_bright: float = 0.40,
+    min_ring: int = 50,
+) -> bool:
+    """
+    Cheap "are these glyphs sitting on bright paper?" test that runs on the LOW-res `seg` map,
+    before a full-resolution mask exists: text on paper *is* the ink, so a thin ring around the
+    strokes reads the surrounding paper.
+
+    A True answer means flat-fill can paint every box with one solid colour
+    (`flat_fill_uniform_paper` still applies its own, stricter, opaque-white gate on the real
+    erase mask), so the heavy full-resolution `seg` pass can be skipped for this page.
+    """
+    if not boxes:
+        return False
+    h, w = img_bgr.shape[:2]
+    if strokes.shape[:2] != (h, w):  # low-res `seg` map -> scale boxes down instead of upsampling ink
+        fx, fy = strokes.shape[1] / w, strokes.shape[0] / h
+        boxes = [(x1 * fx, y1 * fy, x2 * fx, y2 * fy) for x1, y1, x2, y2 in boxes]
+    sh, sw = strokes.shape[:2]
+    win = np.zeros((sh, sw), np.uint8)
+    for x1, y1, x2, y2 in boxes:
+        win[max(0, int(y1) - 3):min(sh, int(y2) + 3), max(0, int(x1) - 3):min(sw, int(x2) + 3)] = 255
+    m = cv2.bitwise_and((strokes > 0).astype(np.uint8) * 255, win)
+    if not m.any():
+        return False
+    ring = cv2.bitwise_and(cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))),
+                           cv2.bitwise_not(m))
+    if int(ring.sum()) < min_ring:
+        return False
+    sel = ring > 0
+    small = cv2.resize(img_bgr, (sw, sh), interpolation=cv2.INTER_AREA)
+    small_gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    paper = sel & (small_gray >= 235) & (small.std(axis=2) <= 6)
+    if float(paper.sum()) / max(1, int(sel.sum())) < min_bright:
+        return False
+    return float(small_gray[paper].mean()) >= paper_min
+
+
+def _eligible_regions(
+    dets: Sequence[Det],
+    seg_regions: Optional[Sequence[Det]],
+) -> Tuple[Sequence[Box], Sequence[Box]]:
+    """
+    Where the `seg` head has to be read from. `seg_regions`, when given, wins; otherwise every
+    detector box of that class.
+    """
+    if seg_regions is None:
+        return ([d.box for d in dets if d.cls == CLS_TEXT_BUBBLE],
+                [d.box for d in dets if d.cls == CLS_TEXT_FREE])
+    return [d.box for d in seg_regions], []
+
+
 def build_masks(
     img_bgr: np.ndarray,
     seg_map: np.ndarray,
@@ -213,29 +270,34 @@ def build_masks(
     dilation_px: int = 4,
     box_pad: int = 6,
     min_speck: int = 4,
+    seg_regions: Optional[Sequence[Det]] = None,
 ) -> MaskSet:
     """
     Constructs Chat and SFX masks using Dual-Gate Filtering & Contour-Preserving Barrier.
+
+    `chat_boxes` / `sfx_boxes` in the result stay the FULL detector boxes (flat-fill and the
+    reports need them). `seg_regions`, when given, only restricts where `seg` is read from.
     """
     h, w = img_bgr.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
     chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
     sfx_boxes = [d.box for d in dets if d.cls == CLS_TEXT_FREE]
+    seg_chat_boxes, seg_sfx_boxes = _eligible_regions(dets, seg_regions)
 
     box_pad = max(10, box_pad)
     chat_core_box = rect_mask(h, w, chat_boxes, 0)
-    chat_region = rect_mask(h, w, chat_boxes, box_pad)
+    chat_region = rect_mask(h, w, seg_chat_boxes, box_pad)
     # Dual-gate filter: SFX must be strictly outside dialogue core boxes
-    sfx_region = cv2.bitwise_and(rect_mask(h, w, sfx_boxes, box_pad), cv2.bitwise_not(chat_core_box))
+    sfx_region = cv2.bitwise_and(rect_mask(h, w, seg_sfx_boxes, box_pad), cv2.bitwise_not(chat_core_box))
 
     seg_bin = (seg_map > seg_thr).astype(np.uint8) * 255
     chat_text = remove_specks(cv2.bitwise_and(seg_bin, chat_region), min_speck)
     sfx_text = remove_specks(cv2.bitwise_and(seg_bin, sfx_region), max(min_speck, 12))
 
     # Auto-snap white halo / stroke around text in colored/tinted bubbles
-    chat_text = snap_white_halo(chat_text, gray, chat_boxes, max_halo_radius=8)
-    sfx_text = snap_white_halo(sfx_text, gray, sfx_boxes, max_halo_radius=8)
+    chat_text = snap_white_halo(chat_text, gray, seg_chat_boxes, max_halo_radius=8)
+    sfx_text = snap_white_halo(sfx_text, gray, seg_sfx_boxes, max_halo_radius=8)
 
     # All text strokes
     all_text = cv2.bitwise_or(chat_text, sfx_text)

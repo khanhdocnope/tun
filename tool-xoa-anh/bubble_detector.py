@@ -75,29 +75,38 @@ class BubbleTextDetector:
                 dets.append(Det(inv[l], float(s), (max(0.0, x1), max(0.0, y1), min(float(w), x2), min(float(h), y2))))
         return dets
 
+    def predict_boxes(self, img_rgb: np.ndarray, device: str = "cpu", thr: float = 0.30) -> List[Det]:
+        """
+        Detect without touching the device: the caller keeps the model on `device` for a whole
+        ZeroGPU window (`manga_cleaner._gpu_page_job`), so moving it here would defeat that.
+        """
+        if not self.load():
+            return []
+        h, w = img_rgb.shape[:2]
+        if h / max(w, 1) <= TALL_RATIO:
+            return self._run(img_rgb, device, thr)
+
+        tile_h = int(w * 1.5)
+        step = int(tile_h * 0.85)
+        dets: List[Det] = []
+        y = 0
+        while y < h:
+            y2 = min(h, y + tile_h)
+            for d in self._run(img_rgb[y:y2], device, thr):
+                x1, y1, x2, yy2 = d.box
+                dets.append(Det(d.cls, d.score, (x1, y1 + y, x2, yy2 + y)))
+            if y2 >= h:
+                break
+            y += step
+        return self._merge(dets)
+
     def detect(self, img_rgb: np.ndarray, device: str = "cpu", thr: float = 0.30) -> List[Det]:
         """Returns Det list in full-page pixel coordinates. Tiles tall webtoon strips."""
         if not self.load():
             return []
         self.model.to(device)
         try:
-            h, w = img_rgb.shape[:2]
-            if h / max(w, 1) <= TALL_RATIO:
-                return self._run(img_rgb, device, thr)
-
-            tile_h = int(w * 1.5)
-            step = int(tile_h * 0.85)
-            dets: List[Det] = []
-            y = 0
-            while y < h:
-                y2 = min(h, y + tile_h)
-                for d in self._run(img_rgb[y:y2], device, thr):
-                    x1, y1, x2, yy2 = d.box
-                    dets.append(Det(d.cls, d.score, (x1, y1 + y, x2, yy2 + y)))
-                if y2 >= h:
-                    break
-                y += step
-            return self._merge(dets)
+            return self.predict_boxes(img_rgb, device, thr)
         finally:
             if device != "cpu":
                 self.model.to("cpu")

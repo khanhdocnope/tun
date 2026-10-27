@@ -1,12 +1,12 @@
 """
-Autonomous Manga Cleaner (ZeroGPU A100 Edition).
-Features:
-- Smart Chat vs SFX classification (Green: Chat, Red: SFX).
-- Sub-second Big-LaMa Inpainting on Hugging Face ZeroGPU.
-- 2-Column Responsive UI (Input, Output, Color Mask, Stats).
-- Brush Editor (ImageEditor with Proxy Canvas for RAM savings).
-- Batch ZIP Archive Processing with history & download.
-- Full FastAPI REST Endpoints (/health, /api/clean_page, /api/inpaint, /api/clean_zip).
+Autonomous Manga Cleaner - text removal only (Hugging Face Space, Gradio SDK + ZeroGPU).
+
+Backend API (what the external studio UI calls):
+- GET  /health            service + model readiness.
+- POST /clean_page        {"imageBase64", "cleanSFX", "dilationPx", "detThreshold", "inpaintModel"}
+                          -> {"success", "cleanedImageBase64", "colorMaskBase64", "stats"}.
+- GET  /api/benchmark     timing suite (CPU by default).
+The Gradio UI is kept for manual checks, the box marquee, the brush and the ZIP batch tool.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import json
 import logging
 import os
 import re
-import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -27,18 +26,12 @@ import cv2
 import gradio as gr
 import numpy as np
 import torch
-from fastapi import FastAPI, APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, Response, HTMLResponse
-from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from PIL import Image, ImageOps
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from core.ocr_engine import process_page_ocr, detect_page_boxes
-from core.translator import MangaTranslator
-from download_models import ensure_models
 from manga_cleaner import cleaner_pipeline
 
 try:
@@ -60,6 +53,11 @@ logger = logging.getLogger("manga_cleaner.app")
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_STORAGE_DIR = Path("/data/outputs") if Path("/data").is_dir() else BASE_DIR / "outputs"
 OUTPUT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Hard limits: a single request must not be able to exhaust the Space container.
+MAX_PIXELS = int(os.getenv(MAX_PIXELS, str(40_000_000)))
+MAX_B64_BYTES = int(os.getenv(MAX_B64_BYTES, str(24 * 1024 * 1024)))
+VALID_INPAINT_MODELS = {anime-lama, big-lama, opencv-telea, opencv-ns}
 
 
 # --------------------------------------------------------------------------------------
@@ -144,23 +142,6 @@ def extract_editor_data(editor_data: Any) -> Tuple[Optional[Image.Image], Option
                     has_brush = True
     mask_pil = Image.fromarray(combined_mask, mode="L") if has_brush else None
     return bg_pil, mask_pil
-
-
-def draw_reading_order_boxes(image: Image.Image, items: List[Dict[str, Any]]) -> Image.Image:
-    """Vẽ bounding box kèm số thứ tự đọc logic (#1, #2...) trực tiếp lên ảnh."""
-    img_bgr = cv2.cvtColor(np.array(image.convert("RGB")), cv2.COLOR_RGB2BGR)
-    for it in items:
-        idx = it.get("id", 1)
-        ymin, xmin, ymax, xmax = it.get("bbox") or it.get("box", [0, 0, 0, 0])
-        # Vẽ khung màu cam nổi bật quanh bóng thoại
-        cv2.rectangle(img_bgr, (xmin, ymin), (xmax, ymax), (0, 140, 255), 2)
-        # Vẽ thẻ số thứ tự đọc
-        label = f"#{idx}"
-        (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-        badge_top = max(0, ymin - h - 8)
-        cv2.rectangle(img_bgr, (xmin, badge_top), (xmin + w + 10, ymin), (0, 140, 255), -1)
-        cv2.putText(img_bgr, label, (xmin + 5, ymin - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-    return Image.fromarray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB))
 
 
 INPAINT_MODEL_CHOICES = [
@@ -534,13 +515,6 @@ class CleanPagePayload(BaseModel):
     inpaintModel: Optional[str] = "anime-lama"
 
 
-class DetectBoxesPayload(BaseModel):
-    imageBase64: str = Field(..., description="Dữ liệu ảnh dạng Base64")
-    readingOrder: Optional[str] = Field("manga", description="'manga' (RTL) hoặc 'webtoon' (TTB)")
-    chatOnly: Optional[bool] = Field(True, description="Chỉ lấy bóng thoại chat (bỏ SFX)")
-    detThreshold: Optional[float] = Field(0.20, description="Ngưỡng tin cậy của detector (0.1 - 0.5)")
-
-
 @api_router.get("/health")
 @api_router.get("/api/v1/health")
 def health():
@@ -576,183 +550,6 @@ async def get_open_api_endpoint():
 # --------------------------------------------------------------------------------------
 # Benchmark Web Page & API
 # --------------------------------------------------------------------------------------
-BENCHMARK_PAGE_HTML = """<!DOCTYPE html>
-<html lang="vi">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⚡ Manga Cleaner Benchmark & Baseline</title>
-  <style>
-    :root {
-      --bg: #0f172a;
-      --card: #1e293b;
-      --border: #334155;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --primary: #38bdf8;
-      --primary-hover: #0284c7;
-      --success: #10b981;
-      --warning: #f59e0b;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 2rem 1rem; line-height: 1.5; }
-    .container { max-width: 900px; margin: 0 auto; }
-    .header { text-align: center; margin-bottom: 2rem; }
-    .header h1 { font-size: 1.8rem; font-weight: 700; color: var(--primary); margin-bottom: 0.5rem; }
-    .header p { color: var(--muted); font-size: 0.95rem; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
-    .row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-bottom: 1rem; }
-    .field { display: flex; flex-direction: column; gap: 0.4rem; min-width: 140px; }
-    label { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    select, button {
-      background: #0f172a; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
-      padding: 0.6rem 1rem; font-size: 0.95rem; outline: none; transition: all 0.2s;
-    }
-    select:focus { border-color: var(--primary); }
-    button.btn-primary {
-      background: var(--primary); color: #0f172a; font-weight: 600; border: none; cursor: pointer;
-      display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center;
-    }
-    button.btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
-    button.btn-copy {
-      background: var(--success); color: #0f172a; font-weight: 600; border: none; cursor: pointer;
-      padding: 0.5rem 1.2rem; font-size: 0.9rem; border-radius: 6px;
-    }
-    button.btn-copy:hover { opacity: 0.9; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
-    .badge-info { background: rgba(56,189,248,0.15); color: var(--primary); border: 1px solid var(--primary); }
-    .badge-success { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid var(--success); }
-    .status-box { padding: 1rem; border-radius: 8px; background: #0f172a; border: 1px solid var(--border); margin-bottom: 1rem; font-family: monospace; font-size: 0.9rem; min-height: 48px; display: flex; align-items: center; justify-content: space-between; }
-    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--muted); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    textarea {
-      width: 100%; min-height: 280px; background: #090d16; color: #38bdf8; border: 1px solid var(--border);
-      border-radius: 8px; padding: 1rem; font-family: "Fira Code", monospace, Consolas, sans-serif;
-      font-size: 0.88rem; resize: vertical; outline: none; line-height: 1.4;
-    }
-    .test-box { font-size: 0.85rem; color: var(--muted); margin-top: 0.5rem; }
-    .test-item { display: flex; gap: 0.5rem; margin-top: 0.2rem; }
-    .copy-toast { display: none; color: var(--success); font-size: 0.85rem; font-weight: 600; margin-left: 0.8rem; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>⚡ Manga Cleaner Performance Benchmark</h1>
-      <p>Tự động đo thời gian từng giai đoạn (decode, detect, seg, masks, inpaint) và tạo bảng Markdown chuẩn cho <code>PERF-BASELINE.md</code>.</p>
-    </div>
-
-    <div class="card">
-      <div class="row">
-        <div class="field">
-          <label>Chế độ chạy</label>
-          <select id="modeSelect">
-            <option value="cpu" selected>CPU (anime-lama)</option>
-            <option value="gpu">ZeroGPU (Nvidia A100)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Số lượt chạy (runs)</label>
-          <select id="runsSelect">
-            <option value="3" selected>3 lượt (Nhanh ~15s)</option>
-            <option value="5">5 lượt (Chuẩn Baseline ~25s)</option>
-          </select>
-        </div>
-        <div class="field" style="flex: 1; align-self: flex-end;">
-          <button id="runBtn" class="btn-primary" onclick="runBenchmark()">
-            <span>🚀 Chạy Benchmark Ngay</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="status-box" id="statusBox">
-        <span id="statusText">Sẵn sàng chạy. Bấm nút phía trên để bắt đầu.</span>
-        <span class="badge badge-info" id="envBadge">HF Space Ready</span>
-      </div>
-
-      <div id="resultSection" style="display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-          <label style="color: var(--text);">Kết quả Markdown (Copy trực tiếp vào PERF-BASELINE.md):</label>
-          <div>
-            <button class="btn-copy" onclick="copyResult()">📋 Sao chép Markdown</button>
-            <span class="copy-toast" id="copyToast">✓ Đã sao chép!</span>
-          </div>
-        </div>
-        <textarea id="markdownOutput" readonly spellcheck="false"></textarea>
-
-        <div class="test-box" id="testBox"></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    async function runBenchmark() {
-      const mode = document.getElementById('modeSelect').value;
-      const runs = document.getElementById('runsSelect').value;
-      const forceCpu = mode === 'cpu';
-      const runBtn = document.getElementById('runBtn');
-      const statusText = document.getElementById('statusText');
-      const resultSection = document.getElementById('resultSection');
-      const mdOutput = document.getElementById('markdownOutput');
-      const testBox = document.getElementById('testBox');
-
-      runBtn.disabled = true;
-      statusText.innerHTML = '<span class="spinner"></span> Đang chạy benchmark ' + runs + ' lượt trên ' + (forceCpu ? 'CPU' : 'GPU') + '... Vui lòng đợi trong giây lát.';
-
-      try {
-        const res = await fetch('/api/benchmark?runs=' + runs + '&force_cpu=' + forceCpu);
-        const data = await res.json();
-
-        if (data.status === 'success') {
-          statusText.innerHTML = '✅ Hoàn tất benchmark (' + data.device + ')! Kết quả đã sẵn sàng bên dưới.';
-          mdOutput.value = data.markdown_table;
-          resultSection.style.display = 'block';
-
-          if (data.tests && data.tests.checks) {
-            let html = '<strong>Kiểm tra xác thực tính đồng nhất (Zero-regression):</strong>';
-            data.tests.checks.forEach(c => {
-              const color = c.status === 'PASS' ? 'var(--success)' : (c.status === 'SKIP' ? 'var(--warning)' : '#ef4444');
-              html += '<div class="test-item"><span style="color:' + color + '">[' + c.status + ']</span> ' + c.name + '</div>';
-            });
-            testBox.innerHTML = html;
-          }
-        } else {
-          statusText.innerHTML = '❌ Lỗi: ' + (data.error || 'Không thể chạy benchmark.');
-        }
-      } catch (err) {
-        statusText.innerHTML = '❌ Lỗi kết nối: ' + err.message;
-      } finally {
-        runBtn.disabled = false;
-      }
-    }
-
-    function copyResult() {
-      const textarea = document.getElementById('markdownOutput');
-      textarea.select();
-      navigator.clipboard.writeText(textarea.value).then(() => {
-        const toast = document.getElementById('copyToast');
-        toast.style.display = 'inline';
-        setTimeout(() => { toast.style.display = 'none'; }, 2500);
-      });
-    }
-
-    // Auto-run if query param ?autorun=1 exists
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('autorun') === '1' || urlParams.get('autorun') === 'true') {
-      window.addEventListener('DOMContentLoaded', () => { runBenchmark(); });
-    }
-  </script>
-</body>
-</html>
-"""
-
-
-@api_router.get("/benchmark", response_class=HTMLResponse)
-async def benchmark_page():
-    return HTMLResponse(content=BENCHMARK_PAGE_HTML)
-
-
 @api_router.get("/api/benchmark")
 @api_router.post("/api/benchmark")
 async def api_run_benchmark(runs: int = 3, force_cpu: bool = True, inpaint_model: str = "anime-lama"):
@@ -839,310 +636,6 @@ async def api_clean_page(req: CleanPagePayload):
     except Exception as exc:
         logger.error("API error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
-
-
-@api_router.post(
-    "/detect_boxes",
-    tags=["Bounding Box Detection"],
-    summary="Phát hiện Bounding Box siêu tốc (JSON)",
-    description="Nhận Base64 ảnh, trả về tọa độ Bounding Box và thứ tự đọc chỉ trong ~50-150ms mà không chạy OCR hay Inpaint.",
-)
-@api_router.post("/api/v1/detect-boxes")
-async def api_detect_boxes(req: DetectBoxesPayload):
-    try:
-        if not req.imageBase64:
-            raise HTTPException(status_code=400, detail="Thiếu dữ liệu ảnh (imageBase64).")
-        img_pil = b64_to_pil(req.imageBase64)
-        order_val = "webtoon" if (req.readingOrder or "").lower() in ("webtoon", "manhwa") else "manga"
-
-        total_boxes, boxes, meta = await run_in_threadpool(
-            detect_page_boxes,
-            image=img_pil,
-            reading_order=order_val,
-            det_threshold=float(req.detThreshold or 0.20),
-            chat_only=bool(req.chatOnly if req.chatOnly is not None else True),
-        )
-        return {
-            "success": True,
-            "total_boxes": total_boxes,
-            "boxes": boxes,
-            "data": boxes,  # bí danh tương thích cho typeset studio
-            "meta": meta,
-        }
-    except Exception as exc:
-        logger.error("api_detect_boxes error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-class TextItemResponse(BaseModel):
-    id: int = Field(..., description="Mã định danh thứ tự logic")
-    box: List[int] = Field(..., description="Tọa độ khung [ymin, xmin, ymax, xmax]")
-    original_text: str = Field(..., description="Văn bản gốc nhận diện từ OCR")
-    translated_text: str = Field(..., description="Bản dịch từ DeepSeek LLM")
-
-
-class TranslatePageResponse(BaseModel):
-    total_boxes: int = Field(..., description="Tổng số khối văn bản tìm thấy")
-    reading_order: str = Field(..., description="Thứ tự đọc ('manga' hoặc 'webtoon')")
-    ocr_engine: str = Field(..., description="Công cụ OCR ('ja_manga' hoặc 'multilingual')")
-    data: List[TextItemResponse] = Field(..., description="Danh sách khối văn bản kèm bản dịch")
-    execution_time_ms: float = Field(..., description="Thời gian thực thi (ms)")
-
-
-@api_router.post(
-    "/api/v1/translate-page",
-    response_model=TranslatePageResponse,
-    tags=["Translation & OCR"],
-    summary="Dịch toàn bộ trang truyện tranh (OCR + Reading Order + Context LLM)",
-    description=(
-        "Nhận diện văn bản bằng Comic-Text-Detector, sắp xếp thứ tự đọc thông minh (manga RTL / webtoon TTB), "
-        "thực hiện OCR theo cơ chế Lazy A/B (ja_manga hoặc multilingual) và gửi toàn bộ ngữ cảnh trang truyện sang "
-        "DeepSeek LLM để dịch thuật chuẩn xác nhất."
-    ),
-)
-async def api_translate_page(
-    file: UploadFile = File(..., description="Tệp ảnh trang truyện cần dịch (JPG, PNG, WebP)"),
-    reading_order: str = Form("manga", description="Thứ tự đọc: 'manga' (phải qua trái) hoặc 'webtoon' (trên xuống dưới)"),
-    ocr_engine: str = Form("ja_manga", description="Cơ chế OCR: 'ja_manga' (manga-ocr) hoặc 'multilingual' (PaddleOCR)"),
-    source_lang: Optional[str] = Form("ch", description="Ngôn ngữ nguồn nếu chọn multilingual (vd: 'ch', 'korean', 'en', 'japan')"),
-    chat_only: bool = Form(True, description="Chỉ nhận diện & dịch chữ trong bong bóng chat (bỏ SFX vẽ tay)"),
-    api_key: Optional[str] = Form(None, description="DeepSeek / OpenAI API Key (tùy chọn, mặc định đọc từ ENV DEEPSEEK_API_KEY)"),
-    target_lang: str = Form("vi", description="Ngôn ngữ đích (mặc định: 'vi' hoặc 'Vietnamese')"),
-    det_threshold: Optional[float] = Form(0.20, description="Ngưỡng phát hiện khung thoại (0.1 - 0.5)"),
-    ocr_only: bool = Form(False, description="Chỉ OCR và bóc tách bóng thoại, không gọi LLM"),
-):
-    start_t = time.perf_counter()
-    try:
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="Tệp ảnh tải lên rỗng.")
-        img_pil = Image.open(io.BytesIO(content)).convert("RGB")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Không thể đọc file ảnh: {exc}")
-
-    engine_val = "ja_manga" if ocr_engine.lower() in ("ja", "ja_manga") else "multilingual"
-    order_val = "webtoon" if reading_order.lower() in ("webtoon", "manhwa") else "manga"
-
-    try:
-        # Bước 1 & 2: Phát hiện text box & chạy Lazy OCR theo Reading Order (có hỗ trợ chat_only)
-        total_boxes, ocr_items = await run_in_threadpool(
-            process_page_ocr,
-            image=img_pil,
-            ocr_engine=engine_val,
-            reading_order=order_val,
-            source_lang=source_lang or "ch",
-            det_threshold=float(det_threshold or 0.20),
-            chat_only=bool(chat_only),
-        )
-
-        # Bước 3: Dịch ngữ cảnh nếu không phải ocr_only và có api_key
-        if ocr_only or not api_key:
-            final_items = ocr_items
-        else:
-            translator = MangaTranslator(api_key=api_key)
-            final_items = await translator.translate_page(
-                items=ocr_items,
-                target_lang=target_lang,
-                api_key=api_key,
-            )
-
-        elapsed_ms = round((time.perf_counter() - start_t) * 1000.0, 1)
-
-        formatted_data = []
-        for it in final_items:
-            box_coords = it.get("bbox") or it.get("box", [0, 0, 0, 0])
-            formatted_data.append({
-                "id": int(it.get("id", 0)),
-                "box": list(box_coords),
-                "original_text": str(it.get("original_text", "")),
-                "translated_text": str(it.get("translated_text", "")),
-            })
-
-        return {
-            "total_boxes": total_boxes,
-            "reading_order": order_val,
-            "ocr_engine": engine_val,
-            "data": formatted_data,
-            "execution_time_ms": elapsed_ms,
-        }
-    except Exception as exc:
-        logger.error("Lỗi khi xử lý translate-page: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Lỗi khi xử lý translate-page: {type(exc).__name__}: {exc}")
-class TranslateDirectRequest(BaseModel):
-    messages: List[Dict[str, Any]]
-    model: Optional[str] = "gemini-2.5-flash"
-    base_url: Optional[str] = "https://generativelanguage.googleapis.com/v1beta/openai"
-    api_key: Optional[str] = None
-    temperature: Optional[float] = 0.3
-    thinking: Optional[Dict[str, Any]] = None
-    max_tokens: Optional[int] = 4096
-
-
-@api_router.post(
-    "/api/v1/translate",
-    tags=["Translation & OCR"],
-    summary="Proxy endpoint gọi AI Dịch (Gemini / DeepSeek / OpenAI)",
-)
-async def api_translate_direct(req: TranslateDirectRequest):
-    active_key = (
-        req.api_key
-        or os.getenv("API_KEY_GEMINI")
-        or os.getenv("GEMINI_API_KEY")
-        or os.getenv("DEEPSEEK_API_KEY")
-        or os.getenv("API_KEY")
-        or ""
-    ).strip()
-    if not active_key:
-        raise HTTPException(status_code=400, detail="Chưa cấu hình API Key.")
-
-    active_model = req.model or "gemini-2.5-flash"
-    if active_model in ["gemini-1.5-flash", "gemini-3-flash-preview", "gemini-3-flash"]:
-        active_model = "gemini-2.5-flash"
-    is_gemini = "gemini" in active_model.lower()
-
-    default_base = "https://generativelanguage.googleapis.com/v1beta/openai" if is_gemini else "https://discovery-api.intern-ai.org.cn/v1"
-    clean_base = (req.base_url or default_base).rstrip("/")
-    if clean_base.endswith("/chat/completions"):
-        clean_base = clean_base[:-len("/chat/completions")].rstrip("/")
-    url = f"{clean_base}/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {active_key}",
-    }
-    payload = {
-        "model": active_model,
-        "messages": req.messages,
-        "temperature": float(req.temperature or 0.3),
-        "max_tokens": int(req.max_tokens or 4096),
-    }
-    if not is_gemini:
-        payload["thinking"] = req.thinking if req.thinking is not None else {"type": "disabled"}
-
-    try:
-        import httpx
-        async with httpx.AsyncClient(timeout=65.0) as client:
-            resp = await client.post(url, headers=headers, json=payload)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=resp.status_code, detail=f"LLM API lỗi ({resp.status_code}): {resp.text}")
-            resp_content = resp.text.strip() if resp.text else ""
-            if not resp_content:
-                raise HTTPException(status_code=502, detail="LLM API trả về phản hồi rỗng (Empty body).")
-            try:
-                return resp.json()
-            except Exception as json_err:
-                raise HTTPException(status_code=502, detail=f"LLM API trả về JSON không hợp lệ: {resp_content[:200]}")
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="AI Dịch phản hồi quá thời gian quy định (Timeout > 65s).")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Lỗi khi proxy gọi LLM: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@api_router.post(
-    "/api/v1/translate-zip",
-    tags=["Translation & OCR"],
-    summary="Dịch hàng loạt trang truyện từ tệp ZIP (Hỗ trợ lọc bóng thoại & xuất kịch bản)",
-)
-async def api_translate_zip(
-    file: UploadFile = File(..., description="Tệp ZIP chứa nhiều trang truyện (.zip)"),
-    reading_order: str = Form("manga", description="Thứ tự đọc ('manga' hoặc 'webtoon')"),
-    ocr_engine: str = Form("ja_manga", description="Cơ chế OCR ('ja_manga' hoặc 'multilingual')"),
-    source_lang: Optional[str] = Form("ch", description="Ngôn ngữ gốc nếu dùng multilingual"),
-    chat_only: bool = Form(True, description="Chỉ nhận diện & dịch chữ trong bong bóng chat (bỏ SFX)"),
-    api_key: Optional[str] = Form(None, description="API Key DeepSeek / OpenAI"),
-    target_lang: str = Form("vi", description="Ngôn ngữ dịch đích"),
-    det_threshold: Optional[float] = Form(0.20),
-):
-    start_t = time.perf_counter()
-    try:
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="Tệp ZIP tải lên rỗng.")
-        zip_buf = io.BytesIO(content)
-        in_zip = zipfile.ZipFile(zip_buf, "r")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Không thể đọc tệp ZIP: {exc}")
-
-    valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".jfif"}
-    file_list = [f for f in in_zip.namelist() if not f.startswith("__MACOSX/") and not Path(f).name.startswith(".")]
-    image_files = [f for f in file_list if Path(f).suffix.lower() in valid_exts]
-    image_files.sort(key=natural_sort_key)
-
-    if not image_files:
-        raise HTTPException(status_code=400, detail="Không tìm thấy tệp ảnh hợp lệ (.jpg, .png, .webp) trong file ZIP.")
-
-    engine_val = "ja_manga" if ocr_engine.lower() in ("ja", "ja_manga") else "multilingual"
-    order_val = "webtoon" if reading_order.lower() in ("webtoon", "manhwa") else "manga"
-    translator = MangaTranslator(api_key=api_key)
-
-    pages_result = []
-    total_all_boxes = 0
-
-    for idx, img_rel in enumerate(image_files, start=1):
-        try:
-            raw_data = in_zip.read(img_rel)
-            img_pil = Image.open(io.BytesIO(raw_data)).convert("RGB")
-
-            total_boxes, ocr_items = await run_in_threadpool(
-                process_page_ocr,
-                image=img_pil,
-                ocr_engine=engine_val,
-                reading_order=order_val,
-                source_lang=source_lang or "ch",
-                det_threshold=float(det_threshold or 0.20),
-                chat_only=bool(chat_only),
-            )
-
-            if total_boxes > 0:
-                translated_items = await translator.translate_page(
-                    items=ocr_items,
-                    target_lang=target_lang,
-                    api_key=api_key,
-                )
-            else:
-                translated_items = []
-
-            total_all_boxes += total_boxes
-            page_data = []
-            for it in translated_items:
-                page_data.append({
-                    "id": it.get("id"),
-                    "box": it.get("bbox") or it.get("box", [0, 0, 0, 0]),
-                    "original_text": it.get("original_text", ""),
-                    "translated_text": it.get("translated_text", ""),
-                })
-
-            pages_result.append({
-                "page_index": idx,
-                "filename": Path(img_rel).name,
-                "total_boxes": total_boxes,
-                "data": page_data,
-            })
-        except Exception as exc:
-            logger.error("Lỗi trang %s trong ZIP: %s", img_rel, exc)
-            pages_result.append({
-                "page_index": idx,
-                "filename": Path(img_rel).name,
-                "total_boxes": 0,
-                "error": str(exc),
-                "data": [],
-            })
-
-    elapsed_s = round(time.perf_counter() - start_t, 2)
-    return {
-        "status": "success",
-        "total_pages": len(image_files),
-        "total_dialogue_boxes": total_all_boxes,
-        "chat_only": chat_only,
-        "reading_order": order_val,
-        "ocr_engine": engine_val,
-        "execution_time_seconds": elapsed_s,
-        "pages": pages_result,
-    }
-
 
 
 # --------------------------------------------------------------------------------------
@@ -1442,165 +935,6 @@ def create_ui() -> gr.Blocks:
                             outputs=[brush_output_image, brush_download_btn],
                         )
 
-            # ================= TAB 3: NHẬN DIỆN & OCR CHỮ (COMIC TEXT OCR) =================
-            with gr.TabItem("📖 Nhận Diện & Đọc Chữ OCR Manga (Comic Text OCR)"):
-                with gr.Row():
-                    with gr.Column(scale=5):
-                        trans_img_input = gr.Image(label="1. Tải ảnh trang truyện cần OCR chữ", type="pil")
-                        with gr.Row():
-                            trans_order_radio = gr.Radio(
-                                choices=[("Manga (Phải -> Trái, Trên -> Dưới)", "manga"), ("Webtoon (Trên -> Dưới)", "webtoon")],
-                                value="manga",
-                                label="Thứ tự đọc logic",
-                            )
-                        with gr.Row():
-                            trans_engine_radio = gr.Radio(
-                                choices=[("manga-ocr (Tiếng Nhật)", "ja_manga"), ("PaddleOCR (Đa ngôn ngữ)", "multilingual")],
-                                value="ja_manga",
-                                label="Bộ nhận diện OCR",
-                            )
-                        with gr.Row():
-                            trans_chat_only_chk = gr.Checkbox(value=True, label="🎯 Chỉ lấy chữ trong Bong Bóng Thoại (Bỏ qua SFX)")
-                            trans_source_lang_dd = gr.Dropdown(
-                                choices=[("Tiếng Trung (ch)", "ch"), ("Tiếng Hàn (korean)", "korean"), ("Tiếng Anh (en)", "en"), ("Tiếng Nhật (japan)", "japan")],
-                                value="ch",
-                                label="Ngôn ngữ nguồn (khi dùng PaddleOCR)",
-                            )
-
-                        trans_enable_llm_chk = gr.Checkbox(
-                            value=False,
-                            label="Dịch sang tiếng Việt bằng LLM DeepSeek (Tùy chọn - Mặc định TẮT để OCR siêu tốc)",
-                        )
-
-                        with gr.Accordion("⚙️ Cấu hình Dịch thuật & API Key (Chỉ dùng khi bật Dịch)", open=False):
-                            trans_target_lang_txt = gr.Textbox(value="Tiếng Việt", label="Dịch sang ngôn ngữ")
-                            trans_api_key_txt = gr.Textbox(
-                                label="API Key",
-                                type="password",
-                                placeholder="sk-... (để trống nếu đã cài DEEPSEEK_API_KEY trên server)",
-                            )
-                            trans_base_url_txt = gr.Textbox(
-                                label="Base URL",
-                                value="https://discovery-api.intern-ai.org.cn/v1",
-                                placeholder="https://api.deepseek.com/v1",
-                            )
-                            trans_model_txt = gr.Textbox(
-                                label="Model Name",
-                                value="deepseek-v4-flash-0731",
-                                placeholder="deepseek-chat",
-                            )
-
-                        btn_run_translate = gr.Button("⚡ Bắt Đầu OCR Chữ (Nhận Diện Siêu Tốc)", variant="primary", elem_classes="action-btn")
-
-                    with gr.Column(scale=7):
-                        trans_status_md = gr.Markdown("💡 *Tải ảnh lên và bấm nút để AI tự động nhận diện khung thoại, sắp xếp thứ tự đọc và trích xuất chữ OCR ngay lập tức.*")
-                        trans_annotated_img = gr.Image(label="Bản đồ thứ tự đọc (#1, #2, #3...)", type="pil", interactive=False)
-                        trans_dataframe = gr.Dataframe(
-                            headers=["Thứ tự", "Văn bản nhận diện (OCR)", "Bản dịch (Nếu bật LLM)"],
-                            datatype=["number", "str", "str"],
-                            wrap=True,
-                            label="Bảng đối chiếu câu thoại chi tiết",
-                        )
-                        with gr.Accordion("📝 Danh sách câu thoại OCR & Tải về", open=True):
-                            trans_script_md = gr.Markdown()
-                            trans_download_file = gr.File(label="⬇️ Tải tệp văn bản OCR (.txt)", interactive=False)
-
-                async def on_translate_page_ui(
-                    image_in,
-                    order_in,
-                    engine_in,
-                    chat_only_in,
-                    source_lang_in,
-                    enable_llm_in,
-                    target_lang_in,
-                    api_key_in,
-                    base_url_in,
-                    model_in,
-                ):
-                    if image_in is None:
-                        raise gr.Error("Vui lòng tải ảnh trang truyện lên!")
-
-                    start_t = time.perf_counter()
-                    total_boxes, ocr_items = await run_in_threadpool(
-                        process_page_ocr,
-                        image=image_in,
-                        ocr_engine=engine_in,
-                        reading_order=order_in,
-                        source_lang=source_lang_in or "ch",
-                        det_threshold=0.20,
-                        chat_only=bool(chat_only_in),
-                    )
-
-                    if total_boxes == 0:
-                        empty_md = "⚠️ Không tìm thấy khung thoại văn bản nào trên trang truyện này."
-                        return None, [], empty_md, None, empty_md
-
-                    if enable_llm_in:
-                        translator = MangaTranslator(
-                            api_key=api_key_in.strip() if api_key_in else None,
-                            base_url=base_url_in.strip() if base_url_in else None,
-                            model=model_in.strip() if model_in else None,
-                        )
-                        translated_items = await translator.translate_page(
-                            items=ocr_items,
-                            target_lang=target_lang_in or "Tiếng Việt",
-                            api_key=api_key_in.strip() if api_key_in else None,
-                        )
-                    else:
-                        for it in ocr_items:
-                            it["translated_text"] = it.get("original_text", "")
-                        translated_items = ocr_items
-
-                    elapsed_s = round(time.perf_counter() - start_t, 2)
-                    annotated_pil = draw_reading_order_boxes(image_in, translated_items)
-
-                    table_rows = []
-                    md_lines = [f"### 📖 Kết quả OCR ({total_boxes} bóng thoại - {elapsed_s}s)\n"]
-                    for it in translated_items:
-                        i_id = it.get("id")
-                        orig = it.get("original_text", "")
-                        trans = it.get("translated_text", "")
-                        table_rows.append([i_id, orig, trans])
-                        if enable_llm_in and trans != orig:
-                            md_lines.append(f"**[#{i_id}]**\n* 🔤 Gốc: `{orig}`\n* 💬 Dịch: **{trans}**\n")
-                        else:
-                            md_lines.append(f"**[#{i_id}]** `{orig}`\n")
-
-                    pages_dir = OUTPUT_STORAGE_DIR / "scripts"
-                    pages_dir.mkdir(parents=True, exist_ok=True)
-                    ts = int(time.time() * 1000)
-                    script_path = str(pages_dir / f"ocr_script_{ts}.txt")
-                    with open(script_path, "w", encoding="utf-8") as f:
-                        f.write(f"=== KẾT QUẢ OCR ({total_boxes} CÂU THOẠI - {elapsed_s}s) ===\n\n")
-                        for it in translated_items:
-                            f.write(f"#{it.get('id')} | {it.get('original_text')}\n")
-
-                    status_msg = f"⚡ **Hoàn thành xuất sắc:** Đã nhận diện & đọc xong {total_boxes} bóng thoại OCR trong **{elapsed_s}s**!"
-                    return annotated_pil, table_rows, "\n".join(md_lines), script_path, status_msg
-
-                btn_run_translate.click(
-                    fn=on_translate_page_ui,
-                    inputs=[
-                        trans_img_input,
-                        trans_order_radio,
-                        trans_engine_radio,
-                        trans_chat_only_chk,
-                        trans_source_lang_dd,
-                        trans_enable_llm_chk,
-                        trans_target_lang_txt,
-                        trans_api_key_txt,
-                        trans_base_url_txt,
-                        trans_model_txt,
-                    ],
-                    outputs=[
-                        trans_annotated_img,
-                        trans_dataframe,
-                        trans_script_md,
-                        trans_download_file,
-                        trans_status_md,
-                    ],
-                )
-
             # ================= TAB 4: BATCH ZIP CLEANER =================
             with gr.TabItem("📦 Xử Lý Hàng Loạt Tệp ZIP (Batch ZIP)"):
                 with gr.Row():
@@ -1650,20 +984,12 @@ def create_ui() -> gr.Blocks:
             with gr.TabItem("📱 REST API Endpoints"):
                 gr.Markdown(
                     """
-                    ### 🔗 Hướng dẫn kết nối REST API & Swagger UI
-                    Hệ thống cung cấp đầy đủ tài liệu tương tác Swagger UI tại: **`/docs`** (hoặc Redoc tại **`/redoc`**).
+                    ### 🔗 REST API (Swagger UI tại **`/docs`**, schema tại **`/openapi.json`**)
 
-                    #### 1. Pipeline Dịch Thuật Toàn Trang (Mới)
-                    * **`POST /api/v1/translate-page`** (Multipart/Form-data):
-                      - Tự động nhận diện Bounding Box bằng Comic-Text-Detector (ONNX).
-                      - Sắp xếp thứ tự đọc thông minh: `reading_order="manga"` (Phải qua Trái, Trên xuống Dưới) hoặc `"webtoon"` (Trên xuống Dưới).
-                      - Lazy OCR A/B: `ocr_engine="ja_manga"` (manga-ocr chuyên Nhật) hoặc `"multilingual"` (PaddleOCR hỗ trợ Trung, Hàn, Anh).
-                      - Dịch toàn bộ ngữ cảnh trang bằng DeepSeek LLM theo giao thức OpenAI.
-                      - Trả về JSON chuẩn kèm danh sách tọa độ Box, text gốc và text dịch.
+                    Backend này chỉ làm **một việc: xóa chữ**. OCR / dịch nằm ở phía studio (Vercel).
 
-                    #### 2. Pipeline Làm Sạch & Inpainting Manga
-                    * **`GET /health`** hoặc **`GET /api/v1/health`**: Kiểm tra trạng thái máy chủ & GPU.
-                    * **`POST /api/clean_page`**: Gửi Base64 ảnh $\\rightarrow$ Nhận Base64 ảnh sạch và Color Mask phân loại Chat (Xanh) vs SFX (Đỏ).
+                    * **`GET /health`** (hoặc **`GET /api/v1/health`**): trạng thái dịch vụ, model sẵn sàng, giới hạn ảnh.
+                    * **`POST /clean_page`** (hoặc **`POST /api/clean_page`**): gửi Base64 ảnh, nhận ảnh đã xóa chữ + Color Mask (Xanh = Chat, Đỏ = SFX).
                       ```json
                       {
                         "imageBase64": "data:image/jpeg;base64,...",
@@ -1673,8 +999,10 @@ def create_ui() -> gr.Blocks:
                         "inpaintModel": "anime-lama"
                       }
                       ```
+                      Phản hồi: `success`, `cleanedImageBase64`, `colorMaskBase64`, `stats` (kèm `timings_ms`, `api_timings_ms`, `device`).
                     * `inpaintModel` hỗ trợ: `"anime-lama"`, `"big-lama"`, `"opencv-telea"`, `"opencv-ns"`.
-                    * **`POST /api/clean_zip`**: Upload tệp ZIP nhiều trang $\\rightarrow$ Server tự động làm sạch và trả về tệp ZIP hoàn chỉnh.
+                    * **`GET /api/benchmark?runs=3&force_cpu=true`**: đo thời gian từng giai đoạn trên 2 ảnh mẫu.
+                    * Lỗi luôn trả `{"detail": "..."}`: 400 (base64 hỏng), 413 (ảnh quá lớn), 422 (tham số sai), 500 (lỗi pipeline).
                     """
                 )
 

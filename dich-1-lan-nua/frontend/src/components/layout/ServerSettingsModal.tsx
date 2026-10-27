@@ -21,6 +21,10 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
   } | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitiesAPI | null>(null);
 
+  // null = unknown (capabilities not fetched yet): keep the option selectable.
+  const lamaAvailable =
+    capabilities?.inpainting?.available_engines?.includes('lama') ?? null;
+
   useEffect(() => {
     setUrlInput(backendUrl);
   }, [backendUrl]);
@@ -144,7 +148,7 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
               <span>Hugging Face Free Tier Optimizations</span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
-              The backend uses a manga-tuned ONNXRuntime OCR pipeline and pixel-accurate flat-bubble erasing, with OpenCV Telea/Navier-Stokes as optional fallbacks for textured artwork. Designed for 2 vCPU / 16 GB free spaces.
+              The backend uses a manga-tuned ONNXRuntime OCR pipeline and pixel-accurate flat-bubble erasing. Translucent or patterned bubbles go through LaMa-Manga when the optional torch model is installed, with OpenCV Telea/Navier-Stokes as manual fallbacks. Designed for 2 vCPU / 16 GB free spaces.
             </p>
           </div>
 
@@ -175,11 +179,13 @@ export const ServerSettingsModal: React.FC<ServerSettingsModalProps> = ({ isOpen
                 onChange={(e) => setSelectedInpaintEngine(e.target.value as any)}
                 className="w-full bg-[#121316] border border-[#272930] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
               >
-                <option value="auto">Auto (flat fill + flatten transparent bubbles)</option>
+                <option value="auto">Auto (flat bubbles exact + LaMa-Manga on textured)</option>
                 <option value="flat">Flat fill (fastest, clean bubbles)</option>
                 <option value="texture">Texture fill (preserve grid/pattern)</option>
                 <option value="flatten">Flatten bubble (solid clean background)</option>
-                <option value="lama">LaMa (AI, optional)</option>
+                <option value="lama" disabled={lamaAvailable === false}>
+                  LaMa-Manga (AI){lamaAvailable === false ? ' — model not installed' : ''}
+                </option>
                 <option value="opencv_telea">Telea (Fast Marching)</option>
                 <option value="opencv_ns">Navier-Stokes (Fluid PDE)</option>
               </select>

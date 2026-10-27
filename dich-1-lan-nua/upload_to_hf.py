@@ -71,6 +71,10 @@ IGNORE_PATTERNS = [
     "*.log",
     "*.tmp",
     "*.zip",
+    # Model checkpoints >= 100 MB are downloaded at runtime (app.py, first boot):
+    # the Space repo would reject them and it would slow every push down.
+    "models/*.pt",
+    "models/*.pth",
 ]
 
 SECRET_RE = re.compile(r"hf_[A-Za-z0-9]{30,}")

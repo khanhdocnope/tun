@@ -1,0 +1,5 @@
+# Model checkpoints are downloaded per machine, never committed.
+*.pt
+*.pth
+*.onnx
+*.safetensors

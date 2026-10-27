@@ -122,7 +122,7 @@ def pairwise_directional_fill(
     span_gain: float = 18.0,
     pad: int = 24,
     structure_boost: float = 1.8,
-    sharpen: float = 0.55,
+    sharpen: float = 0.45,
 ) -> np.ndarray:
     """Continue the local structure through the text mask.
 
@@ -206,9 +206,14 @@ def pairwise_directional_fill(
     estimate = np.nan_to_num(estimate, nan=0.0, posinf=255.0, neginf=0.0)
 
     if sharpen > 0:
+        # Sharpen only the interior of the hole: applying it right at the mask
+        # boundary would turn the faint residual halo into a bright outline.
         soft = cv2.GaussianBlur(estimate, (0, 0), 1.4)
-        estimate = estimate + sharpen * (estimate - soft)
-        estimate = np.clip(estimate, 0, 255)
+        sharpened = np.clip(estimate + sharpen * (estimate - soft), 0, 255)
+        core = cv2.erode(
+            m.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        ) > 0
+        estimate[core] = sharpened[core]
 
     out_crop = img.copy()
     out_crop[m] = estimate[m]

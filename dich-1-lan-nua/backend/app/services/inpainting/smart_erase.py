@@ -15,10 +15,7 @@ import numpy as np
 from PIL import Image
 
 from app.services.inpainting.text_mask import build_combined_mask
-from app.services.inpainting.texture_fill import (
-    directional_fill,
-    reconstruct_texture,
-)
+from app.services.inpainting.texture_fill import reconstruct_texture
 from app.services.inpainting.opencv_engine import (
     OpenCVNavierStokesEngine,
     OpenCVTeleaEngine,
@@ -113,15 +110,16 @@ def smart_erase(
 
     Returns ``(png_bytes, stats)``.  ``engine_name`` accepts:
 
-    * ``auto`` (default) - exact flat fill for solid bubbles, structure-aware
-      reconstruction for translucent / patterned bubbles (never a flat patch)
+    * ``auto`` (default) - exact flat fill for solid bubbles, manga-tuned LaMa
+      for translucent / patterned bubbles when it is installed, structure-aware
+      reconstruction otherwise (never a flat patch on textured artwork)
     * ``flat`` - solid-fill every region (best for clean manga bubbles)
     * ``texture`` - structure-aware reconstruction (preserves grid/stripes)
     * ``flatten`` - turn a translucent/patterned bubble into a solid colour;
       deliberately lossy, kept only as an explicit manual choice
     * ``opencv_telea`` / ``opencv_ns`` - classical diffusion for the whole mask
-    * ``lama`` - neural inpainting when the optional model is installed,
-      otherwise the same safe fallback as ``auto``
+    * ``lama`` - neural inpainting for the whole mask when the optional model
+      is installed, otherwise the same safe fallback as ``auto``
     """
 
     started = time.perf_counter()
@@ -180,7 +178,9 @@ def smart_erase(
                 output[item.interior > 0] = item.background
                 used_full_bubble = True
             else:
-                output = directional_fill(output, item.mask)
+                output = reconstruct_texture(
+                    output, item.mask, item.interior, fallback_color=item.background
+                )
         stats["mask_coverage_pct"] = round(
             100.0 * float((mask > 0).sum()) / float(height * width), 3
         )
@@ -218,28 +218,53 @@ def smart_erase(
         engine_used = "texture"
     else:
         # auto: solid bubbles get an exact colour fill; translucent and
-        # patterned bubbles are reconstructed from their own artwork.  A flat
+        # patterned bubbles go through the neural engine when it is installed,
+        # because that is the artwork a flat patch cannot reproduce.  Without
+        # LaMa they fall back to reconstruction from their own texture.  A flat
         # patch is never used for the latter - that is what produced the
         # text-shaped "ghost" users rejected.
-        used_flat = False
-        used_texture = False
+        #
+        # All textured regions are batched into a single engine call: a text
+        # cluster costs ~10 s on CPU, and the lines of one bubble share the
+        # same crop, so calling the engine per OCR line was 4x the work.
+        textured_mask = np.zeros_like(mask)
+        textured_items = []
         for item in analyses:
             if item.flat:
                 output[item.mask > 0] = item.background
-                used_flat = True
             else:
-                output = reconstruct_texture(
-                    output,
-                    item.mask,
-                    item.interior,
-                    fallback_color=item.background,
-                )
+                textured_items.append(item)
+                textured_mask = cv2.bitwise_or(textured_mask, item.mask)
+
+        used_flat = bool(analyses) and len(textured_items) < len(analyses)
+        used_lama = False
+        used_texture = False
+        if textured_items:
+            if lama_available():
+                try:
+                    output = LamaEngine().inpaint(output, textured_mask)  # type: ignore[misc]
+                    used_lama = True
+                except Exception as exc:  # pragma: no cover - optional dependency
+                    logger.warning("LaMa region failed, using texture fill: %s", exc)
+            if not used_lama:
+                for item in textured_items:
+                    output = reconstruct_texture(
+                        output,
+                        item.mask,
+                        item.interior,
+                        fallback_color=item.background,
+                    )
                 used_texture = True
-        if used_texture and used_flat:
+
+        if used_flat and used_lama:
+            engine_used = "flat+lama"
+        elif used_lama:
+            engine_used = "lama"
+        elif used_texture and used_flat:
             engine_used = "flat+texture"
         elif used_texture:
             engine_used = "texture"
-        elif used_flat:
+        else:
             engine_used = "flat"
 
     stats["mask_coverage_pct"] = round(
