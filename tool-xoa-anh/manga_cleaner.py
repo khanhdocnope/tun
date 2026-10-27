@@ -699,15 +699,12 @@ class MangaCleanerPipeline:
                 stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
                 return img_pil, color_mask, stats
 
-            out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=ms.chat_boxes)
-            target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
             if not target.any():
                 timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
-                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx,
-                                    timings, None, "Flat-Fill Bypass (Instant)")
-                stats["flat_filled_px"] = int(np.count_nonzero(flat_done))
-                return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
-            out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
+                return img_pil, color_mask, stats
+
+            out_rgb = img_rgb
             rects, jobs = self._plan_jobs(out_rgb, target)
         else:
             # Fallback path: ComicTextDetector
@@ -723,45 +720,22 @@ class MangaCleanerPipeline:
                 timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
                 return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
 
-            all_boxes = [d.box for d in dets if d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE)]
-            flat_paper = flat_paper_hint(img_bgr, strokes, all_boxes)
             seg_ms = (time.perf_counter() - _t_seg) * 1000.0
-            timings["seg"] = round(seg_ms, 2)
+            _t_mask = time.perf_counter()
+            seg_full = self.ctd.seg_map(img_bgr)
+            ms = build_masks(img_bgr, seg_full, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
+            timings["seg"] = round(seg_ms + (time.perf_counter() - _t_mask) * 1000.0, 2)
+            target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
+            color_mask = Image.fromarray(self._color_mask(ms, h, w))
+            n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
+            timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
+            if not target.any():
+                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
+                return img_pil, color_mask, stats
+            out_rgb = img_rgb
+            rects, jobs = self._plan_jobs(out_rgb, target)
 
-            if flat_paper:
-                chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
-                target = cv2.resize(strokes.astype(np.uint8) * 255, (w, h), interpolation=cv2.INTER_NEAREST)
-                target = cv2.bitwise_and(target, rect_mask(h, w, all_boxes if clean_sfx else chat_boxes))
-                target = cv2.dilate(target, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-                out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=chat_boxes)
-                out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB) if target.any() else img_rgb
-                rects = []
-                jobs = []
-            else:
-                _t_mask = time.perf_counter()
-                seg_full = self.ctd.seg_map(img_bgr)
-                ms = build_masks(img_bgr, seg_full, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
-                timings["seg"] = round(seg_ms + (time.perf_counter() - _t_mask) * 1000.0, 2)
-                target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
-                color_mask = Image.fromarray(self._color_mask(ms, h, w))
-                n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
-                timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
-                if not target.any():
-                    timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
-                    stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
-                    return img_pil, color_mask, stats
-                out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=ms.chat_boxes)
-                target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
-                if not target.any():
-                    timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
-                    stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx,
-                                        timings, "No text detected", "Flat-Fill Bypass (Instant)")
-                    stats["flat_filled_px"] = int(np.count_nonzero(flat_done))
-                    return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
-                out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
-                rects, jobs = self._plan_jobs(out_rgb, target)
-
-        n_flat = int(np.count_nonzero(flat_done))
         if jobs:
             _t_inp = time.perf_counter()
             low = inpaint_model.lower()
@@ -781,16 +755,14 @@ class MangaCleanerPipeline:
                     tag = f"{inpaint_model} (CPU fallback)"
             final = self._paste(out_rgb, target, rects, results)
             timings["inpaint"] = round((time.perf_counter() - _t_inp) * 1000.0, 2)
-        else:  # flat paper covered everything
+        else:
             final = cv2.cvtColor(out_rgb, cv2.COLOR_RGB2BGR)
-            tag = "Flat-Fill Bypass (paper)"
+            tag = "none"
 
-        if n_flat > 0 and "FlatFill" not in tag:
-            tag = f"Hybrid FlatFill+{tag}"
         timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
         timings["regions"] = len(rects)
         stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, None, tag)
-        stats["flat_filled_px"] = n_flat
+        stats["flat_filled_px"] = 0
         stats["device"] = "gpu" if (gpu_used or used_gpu_window) else "cpu"
         return Image.fromarray(cv2.cvtColor(final, cv2.COLOR_BGR2RGB)), color_mask, stats
 

@@ -376,18 +376,7 @@ def build_masks_from_polygons(
                 matched_bubble_idx = idx
                 break
 
-        is_chat = (matched_bubble_idx >= 0)
-
-        # If not clearly near a bubble, check if sitting on bright paper
-        if not is_chat:
-            is_sfx_explicit = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in sfx_boxes)
-            if not is_sfx_explicit:
-                rx1, ry1 = max(0, int(min_x) - 10), max(0, int(min_y) - 10)
-                rx2, ry2 = min(w, int(max_x) + 10), min(h, int(max_y) + 10)
-                roi_g = gray[ry1:ry2, rx1:rx2]
-                bright_pixels = roi_g[roi_g >= 200]
-                if len(bright_pixels) >= 15 and float(np.median(bright_pixels)) >= 210:
-                    is_chat = True
+        is_chat = (matched_bubble_idx >= 0) or (not bubble_boxes and not sfx_boxes)
 
         p_int = p.astype(np.int32)
         poly_box: Box = (
@@ -438,17 +427,16 @@ def build_masks_from_polygons(
     if sfx_polys:
         cv2.fillPoly(sfx_poly_mask, sfx_polys, 255)
 
-    # Initial text candidate mask
-    ink = (gray < 210).astype(np.uint8) * 255
+    # Initial text candidate mask: strictly dark ink only, never broad probability blobs
+    ink = (gray < 205).astype(np.uint8) * 255
     if seg_map is not None:
         seg_bin = (seg_map > 0.15).astype(np.uint8) * 255
         chat_region = rect_mask(h, w, chat_boxes, max(12, box_pad))
         sfx_region = rect_mask(h, w, sfx_boxes, max(12, box_pad))
         chat_cand = cv2.bitwise_or(chat_poly_mask, cv2.bitwise_and(seg_bin, chat_region))
         sfx_cand = cv2.bitwise_or(sfx_poly_mask, cv2.bitwise_and(seg_bin, sfx_region))
-        high_prob = (seg_map > 0.25).astype(np.uint8) * 255
-        chat_text = cv2.bitwise_and(chat_cand, cv2.bitwise_or(ink, high_prob))
-        sfx_text = cv2.bitwise_and(sfx_cand, cv2.bitwise_or(ink, high_prob))
+        chat_text = cv2.bitwise_and(chat_cand, ink)
+        sfx_text = cv2.bitwise_and(sfx_cand, ink)
     else:
         chat_text = cv2.bitwise_and(chat_poly_mask, ink)
         sfx_text = cv2.bitwise_and(sfx_poly_mask, ink)

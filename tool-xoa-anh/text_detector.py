@@ -211,16 +211,12 @@ class MangaTextDetector:
             if box_score_fast(pred_map, pts) < box_thresh:
                 continue
             unclipped = unclip(pts, unclip_ratio)
-            if unclipped is None or len(unclipped) == 0:
+            if unclipped is None or len(unclipped) < 3:
                 continue
-            rect = cv2.minAreaRect(unclipped.astype(np.float32))
-            _, (bw, bh), _ = rect
-            if min(bw, bh) < 3:
-                continue
-            box_pts = cv2.boxPoints(rect).astype(np.float32)
-            box_pts[:, 0] = np.clip(np.round(box_pts[:, 0] / rw * w), 0, w)
-            box_pts[:, 1] = np.clip(np.round(box_pts[:, 1] / rh * h), 0, h)
-            boxes.append(box_pts)
+            poly = unclipped.astype(np.float32)
+            poly[:, 0] = np.clip(np.round(poly[:, 0] / rw * w), 0, w)
+            poly[:, 1] = np.clip(np.round(poly[:, 1] / rh * h), 0, h)
+            boxes.append(poly)
 
         return boxes, pred_full
 
