@@ -341,37 +341,94 @@ def build_masks_from_polygons(
     """
     Constructs Chat and SFX masks from detected text polygons (and optional probability map).
 
-    1. Polygons are mapped to Chat (if falling within a CLS_TEXT_BUBBLE box) or SFX (CLS_TEXT_FREE).
+    1. Classifies polygons into Chat vs SFX:
+       - Checks intersection with bubble boxes (CLS_TEXT_BUBBLE, CLS_BUBBLE).
+       - Checks background paper brightness around polygons.
+       - Expands chat_boxes with the true polygon bounds to avoid clipping vertical text lines.
     2. Combines polygon raster with per-pixel probability map and dark ink to form crisp text masks.
     3. Runs snap_white_halo and contour_preserving_dilate using barrier protection.
     """
     h, w = img_bgr.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
-    chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
-    sfx_boxes = [d.box for d in dets if d.cls == CLS_TEXT_FREE]
-    seg_chat_boxes, seg_sfx_boxes = _eligible_regions(dets, seg_regions)
+    bubble_boxes: List[Box] = [d.box for d in dets if d.cls in (CLS_TEXT_BUBBLE, CLS_BUBBLE)]
+    sfx_boxes: List[Box] = [d.box for d in dets if d.cls == CLS_TEXT_FREE]
 
-    box_pad = max(10, box_pad)
-    chat_core_box = rect_mask(h, w, chat_boxes, 0)
-    chat_region = rect_mask(h, w, seg_chat_boxes, box_pad)
-    sfx_region = cv2.bitwise_and(rect_mask(h, w, seg_sfx_boxes, box_pad), cv2.bitwise_not(chat_core_box))
-
-    # Separate polygons into Chat vs SFX
+    near_pad = 35.0
     chat_polys: List[np.ndarray] = []
     sfx_polys: List[np.ndarray] = []
+
     for p in polygons:
         if len(p) < 3:
             continue
         cx = float(np.mean(p[:, 0]))
         cy = float(np.mean(p[:, 1]))
-        is_chat = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in seg_chat_boxes)
-        if is_chat:
-            chat_polys.append(p.astype(np.int32))
+        min_x = float(np.min(p[:, 0]))
+        max_x = float(np.max(p[:, 0]))
+        min_y = float(np.min(p[:, 1]))
+        max_y = float(np.max(p[:, 1]))
+
+        # Find closest matching bubble box
+        matched_bubble_idx = -1
+        for idx, b in enumerate(bubble_boxes):
+            if ((b[0] - near_pad) <= cx <= (b[2] + near_pad) and
+                (b[1] - near_pad) <= cy <= (b[3] + near_pad)):
+                matched_bubble_idx = idx
+                break
+
+        is_chat = (matched_bubble_idx >= 0)
+
+        # If not clearly near a bubble, check if sitting on bright paper
+        if not is_chat:
+            is_sfx_explicit = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in sfx_boxes)
+            if not is_sfx_explicit:
+                rx1, ry1 = max(0, int(min_x) - 10), max(0, int(min_y) - 10)
+                rx2, ry2 = min(w, int(max_x) + 10), min(h, int(max_y) + 10)
+                roi_g = gray[ry1:ry2, rx1:rx2]
+                bright_pixels = roi_g[roi_g >= 200]
+                if len(bright_pixels) >= 15 and float(np.median(bright_pixels)) >= 210:
+                    is_chat = True
+
+        p_int = p.astype(np.int32)
+        poly_box: Box = (
+            max(0.0, min_x - 12.0),
+            max(0.0, min_y - 12.0),
+            min(float(w), max_x + 12.0),
+            min(float(h), max_y + 12.0),
+        )
+
+        if is_chat or not sfx_boxes:
+            chat_polys.append(p_int)
+            if matched_bubble_idx >= 0:
+                b = bubble_boxes[matched_bubble_idx]
+                bubble_boxes[matched_bubble_idx] = (
+                    min(b[0], poly_box[0]),
+                    min(b[1], poly_box[1]),
+                    max(b[2], poly_box[2]),
+                    max(b[3], poly_box[3]),
+                )
+            else:
+                bubble_boxes.append(poly_box)
         else:
-            is_sfx = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in seg_sfx_boxes)
-            if is_sfx or not chat_boxes:
-                sfx_polys.append(p.astype(np.int32))
+            sfx_polys.append(p_int)
+            matched_sfx_idx = -1
+            for idx, b in enumerate(sfx_boxes):
+                if ((b[0] - near_pad) <= cx <= (b[2] + near_pad) and
+                    (b[1] - near_pad) <= cy <= (b[3] + near_pad)):
+                    matched_sfx_idx = idx
+                    break
+            if matched_sfx_idx >= 0:
+                b = sfx_boxes[matched_sfx_idx]
+                sfx_boxes[matched_sfx_idx] = (
+                    min(b[0], poly_box[0]),
+                    min(b[1], poly_box[1]),
+                    max(b[2], poly_box[2]),
+                    max(b[3], poly_box[3]),
+                )
+            else:
+                sfx_boxes.append(poly_box)
+
+    chat_boxes = bubble_boxes
 
     chat_poly_mask = np.zeros((h, w), dtype=np.uint8)
     if chat_polys:
@@ -382,25 +439,26 @@ def build_masks_from_polygons(
         cv2.fillPoly(sfx_poly_mask, sfx_polys, 255)
 
     # Initial text candidate mask
+    ink = (gray < 210).astype(np.uint8) * 255
     if seg_map is not None:
         seg_bin = (seg_map > 0.15).astype(np.uint8) * 255
-        chat_cand = cv2.bitwise_and(cv2.bitwise_or(seg_bin, chat_poly_mask), chat_region)
-        sfx_cand = cv2.bitwise_and(cv2.bitwise_or(seg_bin, sfx_poly_mask), sfx_region)
-        ink = (gray < 180).astype(np.uint8) * 255
+        chat_region = rect_mask(h, w, chat_boxes, max(12, box_pad))
+        sfx_region = rect_mask(h, w, sfx_boxes, max(12, box_pad))
+        chat_cand = cv2.bitwise_or(chat_poly_mask, cv2.bitwise_and(seg_bin, chat_region))
+        sfx_cand = cv2.bitwise_or(sfx_poly_mask, cv2.bitwise_and(seg_bin, sfx_region))
         high_prob = (seg_map > 0.25).astype(np.uint8) * 255
         chat_text = cv2.bitwise_and(chat_cand, cv2.bitwise_or(ink, high_prob))
         sfx_text = cv2.bitwise_and(sfx_cand, cv2.bitwise_or(ink, high_prob))
     else:
-        ink = (gray < 180).astype(np.uint8) * 255
-        chat_text = cv2.bitwise_and(cv2.bitwise_and(chat_poly_mask, ink), chat_region)
-        sfx_text = cv2.bitwise_and(cv2.bitwise_and(sfx_poly_mask, ink), sfx_region)
+        chat_text = cv2.bitwise_and(chat_poly_mask, ink)
+        sfx_text = cv2.bitwise_and(sfx_poly_mask, ink)
 
     chat_text = remove_specks(chat_text, min_speck)
     sfx_text = remove_specks(sfx_text, max(min_speck, 12))
 
     # Auto-snap white halo / stroke around text in colored/tinted bubbles
-    chat_text = snap_white_halo(chat_text, gray, seg_chat_boxes, max_halo_radius=8)
-    sfx_text = snap_white_halo(sfx_text, gray, seg_sfx_boxes, max_halo_radius=8)
+    chat_text = snap_white_halo(chat_text, gray, chat_boxes, max_halo_radius=8)
+    sfx_text = snap_white_halo(sfx_text, gray, sfx_boxes, max_halo_radius=8)
 
     # All text strokes
     all_text = cv2.bitwise_or(chat_text, sfx_text)
@@ -409,7 +467,7 @@ def build_masks_from_polygons(
     barrier = extract_contour_barrier(gray, all_text, ink_thr=120, min_area=25, barrier_grow=2)
 
     r = max(0, int(dilation_px))
-    chat_limit = rect_mask(h, w, chat_boxes, box_pad + r + 4)
+    chat_limit = rect_mask(h, w, chat_boxes, max(15, box_pad + r + 10))
 
     # Contour-Preserving Dilation for Dialogue Text
     if r > 0:
@@ -421,7 +479,7 @@ def build_masks_from_polygons(
     chat_erase = cv2.bitwise_or(chat_erase, chat_text)
 
     # SFX Dilation (only used when user chooses "clean all" / clean_sfx=True)
-    sfx_limit = rect_mask(h, w, sfx_boxes, box_pad + r + 2)
+    sfx_limit = rect_mask(h, w, sfx_boxes, max(15, box_pad + r + 10))
     if r > 0 and sfx_text.any():
         sfx_erase = cv2.dilate(sfx_text, _ellipse(2 * (r + 2) + 1))
         sfx_erase = cv2.bitwise_and(sfx_erase, sfx_limit)
@@ -436,9 +494,9 @@ def flat_fill_uniform_paper(
     erase: np.ndarray,
     boxes: Sequence[Box],
     margin: int = 24,
-    own_pad: int = 10,
-    paper_min: int = 225,
-    max_std: float = 5.0,
+    own_pad: int = 14,
+    paper_min: int = 210,
+    max_std: float = 6.0,
     min_ring: int = 50,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -474,9 +532,9 @@ def flat_fill_uniform_paper(
         if float(px.std(axis=0).max()) > max_std:
             continue
         color = np.median(px, axis=0).astype(np.uint8)
-        # Safety Gate: Paper must be bright opaque white (>= 230 on all channels)
+        # Safety Gate: Paper must be bright paper tone (>= 210 on all channels)
         # If the background is tinted, pastel, or semi-transparent, reject flat fill!
-        if float(color.min()) < 230:
+        if float(color.min()) < 210:
             continue
         sel = m > 0
         roi_out = out[Y1:Y2, X1:X2]

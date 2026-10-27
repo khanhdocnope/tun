@@ -85,6 +85,29 @@ def test_build_masks_from_polygons():
     assert len(ms.sfx_boxes) == 1
 
 
+def test_vertical_text_coverage_and_flat_fill():
+    img = np.full((500, 500, 3), 220, dtype=np.uint8)
+    box = (100.0, 100.0, 200.0, 300.0)
+    dets = [Det(CLS_TEXT_BUBBLE, 0.9, box)]
+
+    poly_top = np.array([[120, 80], [180, 80], [180, 120], [120, 120]], dtype=np.float32)
+    poly_mid = np.array([[120, 180], [180, 180], [180, 220], [120, 220]], dtype=np.float32)
+    poly_bot = np.array([[120, 280], [180, 280], [180, 320], [120, 320]], dtype=np.float32)
+
+    for p in [poly_top, poly_mid, poly_bot]:
+        img[int(p[:, 1].min()):int(p[:, 1].max()), int(p[:, 0].min()):int(p[:, 0].max())] = 20
+
+    ms = build_masks_from_polygons(img, [poly_top, poly_mid, poly_bot], dets)
+
+    # All characters must be 100% covered without horizontal clipping
+    assert np.count_nonzero(ms.chat_erase[80:120, 120:180]) == 2400
+    assert np.count_nonzero(ms.chat_erase[180:220, 120:180]) == 2400
+    assert np.count_nonzero(ms.chat_erase[280:320, 120:180]) == 2400
+
+    out_bgr, done = flat_fill_uniform_paper(img, ms.chat_erase, ms.chat_boxes)
+    assert np.count_nonzero(done) > 0, "Manga paper (220) must be flat-filled"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
