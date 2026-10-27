@@ -17,14 +17,12 @@ Can be run:
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
 from statistics import median
 from typing import Any, Dict, List, Optional, Tuple
 
-import cv2
 import numpy as np
 from PIL import Image
 
@@ -36,7 +34,7 @@ try:
 except ImportError:
     HAS_TORCH = False
 
-from mask_logic import Det, CLS_TEXT_BUBBLE, CLS_TEXT_FREE, build_masks
+from mask_logic import Det, CLS_TEXT_BUBBLE, build_masks
 
 EXAMPLES_DIR = Path(__file__).resolve().parent / "examples"
 
@@ -148,6 +146,88 @@ def format_cpu_markdown_table(results: Dict[str, Dict[str, Dict[str, float]]]) -
     return "\n".join(lines)
 
 
+def format_api_markdown_table(payloads: Dict[str, Dict[str, Any]]) -> str:
+    """Round-trip numbers as an HTTP client sees them (Vercel studio -> Space /clean_page)."""
+    rows = payloads.get("runs", [])
+    if not rows:
+        return "_(no /clean_page measurement yet)_"
+    cols = ["payload_mb", "api_total_ms", "pipeline_total_ms", "detect_s", "seg_s", "inpaint_s", "device"]
+    lines = [
+        "| " + " | ".join(["run"] + cols) + " |",
+        "|" + "|".join(["---"] * (len(cols) + 1)) + "|",
+    ]
+    for r in rows:
+        vals = [str(r.get("run", "?"))] + [str(r.get(c, "—")) for c in cols]
+        lines.append("| " + " | ".join(vals) + " |")
+    lines.append("")
+    lines.append(f"- status: {payloads.get('status')}, pages: {payloads.get('pages', 0)}, device: {payloads.get('device', '—')}")
+    if payloads.get("error"):
+        lines.append(f"- error: {payloads['error']}")
+    return "\n".join(lines)
+
+
+def measure_clean_page_api(
+    base_url: str,
+    image_paths: Optional[List[str]] = None,
+    runs: int = 1,
+    timeout: float = 120.0,
+) -> Dict[str, Any]:
+    """
+    POST examples/sample1.jpg & sample2.jpg to a running backend's /clean_page and report the
+    wall-clock round trip plus the split of pipeline stages. This is the number the studio sees.
+    """
+    import base64
+    import json
+    import urllib.request
+
+    images = image_paths or [str(EXAMPLES_DIR / "sample1.jpg"), str(EXAMPLES_DIR / "sample2.jpg")]
+    base = (base_url or "").rstrip("/")
+    out: Dict[str, Any] = {"base_url": base, "status": "success", "pages": 0, "runs": [], "device": ""}
+    n = 0
+    for _ in range(max(1, runs)):
+        for path in images:
+            p = Path(path)
+            if not p.is_file():
+                continue
+            src = base64.b64encode(p.read_bytes()).decode("ascii")
+            payload = json.dumps({"imageBase64": src, "cleanSFX": False, "dilationPx": 4,
+                                  "detThreshold": 0.20, "inpaintModel": "anime-lama"}).encode()
+            req = urllib.request.Request(f"{base}/clean_page", data=payload,
+                                         headers={"Content-Type": "application/json"})
+            t0 = time.perf_counter()
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                out["status"] = "error"
+                out["error"] = f"{Path(path).name}: {type(exc).__name__}: {exc}"
+                out["markdown_table"] = format_api_markdown_table(out)
+                return out
+            wall_ms = (time.perf_counter() - t0) * 1000.0
+            n += 1
+            stats = body.get("stats", {}) or {}
+            tim = stats.get("timings_ms", {}) or {}
+            api = stats.get("api_timings_ms", {}) or {}
+            out["pages"] = n
+            out["device"] = stats.get("device", out["device"])
+            out["runs"].append({
+                "run": n,
+                "image": Path(path).name,
+                "payload_mb": round(len(src) / (1024 * 1024), 2),
+                "api_total_ms": api.get("total"),
+                "round_trip_ms": round(wall_ms, 1),
+                "pipeline_total_ms": tim.get("total"),
+                "detect_s": round(tim.get("detect", 0) / 1000.0, 3),
+                "seg_s": round(tim.get("seg", 0) / 1000.0, 3),
+                "masks_s": round(tim.get("masks", 0) / 1000.0, 3),
+                "inpaint_s": round(tim.get("inpaint", 0) / 1000.0, 3),
+                "engine": stats.get("engine"),
+                "device": stats.get("device"),
+            })
+    out["markdown_table"] = format_api_markdown_table(out)
+    return out
+
+
 def format_gpu_markdown_table(
     avg_total: float,
     avg_detect: float,
@@ -185,8 +265,8 @@ def run_benchmark_suite(
     Reuses provided pipeline or instantiates a new MangaCleanerPipeline.
     """
     if pipeline is None:
-        from manga_cleaner import MangaCleanerPipeline
-        pipeline = MangaCleanerPipeline()
+        from manga_cleaner import get_pipeline
+        pipeline = get_pipeline()
 
     images = get_example_images()
 
@@ -194,14 +274,17 @@ def run_benchmark_suite(
     for name, img in images.items():
         dimensions[name] = f"{img.width}x{img.height}"
 
-    # Warm-up run (excluded from stats)
+    # Warm-up run (excluded from stats) - first call loads detectors + LaMa
+    warmup_error: Optional[str] = None
     try:
         pipeline.clean_image(images["sample1"], force_cpu=force_cpu, inpaint_model=inpaint_model)
-    except Exception as exc:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        warmup_error = f"{type(exc).__name__}: {exc}"
 
     results: Dict[str, Dict[str, Dict[str, float]]] = {}
     raw_details: Dict[str, List[Dict[str, Any]]] = {}
+    engines: Dict[str, str] = {}
+    errors: Dict[str, str] = {}
 
     for label, img in images.items():
         stage_stats, raw_runs = bench_single_image(
@@ -229,6 +312,7 @@ def run_benchmark_suite(
         "dimensions": dimensions,
         "results": results,
         "raw_details": raw_details,
+        "warmup_error": warmup_error,
         "markdown_table": md_table,
     }
 
@@ -281,6 +365,8 @@ def main():
     parser.add_argument("--runs", type=int, default=5, help="Number of benchmark runs per image")
     parser.add_argument("--gpu", action="store_true", help="Benchmark on GPU instead of CPU")
     parser.add_argument("--test", action="store_true", help="Run self-tests and exit")
+    parser.add_argument("--url", default="", help="Also measure /clean_page round trip on this backend, e.g. https://dobietdc-backe-manga-remove.hf.space")
+    parser.add_argument("--url-runs", type=int, default=1, help="How many passes over the 2 sample pages to POST")
     args = parser.parse_args()
 
     if args.test:
@@ -290,8 +376,20 @@ def main():
             print(f"[{c['status']}] {c['name']}")
         sys.exit(0 if res["all_passed"] else 1)
 
+    if args.url:
+        print(f"Measuring POST /clean_page on {args.url} ({args.url_runs} pass(es))...")
+        api = measure_clean_page_api(args.url, runs=args.url_runs)
+        print("\n" + api["markdown_table"] + "\n")
+        if api.get("runs"):
+            first = api["runs"][0]
+            print(f"first page: round trip {first['round_trip_ms']} ms "
+                  f"(pipeline {first['pipeline_total_ms']} ms, device {first.get('device')})\n")
+        return
+
     print(f"Loading pipeline for benchmarking ({args.runs} runs, {'GPU' if args.gpu else 'CPU'})...")
     res = run_benchmark_suite(runs=args.runs, force_cpu=not args.gpu)
+    if res.get("warmup_error"):
+        print(f"warm-up error (check models): {res['warmup_error']}\n")
     print("\n" + res["markdown_table"] + "\n")
 
 

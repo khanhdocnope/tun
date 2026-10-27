@@ -11,7 +11,15 @@ It checks the two speed-oriented guarantees introduced in v3:
 import cv2
 import numpy as np
 
-from mask_logic import CLS_TEXT_BUBBLE, Det, build_masks, flat_paper_hint, flat_fill_uniform_paper
+from mask_logic import (
+    CLS_TEXT_BUBBLE,
+    CLS_TEXT_FREE,
+    Det,
+    build_masks,
+    build_masks_from_polygons,
+    flat_paper_hint,
+    flat_fill_uniform_paper,
+)
 
 
 def test_flat_paper_hint_on_synthetic_page():
@@ -59,6 +67,22 @@ def test_flat_fill_paints_paper_strokes():
     strokes[y1:y2, x1:x2] = ((gray[y1:y2, x1:x2] < 90).astype(np.uint8)) * 255
     _, done = flat_fill_uniform_paper(img, strokes, [box])
     assert int(np.count_nonzero(done)) > 0, "plain white bubble paper must be flat-filled"
+
+
+def test_build_masks_from_polygons():
+    img = cv2.imread("examples/sample1.jpg")
+    assert img is not None, "examples/sample1.jpg must exist"
+    poly_chat = np.array([[120, 150], [300, 150], [300, 200], [120, 200]], dtype=np.float32)
+    poly_sfx = np.array([[650, 100], [800, 100], [800, 250], [650, 250]], dtype=np.float32)
+    dets = [
+        Det(CLS_TEXT_BUBBLE, 0.9, (100.0, 70.0, 420.0, 340.0)),
+        Det(CLS_TEXT_FREE, 0.9, (630.0, 70.0, 820.0, 280.0)),
+    ]
+    ms = build_masks_from_polygons(img, [poly_chat, poly_sfx], dets, dilation_px=4)
+    assert int((ms.chat_erase > 0).sum()) > 0, "Chat erase mask must contain pixels"
+    assert int((ms.sfx_erase > 0).sum()) > 0, "SFX erase mask must contain pixels"
+    assert len(ms.chat_boxes) == 1
+    assert len(ms.sfx_boxes) == 1
 
 
 if __name__ == "__main__":

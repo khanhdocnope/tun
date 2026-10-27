@@ -11,6 +11,7 @@ venv/
 # Weights (Downloaded dynamically on Hugging Face Space boot to keep Git repo < 1MB)
 weights/*.onnx
 weights/*.tmp
+models/
 
 # Temporary files
 *.tmp

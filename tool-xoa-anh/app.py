@@ -55,9 +55,9 @@ OUTPUT_STORAGE_DIR = Path("/data/outputs") if Path("/data").is_dir() else BASE_D
 OUTPUT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Hard limits: a single request must not be able to exhaust the Space container.
-MAX_PIXELS = int(os.getenv(MAX_PIXELS, str(40_000_000)))
-MAX_B64_BYTES = int(os.getenv(MAX_B64_BYTES, str(24 * 1024 * 1024)))
-VALID_INPAINT_MODELS = {anime-lama, big-lama, opencv-telea, opencv-ns}
+MAX_PIXELS = int(os.getenv("MAX_PIXELS", str(40_000_000)))
+MAX_B64_BYTES = int(os.getenv("MAX_B64_BYTES", str(24 * 1024 * 1024)))
+VALID_INPAINT_MODELS = {"anime-lama", "big-lama", "opencv-telea", "opencv-ns"}
 
 
 # --------------------------------------------------------------------------------------
@@ -518,37 +518,31 @@ class CleanPagePayload(BaseModel):
 @api_router.get("/health")
 @api_router.get("/api/v1/health")
 def health():
+    pipeline = cleaner_pipeline
     return {
         "status": "online",
-        "device": "ZeroGPU (Nvidia A100)" if torch.cuda.is_available() else "CPU",
-        "detector_ready": cleaner_pipeline.detector.ready,
-        "available_models": ["anime-lama", "big-lama", "opencv-telea", "opencv-ns"],
-        "features": ["Chat vs SFX classification", "Multi-model Inpainting", "Color Mask (Green/Red)"],
+        "device": "ZeroGPU (Nvidia A10G)" if torch.cuda.is_available() else "CPU",
+        "detector_ready": bool(pipeline.bubbles.ready),
+        "seg_ready": bool(pipeline.ctd.ready),
+        "text_backend": getattr(pipeline, "text_backend", "manga_det"),
+        "inpaint_ready": True,
+        "available_models": sorted(VALID_INPAINT_MODELS),
+        "limits": {"max_pixels": MAX_PIXELS, "max_base64_bytes": MAX_B64_BYTES},
     }
-
-
-@api_router.get("/docs", include_in_schema=False)
-async def custom_swagger_ui_html():
-    return get_swagger_ui_html(openapi_url="/openapi.json", title="⚡ Manga Cleaner & Translation API - Swagger Docs")
-
-
-@api_router.get("/redoc", include_in_schema=False)
-async def custom_redoc_html():
-    return get_redoc_html(openapi_url="/openapi.json", title="⚡ Manga Cleaner & Translation API - ReDoc")
 
 
 @api_router.get("/openapi.json", include_in_schema=False)
 async def get_open_api_endpoint():
     return get_openapi(
-        title="⚡ Manga Cleaner & Translation API",
-        version="2.0.0",
-        description="Backend API đa chế độ cho Manga/Manhwa: OCR, Comic-Text-Detection, Inpainting & DeepSeek Translation.",
+        title="Manga Text Cleaner API",
+        version="3.0.0",
+        description="Xóa chữ / bóng thoại trên trang Manga & Manhwa: RT-DETR vùng Chat/SFX, ComicTextDetector seg, flat-fill + LaMa inpaint.",
         routes=api_router.routes,
     )
 
 
 # --------------------------------------------------------------------------------------
-# Benchmark Web Page & API
+# Benchmark API
 # --------------------------------------------------------------------------------------
 @api_router.get("/api/benchmark")
 @api_router.post("/api/benchmark")
@@ -569,12 +563,12 @@ async def api_run_benchmark(runs: int = 3, force_cpu: bool = True, inpaint_model
         if run_self_tests is not None:
             try:
                 tests_res = await run_in_threadpool(run_self_tests, pipeline=cleaner_pipeline)
-            except Exception as test_err:
+            except Exception as test_err:  # noqa: BLE001
                 tests_res = {"error": str(test_err)}
 
         bench_res["tests"] = tests_res
         return bench_res
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.error("Benchmark error: %s", exc)
         return {"status": "error", "error": str(exc)}
 
@@ -582,60 +576,81 @@ async def api_run_benchmark(runs: int = 3, force_cpu: bool = True, inpaint_model
 @api_router.post("/clean_page")
 @api_router.post("/api/clean_page")
 async def api_clean_page(req: CleanPagePayload):
+    _t_api = time.perf_counter()
+
+    raw = (req.imageBase64 or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Thiếu dữ liệu ảnh (imageBase64).")
+    if len(raw) > MAX_B64_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Ảnh quá lớn: {len(raw) // 1024} KB base64, giới hạn {MAX_B64_BYTES // 1024} KB.",
+        )
+    inpaint_model = str(req.inpaintModel or "anime-lama").strip().lower()
+    if inpaint_model not in VALID_INPAINT_MODELS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"inpaintModel không hợp lệ: {inpaint_model}. Chọn một trong {sorted(VALID_INPAINT_MODELS)}.",
+        )
+
+    # Decode incoming base64
+    _t_dec = time.perf_counter()
     try:
-        _t_api = time.perf_counter()
+        img_pil = b64_to_pil(raw)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Không giải mã được ảnh base64: {exc}") from exc
+    if img_pil.width * img_pil.height > MAX_PIXELS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Ảnh quá lớn: {img_pil.width}x{img_pil.height}, giới hạn {MAX_PIXELS} pixel.",
+        )
+    _decode_ms = (time.perf_counter() - _t_dec) * 1000.0
+    payload_in_bytes = len(raw)
 
-        # Decode incoming base64
-        _t_dec = time.perf_counter()
-        img_pil = b64_to_pil(req.imageBase64)
-        _decode_ms = (time.perf_counter() - _t_dec) * 1000.0
-
-        payload_in_bytes = len(req.imageBase64)
-
+    try:
         cleaned_pil, color_mask_pil, stats = await run_in_threadpool(
             cleaner_pipeline.clean_image,
             image_input=img_pil,
             clean_sfx=bool(req.cleanSFX),
             dilation_px=int(req.dilationPx or 4),
             det_threshold=float(req.detThreshold or 0.20),
-            inpaint_model=str(req.inpaintModel or "anime-lama"),
+            inpaint_model=inpaint_model,
         )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("clean_page failed")
+        raise HTTPException(
+            status_code=500, detail=f"Làm sạch ảnh thất bại: {type(exc).__name__}: {exc}"
+        ) from exc
 
-        # Encode results to base64
-        _t_enc1 = time.perf_counter()
-        cleaned_b64 = await run_in_threadpool(pil_to_b64, cleaned_pil)
-        _encode1_ms = (time.perf_counter() - _t_enc1) * 1000.0
+    # Encode results to base64
+    _t_enc1 = time.perf_counter()
+    cleaned_b64 = await run_in_threadpool(pil_to_b64, cleaned_pil)
+    _encode1_ms = (time.perf_counter() - _t_enc1) * 1000.0
 
-        _t_enc2 = time.perf_counter()
-        mask_b64 = await run_in_threadpool(pil_to_b64, color_mask_pil)
-        _encode2_ms = (time.perf_counter() - _t_enc2) * 1000.0
+    _t_enc2 = time.perf_counter()
+    mask_b64 = await run_in_threadpool(pil_to_b64, color_mask_pil)
+    _encode2_ms = (time.perf_counter() - _t_enc2) * 1000.0
 
-        _total_api_ms = (time.perf_counter() - _t_api) * 1000.0
+    _total_api_ms = (time.perf_counter() - _t_api) * 1000.0
+    response_bytes = len(cleaned_b64) + len(mask_b64)
 
-        response_bytes = len(cleaned_b64) + len(mask_b64)
+    # API-level timings live in their own key: the pipeline reports its own `timings_ms`,
+    # and mixing the two made `inpaint` look slower than it really is.
+    stats["api_timings_ms"] = {
+        "decode": round(_decode_ms, 2),
+        "encode_cleaned": round(_encode1_ms, 2),
+        "encode_mask": round(_encode2_ms, 2),
+        "payload_in_bytes": payload_in_bytes,
+        "response_bytes": response_bytes,
+        "total": round(_total_api_ms, 2),
+    }
 
-        # Merge API-level timings into stats
-        api_timings = {
-            "decode_ms": round(_decode_ms, 2),
-            "encode_cleaned_ms": round(_encode1_ms, 2),
-            "encode_mask_ms": round(_encode2_ms, 2),
-            "payload_in_bytes": payload_in_bytes,
-            "response_bytes": response_bytes,
-            "total_ms": round(_total_api_ms, 2),
-        }
-        if "timings_ms" not in stats:
-            stats["timings_ms"] = {}
-        stats["timings_ms"].update(api_timings)
-
-        return {
-            "success": True,
-            "cleanedImageBase64": cleaned_b64,
-            "colorMaskBase64": mask_b64,
-            "stats": stats,
-        }
-    except Exception as exc:
-        logger.error("API error: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+    return {
+        "success": True,
+        "cleanedImageBase64": cleaned_b64,
+        "colorMaskBase64": mask_b64,
+        "stats": stats,
+    }
 
 
 # --------------------------------------------------------------------------------------
@@ -935,7 +950,7 @@ def create_ui() -> gr.Blocks:
                             outputs=[brush_output_image, brush_download_btn],
                         )
 
-            # ================= TAB 4: BATCH ZIP CLEANER =================
+            # ================= TAB 3: BATCH ZIP CLEANER =================
             with gr.TabItem("📦 Xử Lý Hàng Loạt Tệp ZIP (Batch ZIP)"):
                 with gr.Row():
                     with gr.Column(scale=5):
@@ -980,17 +995,17 @@ def create_ui() -> gr.Blocks:
                     outputs=[zip_file_output],
                 )
 
-            # ================= TAB 5: API GUIDE =================
+            # ================= TAB 4: API GUIDE =================
             with gr.TabItem("📱 REST API Endpoints"):
                 gr.Markdown(
                     """
-                    ### 🔗 REST API (Swagger UI tại **`/docs`**, schema tại **`/openapi.json`**)
+                    ### 🔗 REST API (Swagger UI tại **/docs**, schema tại **/openapi.json**)
 
                     Backend này chỉ làm **một việc: xóa chữ**. OCR / dịch nằm ở phía studio (Vercel).
 
-                    * **`GET /health`** (hoặc **`GET /api/v1/health`**): trạng thái dịch vụ, model sẵn sàng, giới hạn ảnh.
-                    * **`POST /clean_page`** (hoặc **`POST /api/clean_page`**): gửi Base64 ảnh, nhận ảnh đã xóa chữ + Color Mask (Xanh = Chat, Đỏ = SFX).
-                      ```json
+                    * **GET /health** hoặc **GET /api/v1/health**: trạng thái dịch vụ, model sẵn sàng, giới hạn ảnh.
+                    * **POST /clean_page** hoặc **POST /api/clean_page**: gửi Base64 ảnh, nhận ảnh đã xóa chữ + Color Mask (Xanh = Chat, Đỏ = SFX).
+                      `json
                       {
                         "imageBase64": "data:image/jpeg;base64,...",
                         "cleanSFX": false,
@@ -998,11 +1013,11 @@ def create_ui() -> gr.Blocks:
                         "detThreshold": 0.20,
                         "inpaintModel": "anime-lama"
                       }
-                      ```
-                      Phản hồi: `success`, `cleanedImageBase64`, `colorMaskBase64`, `stats` (kèm `timings_ms`, `api_timings_ms`, `device`).
-                    * `inpaintModel` hỗ trợ: `"anime-lama"`, `"big-lama"`, `"opencv-telea"`, `"opencv-ns"`.
-                    * **`GET /api/benchmark?runs=3&force_cpu=true`**: đo thời gian từng giai đoạn trên 2 ảnh mẫu.
-                    * Lỗi luôn trả `{"detail": "..."}`: 400 (base64 hỏng), 413 (ảnh quá lớn), 422 (tham số sai), 500 (lỗi pipeline).
+                      `
+                      Phản hồi: success, cleanedImageBase64, colorMaskBase64, stats (kèm 	imings_ms, pi_timings_ms, device).
+                    * inpaintModel hỗ trợ: "anime-lama", "big-lama", "opencv-telea", "opencv-ns".
+                    * **GET /api/benchmark?runs=3&force_cpu=true**: đo thời gian từng giai đoạn trên 2 ảnh mẫu.
+                    * Lỗi luôn trả {"detail": "..."}: 400 (base64 hỏng), 413 (ảnh quá lớn), 422 (tham số sai), 500 (lỗi pipeline).
                     """
                 )
 
@@ -1013,15 +1028,8 @@ def create_ui() -> gr.Blocks:
 demo = create_ui()
 
 if __name__ == "__main__":
-    logger.info("🚀 Ensuring models at boot...")
-    try:
-        ensure_models()
-        logger.info("✅ Models verified successfully!")
-    except Exception as e:
-        logger.warning("Model download check warning: %s", e)
-
     port = int(os.environ.get("PORT", 7860))
-    logger.info("🚀 Starting Manga Cleaner & Translation Server on port %d...", port)
+    logger.info("🚀 Starting Manga Cleaner (text removal) on port %d ...", port)
 
     # Khởi chạy Gradio Server chuẩn theo cơ chế quản lý lifecycle của Hugging Face Gradio SDK
     app, local_url, share_url = demo.launch(
@@ -1031,7 +1039,7 @@ if __name__ == "__main__":
         show_error=True,
     )
 
-    # Gắn toàn bộ router REST API (/api/v1/translate-page, /clean_page, /health) và Swagger Docs (/docs)
+    # Gắn router REST API (/health, /clean_page, /api/benchmark)
     if hasattr(app, "include_router"):
         app.include_router(api_router)
     if hasattr(app, "router") and hasattr(app.router, "routes"):
@@ -1039,12 +1047,12 @@ if __name__ == "__main__":
             for route in reversed(api_router.routes):
                 if route not in app.router.routes:
                     app.router.routes.insert(0, route)
-            logger.info("✅ Custom REST API & Swagger /docs routes attached successfully.")
+            logger.info("✅ REST API routes attached.")
         except Exception as e:
             logger.warning("Router insertion notice: %s", e)
 
-    logger.info("📖 Swagger UI Docs: http://0.0.0.0:%d/docs", port)
-    logger.info("🎨 Gradio Web UI:  http://0.0.0.0:%d/", port)
+    logger.info("📖 Swagger UI: http://0.0.0.0:%d/docs", port)
+    logger.info("🎨 Gradio UI :  http://0.0.0.0:%d/", port)
     demo.block_thread()
 
 

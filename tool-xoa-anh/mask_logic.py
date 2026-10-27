@@ -328,6 +328,109 @@ def build_masks(
     return MaskSet(chat_text, sfx_text, chat_erase, sfx_erase, barrier, chat_boxes, sfx_boxes)
 
 
+def build_masks_from_polygons(
+    img_bgr: np.ndarray,
+    polygons: Sequence[np.ndarray],
+    dets: Sequence[Det],
+    seg_map: Optional[np.ndarray] = None,
+    dilation_px: int = 4,
+    box_pad: int = 6,
+    min_speck: int = 4,
+    seg_regions: Optional[Sequence[Det]] = None,
+) -> MaskSet:
+    """
+    Constructs Chat and SFX masks from detected text polygons (and optional probability map).
+
+    1. Polygons are mapped to Chat (if falling within a CLS_TEXT_BUBBLE box) or SFX (CLS_TEXT_FREE).
+    2. Combines polygon raster with per-pixel probability map and dark ink to form crisp text masks.
+    3. Runs snap_white_halo and contour_preserving_dilate using barrier protection.
+    """
+    h, w = img_bgr.shape[:2]
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
+    sfx_boxes = [d.box for d in dets if d.cls == CLS_TEXT_FREE]
+    seg_chat_boxes, seg_sfx_boxes = _eligible_regions(dets, seg_regions)
+
+    box_pad = max(10, box_pad)
+    chat_core_box = rect_mask(h, w, chat_boxes, 0)
+    chat_region = rect_mask(h, w, seg_chat_boxes, box_pad)
+    sfx_region = cv2.bitwise_and(rect_mask(h, w, seg_sfx_boxes, box_pad), cv2.bitwise_not(chat_core_box))
+
+    # Separate polygons into Chat vs SFX
+    chat_polys: List[np.ndarray] = []
+    sfx_polys: List[np.ndarray] = []
+    for p in polygons:
+        if len(p) < 3:
+            continue
+        cx = float(np.mean(p[:, 0]))
+        cy = float(np.mean(p[:, 1]))
+        is_chat = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in seg_chat_boxes)
+        if is_chat:
+            chat_polys.append(p.astype(np.int32))
+        else:
+            is_sfx = any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in seg_sfx_boxes)
+            if is_sfx or not chat_boxes:
+                sfx_polys.append(p.astype(np.int32))
+
+    chat_poly_mask = np.zeros((h, w), dtype=np.uint8)
+    if chat_polys:
+        cv2.fillPoly(chat_poly_mask, chat_polys, 255)
+
+    sfx_poly_mask = np.zeros((h, w), dtype=np.uint8)
+    if sfx_polys:
+        cv2.fillPoly(sfx_poly_mask, sfx_polys, 255)
+
+    # Initial text candidate mask
+    if seg_map is not None:
+        seg_bin = (seg_map > 0.15).astype(np.uint8) * 255
+        chat_cand = cv2.bitwise_and(cv2.bitwise_or(seg_bin, chat_poly_mask), chat_region)
+        sfx_cand = cv2.bitwise_and(cv2.bitwise_or(seg_bin, sfx_poly_mask), sfx_region)
+        ink = (gray < 180).astype(np.uint8) * 255
+        high_prob = (seg_map > 0.25).astype(np.uint8) * 255
+        chat_text = cv2.bitwise_and(chat_cand, cv2.bitwise_or(ink, high_prob))
+        sfx_text = cv2.bitwise_and(sfx_cand, cv2.bitwise_or(ink, high_prob))
+    else:
+        ink = (gray < 180).astype(np.uint8) * 255
+        chat_text = cv2.bitwise_and(cv2.bitwise_and(chat_poly_mask, ink), chat_region)
+        sfx_text = cv2.bitwise_and(cv2.bitwise_and(sfx_poly_mask, ink), sfx_region)
+
+    chat_text = remove_specks(chat_text, min_speck)
+    sfx_text = remove_specks(sfx_text, max(min_speck, 12))
+
+    # Auto-snap white halo / stroke around text in colored/tinted bubbles
+    chat_text = snap_white_halo(chat_text, gray, seg_chat_boxes, max_halo_radius=8)
+    sfx_text = snap_white_halo(sfx_text, gray, seg_sfx_boxes, max_halo_radius=8)
+
+    # All text strokes
+    all_text = cv2.bitwise_or(chat_text, sfx_text)
+
+    # Extract contour barrier (bubble contours, panel borders, character line art)
+    barrier = extract_contour_barrier(gray, all_text, ink_thr=120, min_area=25, barrier_grow=2)
+
+    r = max(0, int(dilation_px))
+    chat_limit = rect_mask(h, w, chat_boxes, box_pad + r + 4)
+
+    # Contour-Preserving Dilation for Dialogue Text
+    if r > 0:
+        chat_erase = contour_preserving_dilate(chat_text, barrier, dilation_px=r)
+    else:
+        chat_erase = chat_text.copy()
+
+    chat_erase = cv2.bitwise_and(chat_erase, chat_limit)
+    chat_erase = cv2.bitwise_or(chat_erase, chat_text)
+
+    # SFX Dilation (only used when user chooses "clean all" / clean_sfx=True)
+    sfx_limit = rect_mask(h, w, sfx_boxes, box_pad + r + 2)
+    if r > 0 and sfx_text.any():
+        sfx_erase = cv2.dilate(sfx_text, _ellipse(2 * (r + 2) + 1))
+        sfx_erase = cv2.bitwise_and(sfx_erase, sfx_limit)
+    else:
+        sfx_erase = sfx_text.copy()
+
+    return MaskSet(chat_text, sfx_text, chat_erase, sfx_erase, barrier, chat_boxes, sfx_boxes)
+
+
 def flat_fill_uniform_paper(
     img_bgr: np.ndarray,
     erase: np.ndarray,

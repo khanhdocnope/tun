@@ -29,7 +29,16 @@ import torch
 from PIL import Image, ImageOps
 
 from bubble_detector import BubbleTextDetector
-from mask_logic import CLS_TEXT_BUBBLE, CLS_TEXT_FREE, Det, MaskSet, build_masks, flat_fill_uniform_paper, flat_paper_hint
+from mask_logic import (
+    CLS_TEXT_BUBBLE,
+    CLS_TEXT_FREE,
+    Det,
+    MaskSet,
+    build_masks,
+    build_masks_from_polygons,
+    flat_fill_uniform_paper,
+    flat_paper_hint,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("manga_cleaner.core")
@@ -109,10 +118,9 @@ torch.set_num_threads(CPU_THREADS)
 INPAINT_CTX_PX = int(os.getenv("INPAINT_CONTEXT_PX", "64"))       # context kept around every erased region
 INPAINT_MOD = 32                                                  # pad crops to a multiple of 32 (fewer distinct shapes)
 FULL_PAGE_RATIO = float(os.getenv("FULL_PAGE_RATIO", "0.35"))      # crops cover >= 35% of page -> just do the page
-SEG_DEVICE = os.getenv("SEG_DEVICE", "auto").lower()               # "auto" | "gpu" | "cpu"
-SEG_SIZE = int(os.getenv("SEG_SIZE", "1024"))                     # ComicTextDetector input size
-SEG_LOW_SIZE = int(os.getenv("SEG_LOW_SIZE", "512"))              # cheap paper-check pass before the full-res seg
-GPU_DURATION = int(os.getenv("GPU_DURATION", "30"))               # ZeroGPU window per page (seconds)
+SEG_SIZE = int(os.getenv("SEG_SIZE", "1024"))                     # ComicTextDetector canvas (the ONNX graph is static at 1024)
+SEG_LOW_SIZE = int(os.getenv("SEG_LOW_SIZE", "512"))              # resolution the paper gate reads strokes at
+GPU_DURATION = int(os.getenv("GPU_DURATION", "8"))                # ZeroGPU window per page (seconds) - optimized to save quota
 
 # One page at a time: the detectors / LaMa are process-wide singletons and moving them
 # between devices while another request is mid-flight corrupts results.
@@ -305,7 +313,7 @@ class ComicTextDetectorEngine:
             logger.warning("ComicTextDetector init failed: %s", exc)
 
     def _forward(self, im: np.ndarray, size: int) -> np.ndarray:
-        """Raw seg/det probabilities for a padded `im` (side 1, size, size), squeezed to HxW."""
+        """Raw seg/det probabilities for a padded `im` (1, 3, size, size), squeezed to size x size."""
         if self.session is not None:
             blob = np.ascontiguousarray(im.transpose(2, 0, 1)[None], dtype=np.float32)
             blob *= (1.0 / 255.0)
@@ -329,10 +337,28 @@ class ComicTextDetectorEngine:
             return det_prob
         return np.zeros((size, size), np.float32)
 
+    def _require_size(self, size: int) -> int:
+        """
+        The ONNX graph exported from `comictextdetector.pt.onnx` has a STATIC input size
+        (1024x1024) - feeding 512 raises "Got: 512 Expected: 1024". Reading the fixed size from
+        the session keeps the cheap 512px gate working only where the graph allows it.
+        """
+        if self.session is None:
+            return size
+        try:
+            shape = self.session.get_inputs()[0].shape
+            fixed = int(shape[-1])
+            if fixed != size:
+                logger.debug("ComicTextDetector input is fixed at %d, requested %d", fixed, size)
+            return fixed
+        except (TypeError, ValueError, IndexError):
+            return size
+
     def seg_map(self, img_bgr: np.ndarray, size: int = SEG_SIZE) -> np.ndarray:
         h, w = img_bgr.shape[:2]
         if not self.ready:
             return np.zeros((h, w), np.float32)
+        size = self._require_size(size)
         r = min(size / h, size / w)
         nw, nh = max(1, int(round(w * r))), max(1, int(round(h * r)))
         im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA if r < 1 else cv2.INTER_LINEAR)
@@ -340,17 +366,25 @@ class ComicTextDetectorEngine:
         comb = self._forward(im, size)
         return cv2.resize(comb[:nh, :nw], (w, h), interpolation=cv2.INTER_LINEAR)
 
-    def seg_strokes(self, img_bgr: np.ndarray, dets: List[Det], size: int = SEG_LOW_SIZE) -> np.ndarray:
-        """Boolean stroke map at low resolution, restricted to the detector boxes (cheap gate)."""
+    def seg_strokes(self, img_bgr: np.ndarray, dets: List[Det]) -> np.ndarray:
+        """
+        Boolean stroke map at LOW resolution, restricted to the detector boxes.
+
+        This is the cheap paper gate: the graph needs one 1024 pass (its input is static), so we
+        feed a downscaled copy of the page into that same canvas and read strokes back at the
+        low resolution - the result is ~10x smaller to process, while the model still sees only
+        one page, exactly like the full-resolution path.
+        """
         if not self.ready or not dets:
             return np.zeros(img_bgr.shape[:2], np.bool_)
         h, w = img_bgr.shape[:2]
+        canvas = self._require_size(SEG_SIZE)          # 1024 for the exported static graph
+        size = min(int(SEG_LOW_SIZE), canvas)
         r = min(size / h, size / w)
         nw, nh = max(1, int(round(w * r))), max(1, int(round(h * r)))
-        size_n = max(nw, nh)
         im = cv2.resize(img_bgr, (nw, nh), interpolation=cv2.INTER_AREA)
-        im = cv2.copyMakeBorder(im, 0, size_n - nh, 0, size_n - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
-        seg = self._forward(im, size_n)[:nh, :nw]
+        im = cv2.copyMakeBorder(im, 0, canvas - nh, 0, canvas - nw, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        seg = self._forward(im, canvas)[:nh, :nw]
         ok = seg > 0.5
         mask = np.zeros((nh, nw), np.bool_)
         for d in dets:
@@ -363,6 +397,34 @@ class ComicTextDetectorEngine:
     @property
     def device(self) -> str:
         return "cpu"
+
+
+def _asan_report(exc: BaseException) -> Tuple[str, Optional[int]]:
+    """
+    ONNX Runtime rarely says WHY it aborted. With `ORT_LOG_SEVERITY_LEVEL=verbose` an abort
+    message mentions the offending address, e.g. "WRITE of size 4 at 0x... thread T0" - mapping
+    that address into /proc/self/maps tells us whether the writer was torch/CUDA, OpenCV or ORT
+    itself, which is otherwise guesswork.
+    """
+    text = f"{type(exc).__name__}: {exc}"
+    import re
+
+    m = re.search(r"at 0x([0-9a-fA-F]+)", text)
+    if not m:
+        return text, None
+    addr = int(m.group(1), 16)
+    try:
+        with open("/proc/self/maps", "r", encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                parts = line.split()
+                if len(parts) < 6:
+                    continue
+                start, end = (int(x, 16) for x in parts[0].split("-"))
+                if start <= addr < end:
+                    return f"{text} | 0x{addr:x} is inside {parts[-1]}", addr
+    except Exception:  # noqa: BLE001
+        pass
+    return text, addr
 
 
 def _assert_model_depth(model, expected: str) -> None:
@@ -434,7 +496,14 @@ def _gpu_lama_only(jobs: List[Tuple[np.ndarray, np.ndarray]], model_name: str) -
 # ----------------------------------------------------------------------------- pipeline
 class MangaCleanerPipeline:
     def __init__(self):
-        self.ctd = ComicTextDetectorEngine()
+        self.text_backend = os.getenv("TEXT_DET_BACKEND", "manga_det").lower()
+        if self.text_backend == "manga_det":
+            from text_detector import MangaTextDetector
+            self.text_det = MangaTextDetector()
+            self.ctd = self.text_det  # alias for backward-compatibility (.ready, .seg_map)
+        else:
+            self.ctd = ComicTextDetectorEngine()
+            self.text_det = self.ctd
         self.bubbles = _BUBBLE
         self.bubbles.load()
 
@@ -590,54 +659,107 @@ class MangaCleanerPipeline:
             timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
             return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
 
-        # Cheap gate: low-resolution strokes decide whether the full-resolution `seg` pass is
-        # needed at all. Every bubble on plain paper -> flat-fill can paint them outright.
+        # Text segmentation & mask generation
         _t_seg = time.perf_counter()
-        strokes = self.ctd.seg_strokes(img_bgr, dets)
-        all_boxes = [d.box for d in dets if d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE)]
-        flat_paper = flat_paper_hint(img_bgr, strokes, all_boxes)
-        seg_ms = (time.perf_counter() - _t_seg) * 1000.0
-        timings["seg"] = round(seg_ms, 2)
-
         color_mask = Image.fromarray(np.zeros((h, w, 3), np.uint8))
         n_chat = sum(1 for d in dets if d.cls == CLS_TEXT_BUBBLE)
         n_sfx = sum(1 for d in dets if d.cls == CLS_TEXT_FREE)
         flat_done = np.zeros((h, w), np.uint8)
         out_rgb = img_rgb
 
-        if flat_paper:
-            # Paint the low-res strokes that sit on plain paper; no full-res seg, no LaMa for them.
-            chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
-            target = cv2.resize(strokes.astype(np.uint8) * 255, (w, h), interpolation=cv2.INTER_NEAREST)
-            target = cv2.bitwise_and(target, rect_all(h, w, all_boxes if clean_sfx else chat_boxes))
-            target = cv2.dilate(target, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-            out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=chat_boxes)
-            out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB) if target.any() else img_rgb
-            rects: List[Tuple[int, int, int, int]] = []
-            jobs: List[Tuple[np.ndarray, np.ndarray]] = []
-        else:
+        if self.text_backend == "manga_det":
+            try:
+                polys, seg_full = self.text_det.detect(img_bgr)
+            except Exception as exc:  # noqa: BLE001
+                text, addr = _asan_report(exc)
+                logger.error("manga_det pass failed: %s", text)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, 0, 0, timings,
+                                    "seg failed", "none")
+                stats["error"] = text
+                stats["error_address"] = hex(addr) if addr else None
+                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
+
+            timings["seg"] = round((time.perf_counter() - _t_seg) * 1000.0, 2)
             _t_mask = time.perf_counter()
-            seg_full = self.ctd.seg_map(img_bgr)
-            ms = build_masks(img_bgr, seg_full, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
-            timings["seg"] = round(seg_ms + (time.perf_counter() - _t_mask) * 1000.0, 2)
+            ms = build_masks_from_polygons(
+                img_bgr=img_bgr,
+                polygons=polys,
+                dets=dets,
+                seg_map=seg_full,
+                dilation_px=int(dilation_px),
+            )
+            timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
             target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
             color_mask = Image.fromarray(self._color_mask(ms, h, w))
             n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
-            timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
+
             if not target.any():
                 timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
                 stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
                 return img_pil, color_mask, stats
+
             out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=ms.chat_boxes)
             target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
             if not target.any():
                 timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
                 stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx,
-                                    timings, "No text detected", "Flat-Fill Bypass (Instant)")
+                                    timings, None, "Flat-Fill Bypass (Instant)")
                 stats["flat_filled_px"] = int(np.count_nonzero(flat_done))
                 return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
             out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
             rects, jobs = self._plan_jobs(out_rgb, target)
+        else:
+            # Fallback path: ComicTextDetector
+            try:
+                strokes = self.ctd.seg_strokes(img_bgr, dets)
+            except Exception as exc:  # noqa: BLE001
+                text, addr = _asan_report(exc)
+                logger.error("seg pass failed: %s", text)
+                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, 0, 0, timings,
+                                    "seg failed", "none")
+                stats["error"] = text
+                stats["error_address"] = hex(addr) if addr else None
+                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                return img_pil, Image.fromarray(np.zeros((h, w, 3), np.uint8)), stats
+
+            all_boxes = [d.box for d in dets if d.cls in (CLS_TEXT_BUBBLE, CLS_TEXT_FREE)]
+            flat_paper = flat_paper_hint(img_bgr, strokes, all_boxes)
+            seg_ms = (time.perf_counter() - _t_seg) * 1000.0
+            timings["seg"] = round(seg_ms, 2)
+
+            if flat_paper:
+                chat_boxes = [d.box for d in dets if d.cls == CLS_TEXT_BUBBLE]
+                target = cv2.resize(strokes.astype(np.uint8) * 255, (w, h), interpolation=cv2.INTER_NEAREST)
+                target = cv2.bitwise_and(target, rect_mask(h, w, all_boxes if clean_sfx else chat_boxes))
+                target = cv2.dilate(target, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+                out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=chat_boxes)
+                out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB) if target.any() else img_rgb
+                rects = []
+                jobs = []
+            else:
+                _t_mask = time.perf_counter()
+                seg_full = self.ctd.seg_map(img_bgr)
+                ms = build_masks(img_bgr, seg_full, dets, seg_thr=float(det_threshold), dilation_px=int(dilation_px))
+                timings["seg"] = round(seg_ms + (time.perf_counter() - _t_mask) * 1000.0, 2)
+                target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
+                color_mask = Image.fromarray(self._color_mask(ms, h, w))
+                n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
+                timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
+                if not target.any():
+                    timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                    stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
+                    return img_pil, color_mask, stats
+                out_bgr, flat_done = flat_fill_uniform_paper(img_bgr=img_bgr, erase=target, boxes=ms.chat_boxes)
+                target = cv2.bitwise_and(target, cv2.bitwise_not(flat_done))
+                if not target.any():
+                    timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
+                    stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx,
+                                        timings, "No text detected", "Flat-Fill Bypass (Instant)")
+                    stats["flat_filled_px"] = int(np.count_nonzero(flat_done))
+                    return Image.fromarray(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)), color_mask, stats
+                out_rgb = cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB)
+                rects, jobs = self._plan_jobs(out_rgb, target)
 
         n_flat = int(np.count_nonzero(flat_done))
         if jobs:
