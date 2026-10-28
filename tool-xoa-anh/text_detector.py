@@ -168,9 +168,9 @@ class MangaTextDetector:
     def detect(
         self,
         img_bgr: np.ndarray,
-        thresh: float = 0.15,
-        box_thresh: float = 0.25,
-        unclip_ratio: float = 1.4,
+        thresh: float = 0.12,
+        box_thresh: float = 0.18,
+        unclip_ratio: float = 1.8,
     ) -> Tuple[List[np.ndarray], np.ndarray]:
         """
         Detect text lines in page image.
@@ -206,7 +206,7 @@ class MangaTextDetector:
 
         for cnt in contours:
             pts = cnt.squeeze(1)
-            if pts.ndim != 2 or pts.shape[0] < 4:
+            if pts.ndim != 2 or pts.shape[0] < 3:
                 continue
             if box_score_fast(pred_map, pts) < box_thresh:
                 continue

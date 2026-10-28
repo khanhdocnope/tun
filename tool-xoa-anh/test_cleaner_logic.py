@@ -108,6 +108,52 @@ def test_vertical_text_coverage_and_flat_fill():
     assert np.count_nonzero(done) > 0, "Manga paper (220) must be flat-filled"
 
 
+def test_translucent_bubble_does_not_turn_into_solid_egg():
+    # 600x600 image with character skin/shading (gray 140) and speech bubble over chest
+    h, w = 600, 600
+    img = np.full((h, w, 3), 140, dtype=np.uint8)
+    cv2.ellipse(img, (300, 300), (120, 180), 0, 0, 360, (0, 0, 0), 3) # bubble outline
+    cv2.ellipse(img, (300, 300), (117, 177), 0, 0, 360, (200, 200, 200), -1) # translucent background
+    # Girl's chest / collar passing through bubble
+    img[250:350, 220:380] = 130
+    # Text inside bubble
+    poly = np.array([[240, 260], [360, 260], [360, 290], [240, 290]], dtype=np.float32)
+    img[260:290, 240:360] = 20
+
+    box = (180.0, 120.0, 420.0, 480.0)
+    dets = [Det(CLS_TEXT_BUBBLE, 0.9, box)]
+    ms = build_masks_from_polygons(img, [poly], dets, dilation_px=4)
+
+    # Girl's chest/collar outside the text line (y=310:340, x=250:350) MUST NOT be erased
+    chest_erased = np.count_nonzero(ms.chat_erase[310:340, 250:350])
+    assert chest_erased == 0, f"Translucent bubble must NOT turn into a solid egg! (erased {chest_erased} px)"
+    # Text itself MUST be erased
+    text_erased = np.count_nonzero(ms.chat_erase[260:290, 240:360])
+    assert text_erased > 0, "Text inside bubble must be erased"
+
+
+def test_english_punctuation_and_quotes_covered():
+    # Test text containing quotation marks, apostrophe, exclamation mark, and dots
+    h, w = 300, 500
+    img = np.full((h, w, 3), 255, dtype=np.uint8)
+    cv2.putText(img, "WON'T YOU?", (40, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+    cv2.putText(img, "'YES!' I'M HERE...", (40, 160), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+
+    poly1 = np.array([[38, 55], [230, 55], [230, 85], [38, 85]], dtype=np.float32)
+    poly2 = np.array([[38, 135], [320, 135], [320, 165], [38, 165]], dtype=np.float32)
+
+    dets = [
+        Det(CLS_TEXT_BUBBLE, 0.9, (30.0, 40.0, 240.0, 100.0)),
+        Det(CLS_TEXT_BUBBLE, 0.9, (30.0, 120.0, 330.0, 180.0)),
+    ]
+    ms = build_masks_from_polygons(img, [poly1, poly2], dets, dilation_px=4)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    actual_text = (gray < 220)
+    missed = actual_text & (ms.chat_erase == 0)
+    assert np.count_nonzero(missed) == 0, f"All punctuation and quotes must be covered (missed {np.count_nonzero(missed)} px)"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

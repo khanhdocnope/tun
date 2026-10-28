@@ -87,7 +87,10 @@ def extract_contour_barrier(
     h, w = gray.shape[:2]
     clean_gray = gray.copy()
     if text_mask.any():
-        clean_gray[text_mask > 0] = 255
+        # Cushion-clear text mask so antialiasing halos cannot form false barrier walls
+        # that block dilation and cause ghost text!
+        t_pad = cv2.dilate(text_mask, _ellipse(7))
+        clean_gray[t_pad > 0] = 255
 
     # 1. Dark ink threshold (bubble borders and panel outlines are black ink)
     ink = (clean_gray < ink_thr).astype(np.uint8) * 255
@@ -427,19 +430,126 @@ def build_masks_from_polygons(
     if sfx_polys:
         cv2.fillPoly(sfx_poly_mask, sfx_polys, 255)
 
-    # Initial text candidate mask: strictly dark ink only, never broad probability blobs
-    ink = (gray < 205).astype(np.uint8) * 255
+    def _extract_poly_ink(polys: Sequence[np.ndarray]) -> np.ndarray:
+        poly_ink = np.zeros((h, w), dtype=np.uint8)
+        for poly in polys:
+            xmin = max(0, int(np.floor(poly[:, 0].min())) - 6)
+            xmax = min(w, int(np.ceil(poly[:, 0].max())) + 6)
+            ymin = max(0, int(np.floor(poly[:, 1].min())) - 6)
+            ymax = min(h, int(np.ceil(poly[:, 1].max())) + 6)
+            if xmax <= xmin or ymax <= ymin:
+                continue
+            crop_g = gray[ymin:ymax, xmin:xmax]
+            poly_rel = poly.copy()
+            poly_rel[:, 0] -= xmin
+            poly_rel[:, 1] -= ymin
+            pm = np.zeros(crop_g.shape, np.uint8)
+            cv2.fillPoly(pm, [poly_rel.astype(np.int32)], 255)
+
+            pts_vals = crop_g[pm > 0]
+            if len(pts_vals) == 0:
+                continue
+
+            # Robust local background level from surrounding crop
+            bg_val = float(np.percentile(crop_g, 90))
+            otsu_t, _ = cv2.threshold(pts_vals, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            if bg_val >= 210.0:
+                # White or near-white paper: allow full text + antialiasing
+                thr = min(bg_val - 12.0, max(195.0, float(otsu_t)))
+            elif bg_val >= 110.0:
+                # Translucent / shaded / screentone background: Otsu separates dark text from shading
+                thr = min(bg_val - 18.0, max(40.0, float(otsu_t)))
+            else:
+                # Inverted polarity (white text on dark background)
+                thr = max(bg_val + 20.0, min(220.0, float(otsu_t)))
+                local_ink = (crop_g > thr).astype(np.uint8) * 255
+                reach = cv2.dilate(pm, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
+                local_ink = cv2.bitwise_and(local_ink, reach)
+                poly_ink[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_ink[ymin:ymax, xmin:xmax], local_ink)
+                continue
+
+            local_ink = (crop_g < thr).astype(np.uint8) * 255
+            reach = cv2.dilate(pm, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
+            local_ink = cv2.bitwise_and(local_ink, reach)
+            poly_ink[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_ink[ymin:ymax, xmin:xmax], local_ink)
+        return poly_ink
+
+    chat_text = _extract_poly_ink(chat_polys)
+    sfx_text = _extract_poly_ink(sfx_polys)
+
+    # If DBNet probability map is provided, combine with high-confidence probability regions
     if seg_map is not None:
-        seg_bin = (seg_map > 0.15).astype(np.uint8) * 255
-        chat_region = rect_mask(h, w, chat_boxes, max(12, box_pad))
-        sfx_region = rect_mask(h, w, sfx_boxes, max(12, box_pad))
-        chat_cand = cv2.bitwise_or(chat_poly_mask, cv2.bitwise_and(seg_bin, chat_region))
-        sfx_cand = cv2.bitwise_or(sfx_poly_mask, cv2.bitwise_and(seg_bin, sfx_region))
-        chat_text = cv2.bitwise_and(chat_cand, ink)
-        sfx_text = cv2.bitwise_and(sfx_cand, ink)
-    else:
-        chat_text = cv2.bitwise_and(chat_poly_mask, ink)
-        sfx_text = cv2.bitwise_and(sfx_poly_mask, ink)
+        seg_bin = (seg_map > 0.20).astype(np.uint8) * 255
+        chat_reach = cv2.dilate(chat_poly_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+        sfx_reach = cv2.dilate(sfx_poly_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)))
+        chat_text = cv2.bitwise_or(chat_text, cv2.bitwise_and(seg_bin, chat_reach))
+        sfx_text = cv2.bitwise_or(sfx_text, cv2.bitwise_and(seg_bin, sfx_reach))
+
+    # For speech bubbles: only search for interior punctuation if it's confirmed flat white paper
+    bubble_interior_ink = np.zeros((h, w), dtype=np.uint8)
+    for bx1, by1, bx2, by2 in chat_boxes:
+        bw, bh = int(bx2 - bx1), int(by2 - by1)
+        if bw < 15 or bh < 15:
+            continue
+        pad = 12
+        x1, y1 = max(0, int(bx1) - pad), max(0, int(by1) - pad)
+        x2, y2 = min(w, int(bx2) + pad), min(h, int(by2) + pad)
+        crop_g = gray[y1:y2, x1:x2]
+        ch, cw = crop_g.shape
+        paper = (crop_g >= 195).astype(np.uint8) * 255
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(paper, connectivity=8)
+        if n <= 1:
+            continue
+
+        candidates = []
+        for i in range(1, n):
+            comp_x, comp_y, comp_bw, comp_bh, comp_area = stats[i]
+            if comp_area < 50:
+                continue
+            touches = (comp_x <= 1 or comp_y <= 1 or comp_x + comp_bw >= cw - 1 or comp_y + comp_bh >= ch - 1)
+            candidates.append((comp_area, i, touches))
+
+        if not candidates:
+            continue
+
+        enclosed = [c for c in candidates if not c[2]]
+        enclosed_labels = [c[1] for c in enclosed] if enclosed else [max(candidates, key=lambda c: c[0])[1]]
+        interior = np.isin(lab, enclosed_labels).astype(np.uint8) * 255
+
+        # STRICT SAFETY GATE: Only opaque flat white paper bubbles are allowed interior punctuation harvesting!
+        # Translucent, screentone, tinted, or artwork bubbles (std > 8.0 or median < 225) are strictly skipped!
+        bg_median = float(np.median(crop_g[interior > 0])) if interior.any() else 0.0
+        bg_std = float(crop_g[interior > 0].std()) if interior.any() else 999.0
+        if bg_median < 225.0 or bg_std > 8.0:
+            continue
+
+        # Close notches and letter dents on white paper boundaries
+        closed = cv2.morphologyEx(interior, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25)))
+        cnts, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        filled = np.zeros_like(closed)
+        if cnts:
+            cv2.drawContours(filled, cnts, -1, 255, cv2.FILLED)
+
+        eroded = cv2.erode(filled, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+        b_ink = cv2.bitwise_and((crop_g < 205).astype(np.uint8) * 255, eroded)
+
+        # Component filter: only keep small glyph components (apostrophes, commas, dots, dashes)
+        # NEVER keep large background structures or giant blobs!
+        cn, clab, cstats, _ = cv2.connectedComponentsWithStats(b_ink, connectivity=8)
+        bubble_area = float(bw * bh)
+        for ci in range(1, cn):
+            cx, cy, cbw, cbh, carea = cstats[ci]
+            if carea < 4:
+                continue
+            # Rejection gates: must be glyph-sized punctuation
+            if carea > 350 or carea > bubble_area * 0.12:
+                continue
+            if cbw > cw * 0.50 or cbh > ch * 0.50:
+                continue
+            bubble_interior_ink[y1:y2, x1:x2][clab == ci] = 255
+
+    chat_text = cv2.bitwise_or(chat_text, bubble_interior_ink)
 
     chat_text = remove_specks(chat_text, min_speck)
     sfx_text = remove_specks(sfx_text, max(min_speck, 12))
