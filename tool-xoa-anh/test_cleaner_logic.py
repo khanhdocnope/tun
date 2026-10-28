@@ -154,6 +154,34 @@ def test_english_punctuation_and_quotes_covered():
     assert np.count_nonzero(missed) == 0, f"All punctuation and quotes must be covered (missed {np.count_nonzero(missed)} px)"
 
 
+def test_adaptive_font_size_dilation():
+    # Verify small font lines receive compact dilation while large font lines get wider dilation
+    h, w = 300, 500
+    img = np.full((h, w, 3), 255, dtype=np.uint8)
+    # Small text line (font_size ~15px) at x=50..150
+    poly_small = np.array([[50, 40], [150, 40], [150, 55], [50, 55]], dtype=np.float32)
+    img[40:55, 50:150] = 20
+    # Large text line (font_size ~60px) at x=250..450
+    poly_large = np.array([[250, 40], [450, 40], [450, 100], [250, 100]], dtype=np.float32)
+    img[40:100, 250:450] = 20
+
+    dets = [
+        Det(CLS_TEXT_BUBBLE, 0.9, (40.0, 30.0, 160.0, 70.0)),
+        Det(CLS_TEXT_BUBBLE, 0.9, (240.0, 30.0, 460.0, 120.0)),
+    ]
+    ms = build_masks_from_polygons(img, [poly_small, poly_large], dets, dilation_px=4)
+
+    # In small text: y span of poly is 15px (40..55). Dilated mask should stay compact (<= 28px height).
+    small_mask_y = np.where(ms.chat_erase[:, 50:150] > 0)[0]
+    small_height = small_mask_y.max() - small_mask_y.min() + 1
+    assert small_height <= 28, f"Small font should stay compact! Got height {small_height}"
+
+    # In large text: y span of poly is 60px (40..100). Dilated mask should expand wider (>= 75px height).
+    large_mask_y = np.where(ms.chat_erase[:, 250:450] > 0)[0]
+    large_height = large_mask_y.max() - large_mask_y.min() + 1
+    assert large_height >= 75, f"Large font should get wider dilation! Got height {large_height}"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

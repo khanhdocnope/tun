@@ -430,13 +430,14 @@ def build_masks_from_polygons(
     if sfx_polys:
         cv2.fillPoly(sfx_poly_mask, sfx_polys, 255)
 
-    def _extract_poly_ink(polys: Sequence[np.ndarray]) -> np.ndarray:
+    def _extract_poly_ink(polys: Sequence[np.ndarray], base_dil: int = 4) -> Tuple[np.ndarray, np.ndarray]:
         poly_ink = np.zeros((h, w), dtype=np.uint8)
+        poly_erase_adapt = np.zeros((h, w), dtype=np.uint8)
         for poly in polys:
-            xmin = max(0, int(np.floor(poly[:, 0].min())) - 6)
-            xmax = min(w, int(np.ceil(poly[:, 0].max())) + 6)
-            ymin = max(0, int(np.floor(poly[:, 1].min())) - 6)
-            ymax = min(h, int(np.ceil(poly[:, 1].max())) + 6)
+            xmin = max(0, int(np.floor(poly[:, 0].min())) - 8)
+            xmax = min(w, int(np.ceil(poly[:, 0].max())) + 8)
+            ymin = max(0, int(np.floor(poly[:, 1].min())) - 8)
+            ymax = min(h, int(np.ceil(poly[:, 1].max())) + 8)
             if xmax <= xmin or ymax <= ymin:
                 continue
             crop_g = gray[ymin:ymax, xmin:xmax]
@@ -449,6 +450,16 @@ def build_masks_from_polygons(
             pts_vals = crop_g[pm > 0]
             if len(pts_vals) == 0:
                 continue
+
+            pw = float(poly[:, 0].max() - poly[:, 0].min())
+            ph = float(poly[:, 1].max() - poly[:, 1].min())
+            font_size = max(10.0, min(pw, ph))
+            # MIT-inspired adaptive dilation: scales proportionally with font thickness
+            # Small furigana / punctuation (12px) -> 3-4px dilation (avoids bleeding into borders)
+            # Big titles / SFX (50-80px) -> 8-12px dilation (swallows wide antialiasing halos)
+            local_r = max(3, min(14, int(round(font_size * 0.16)) + max(1, int(base_dil) - 2)))
+            k_dil = 2 * local_r + 1
+            ell_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_dil, k_dil))
 
             # Robust local background level from surrounding crop
             bg_val = float(np.percentile(crop_g, 90))
@@ -467,16 +478,23 @@ def build_masks_from_polygons(
                 reach = cv2.dilate(pm, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
                 local_ink = cv2.bitwise_and(local_ink, reach)
                 poly_ink[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_ink[ymin:ymax, xmin:xmax], local_ink)
+                local_erase = cv2.dilate(local_ink, ell_k)
+                poly_erase_adapt[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_erase_adapt[ymin:ymax, xmin:xmax], local_erase)
                 continue
 
             local_ink = (crop_g < thr).astype(np.uint8) * 255
             reach = cv2.dilate(pm, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)))
             local_ink = cv2.bitwise_and(local_ink, reach)
             poly_ink[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_ink[ymin:ymax, xmin:xmax], local_ink)
-        return poly_ink
 
-    chat_text = _extract_poly_ink(chat_polys)
-    sfx_text = _extract_poly_ink(sfx_polys)
+            local_erase = cv2.dilate(local_ink, ell_k)
+            poly_erase_adapt[ymin:ymax, xmin:xmax] = cv2.bitwise_or(poly_erase_adapt[ymin:ymax, xmin:xmax], local_erase)
+
+        return poly_ink, poly_erase_adapt
+
+    r = max(0, int(dilation_px))
+    chat_text, chat_erase_adapt = _extract_poly_ink(chat_polys, base_dil=r)
+    sfx_text, sfx_erase_adapt = _extract_poly_ink(sfx_polys, base_dil=r)
 
     # If DBNet probability map is provided, combine with high-confidence probability regions
     if seg_map is not None:
@@ -565,24 +583,26 @@ def build_masks_from_polygons(
     barrier = extract_contour_barrier(gray, all_text, ink_thr=120, min_area=25, barrier_grow=2)
 
     r = max(0, int(dilation_px))
-    chat_limit = rect_mask(h, w, chat_boxes, max(15, box_pad + r + 10))
+    chat_limit = rect_mask(h, w, chat_boxes, max(15, box_pad + r + 12))
 
-    # Contour-Preserving Dilation for Dialogue Text
+    # Barrier-Protected Font-Adaptive Dilation for Dialogue Text
+    base_erase = cv2.bitwise_or(chat_text, cv2.bitwise_and(chat_erase_adapt, cv2.bitwise_not(barrier)))
     if r > 0:
-        chat_erase = contour_preserving_dilate(chat_text, barrier, dilation_px=r)
+        chat_erase = contour_preserving_dilate(base_erase, barrier, dilation_px=max(1, r - 2))
     else:
-        chat_erase = chat_text.copy()
+        chat_erase = base_erase.copy()
 
     chat_erase = cv2.bitwise_and(chat_erase, chat_limit)
     chat_erase = cv2.bitwise_or(chat_erase, chat_text)
 
     # SFX Dilation (only used when user chooses "clean all" / clean_sfx=True)
-    sfx_limit = rect_mask(h, w, sfx_boxes, max(15, box_pad + r + 10))
+    sfx_limit = rect_mask(h, w, sfx_boxes, max(15, box_pad + r + 12))
+    base_sfx_erase = cv2.bitwise_or(sfx_text, sfx_erase_adapt)
     if r > 0 and sfx_text.any():
-        sfx_erase = cv2.dilate(sfx_text, _ellipse(2 * (r + 2) + 1))
+        sfx_erase = cv2.dilate(base_sfx_erase, _ellipse(2 * r + 1))
         sfx_erase = cv2.bitwise_and(sfx_erase, sfx_limit)
     else:
-        sfx_erase = sfx_text.copy()
+        sfx_erase = cv2.bitwise_and(base_sfx_erase, sfx_limit)
 
     return MaskSet(chat_text, sfx_text, chat_erase, sfx_erase, barrier, chat_boxes, sfx_boxes)
 
