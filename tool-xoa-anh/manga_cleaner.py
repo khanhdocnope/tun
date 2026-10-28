@@ -242,8 +242,14 @@ def _lama_crop(model, img_rgb: np.ndarray, mask: np.ndarray, dev: str) -> np.nda
     img_t = torch.from_numpy(norm_img(pi)).unsqueeze(0).to(dev)
     msk_t = torch.from_numpy((norm_img(pm) > 0).astype(np.float32)).unsqueeze(0).to(dev)
     with torch.inference_mode():
-        out = model(img_t, msk_t)
-    res = np.clip(out[0].permute(1, 2, 0).cpu().numpy() * 255.0, 0, 255).astype(np.uint8)[:ch, :cw]
+        # manga-image-translator pattern: bfloat16 autocast on CUDA uses Tensor Cores
+        # without darkening Fourier convolution weights
+        if str(dev).startswith("cuda") and hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported():
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                out = model(img_t, msk_t)
+        else:
+            out = model(img_t, msk_t)
+    res = np.clip(out[0].float().permute(1, 2, 0).cpu().numpy() * 255.0, 0, 255).astype(np.uint8)[:ch, :cw]
     return cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
 
 
