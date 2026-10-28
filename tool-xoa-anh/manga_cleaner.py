@@ -242,13 +242,7 @@ def _lama_crop(model, img_rgb: np.ndarray, mask: np.ndarray, dev: str) -> np.nda
     img_t = torch.from_numpy(norm_img(pi)).unsqueeze(0).to(dev)
     msk_t = torch.from_numpy((norm_img(pm) > 0).astype(np.float32)).unsqueeze(0).to(dev)
     with torch.inference_mode():
-        # manga-image-translator pattern: bfloat16 autocast on CUDA uses Tensor Cores
-        # without darkening Fourier convolution weights
-        if str(dev).startswith("cuda") and hasattr(torch.cuda, "is_bf16_supported") and torch.cuda.is_bf16_supported():
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                out = model(img_t, msk_t)
-        else:
-            out = model(img_t, msk_t)
+        out = model(img_t, msk_t)
     res = np.clip(out[0].float().permute(1, 2, 0).cpu().numpy() * 255.0, 0, 255).astype(np.uint8)[:ch, :cw]
     return cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
 
@@ -581,14 +575,15 @@ class MangaCleanerPipeline:
         user_mask: Optional[np.ndarray | Image.Image] = None,
         bubble_threshold: float = 0.30,
         inpaint_model: str = "anime-lama",
+        min_box_size: int = 0,
     ) -> Tuple[Image.Image, Image.Image, Dict[str, Any]]:
         """Clean one page. Thread-safe: the whole call is serialised (models are shared)."""
         with MODEL_LOCK:
             return self._clean_locked(image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
-                                      user_mask, bubble_threshold, inpaint_model)
+                                      user_mask, bubble_threshold, inpaint_model, min_box_size)
 
     def _clean_locked(self, image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
-                      user_mask, bubble_threshold, inpaint_model):
+                      user_mask, bubble_threshold, inpaint_model, min_box_size: int = 0):
         _t_total = time.perf_counter()
 
         # ---- decode input
@@ -694,16 +689,12 @@ class MangaCleanerPipeline:
                 dets=dets,
                 seg_map=seg_full,
                 dilation_px=int(dilation_px),
+                min_box_size=int(min_box_size),
             )
             timings["masks"] = round((time.perf_counter() - _t_mask) * 1000.0, 2)
             target = cv2.bitwise_or(ms.chat_erase, ms.sfx_erase) if clean_sfx else ms.chat_erase
             color_mask = Image.fromarray(self._color_mask(ms, h, w))
             n_chat, n_sfx = len(ms.chat_boxes), len(ms.sfx_boxes)
-
-            if not target.any():
-                timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)
-                stats = self._stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text detected", "none")
-                return img_pil, color_mask, stats
 
             if not target.any():
                 timings["total"] = round((time.perf_counter() - _t_total) * 1000.0, 2)

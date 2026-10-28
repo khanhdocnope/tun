@@ -125,6 +125,16 @@ def unclip(box: np.ndarray, unclip_ratio: float = 1.4) -> Optional[np.ndarray]:
     return np.asarray(paths[0], dtype=np.float32) if len(paths) == 1 else None
 
 
+def get_mini_boxes(contour: np.ndarray) -> Tuple[np.ndarray, float]:
+    """Compute minimum-area oriented bounding box and return (4_points, short_side_length)."""
+    bounding_box = cv2.minAreaRect(contour)
+    points = sorted(list(cv2.boxPoints(bounding_box)), key=lambda x: x[0])
+    index_1, index_4 = (0, 1) if points[1][1] > points[0][1] else (1, 0)
+    index_2, index_3 = (2, 3) if points[3][1] > points[2][1] else (3, 2)
+    box = [points[index_1], points[index_2], points[index_3], points[index_4]]
+    return np.array(box), float(min(bounding_box[1]))
+
+
 class MangaTextDetector:
     """
     Ultra-fast Manga Text Detector using PP-OCRv6_manga via ONNX Runtime on CPU.
@@ -168,14 +178,15 @@ class MangaTextDetector:
     def detect(
         self,
         img_bgr: np.ndarray,
-        thresh: float = 0.12,
-        box_thresh: float = 0.18,
-        unclip_ratio: float = 1.8,
+        thresh: float = 0.20,
+        box_thresh: float = 0.30,
+        unclip_ratio: float = 1.6,
+        min_size: float = 3.0,
     ) -> Tuple[List[np.ndarray], np.ndarray]:
         """
         Detect text lines in page image.
         Returns:
-            boxes: List of 4-point rotated bounding boxes [[x1, y1], [x2, y2], [x3, y3], [x4, y4]] in page coords.
+            boxes: List of rotated bounding polygons in page coords.
             pred_full: Full-resolution text probability heatmap [H, W] in float32 [0.0, 1.0].
         """
         h, w = img_bgr.shape[:2]
@@ -199,23 +210,39 @@ class MangaTextDetector:
         pred_map = outputs[0][0, 0]  # shape [rh, rw]
         pred_full = cv2.resize(pred_map, (w, h), interpolation=cv2.INTER_LINEAR)
 
-        # DB post-processing
+        # DB post-processing using MIT SegDetectorRepresenter principles
         mask = (pred_map > thresh)
         contours, _ = cv2.findContours((mask * 255).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         boxes: List[np.ndarray] = []
 
         for cnt in contours:
-            pts = cnt.squeeze(1)
-            if pts.ndim != 2 or pts.shape[0] < 3:
+            epsilon = 0.005 * cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, epsilon, True)
+            pts = approx.squeeze(1)
+            if pts.ndim != 2 or pts.shape[0] < 4:
+                continue
+            _, sside = get_mini_boxes(pts)
+            if sside < min_size:
                 continue
             if box_score_fast(pred_map, pts) < box_thresh:
                 continue
             unclipped = unclip(pts, unclip_ratio)
             if unclipped is None or len(unclipped) < 3:
                 continue
+            _, sside_unclipped = get_mini_boxes(unclipped)
+            if sside_unclipped < min_size + 2.0:
+                continue
+
             poly = unclipped.astype(np.float32)
             poly[:, 0] = np.clip(np.round(poly[:, 0] / rw * w), 0, w)
             poly[:, 1] = np.clip(np.round(poly[:, 1] / rh * h), 0, h)
+
+            # Filter out tiny noise specks in destination page coordinates (1x1, 5x5 false positives)
+            pw = float(poly[:, 0].max() - poly[:, 0].min())
+            ph = float(poly[:, 1].max() - poly[:, 1].min())
+            if pw < 6.0 or ph < 6.0 or (pw * ph) < 36.0:
+                continue
+
             boxes.append(poly)
 
         return boxes, pred_full

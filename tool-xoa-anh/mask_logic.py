@@ -340,6 +340,7 @@ def build_masks_from_polygons(
     box_pad: int = 6,
     min_speck: int = 4,
     seg_regions: Optional[Sequence[Det]] = None,
+    min_box_size: int = 0,
 ) -> MaskSet:
     """
     Constructs Chat and SFX masks from detected text polygons (and optional probability map).
@@ -348,6 +349,7 @@ def build_masks_from_polygons(
        - Checks intersection with bubble boxes (CLS_TEXT_BUBBLE, CLS_BUBBLE).
        - Checks background paper brightness around polygons.
        - Expands chat_boxes with the true polygon bounds to avoid clipping vertical text lines.
+       - If min_box_size > 0: skips small polygons (like single kana 'ん', whispers) so they are kept intact.
     2. Combines polygon raster with per-pixel probability map and dark ink to form crisp text masks.
     3. Runs snap_white_halo and contour_preserving_dilate using barrier protection.
     """
@@ -360,6 +362,8 @@ def build_masks_from_polygons(
     near_pad = 35.0
     chat_polys: List[np.ndarray] = []
     sfx_polys: List[np.ndarray] = []
+    active_chat_bubble_indices: set[int] = set()
+    active_sfx_bubble_indices: set[int] = set()
 
     for p in polygons:
         if len(p) < 3:
@@ -370,6 +374,12 @@ def build_masks_from_polygons(
         max_x = float(np.max(p[:, 0]))
         min_y = float(np.min(p[:, 1]))
         max_y = float(np.max(p[:, 1]))
+
+        pw = max_x - min_x
+        ph = max_y - min_y
+        if min_box_size > 0 and max(pw, ph) < float(min_box_size):
+            # User requested: keep small boxes intact, do not erase!
+            continue
 
         # Find closest matching bubble box
         matched_bubble_idx = -1
@@ -392,6 +402,7 @@ def build_masks_from_polygons(
         if is_chat or not sfx_boxes:
             chat_polys.append(p_int)
             if matched_bubble_idx >= 0:
+                active_chat_bubble_indices.add(matched_bubble_idx)
                 b = bubble_boxes[matched_bubble_idx]
                 bubble_boxes[matched_bubble_idx] = (
                     min(b[0], poly_box[0]),
@@ -400,6 +411,7 @@ def build_masks_from_polygons(
                     max(b[3], poly_box[3]),
                 )
             else:
+                active_chat_bubble_indices.add(len(bubble_boxes))
                 bubble_boxes.append(poly_box)
         else:
             sfx_polys.append(p_int)
@@ -410,6 +422,7 @@ def build_masks_from_polygons(
                     matched_sfx_idx = idx
                     break
             if matched_sfx_idx >= 0:
+                active_sfx_bubble_indices.add(matched_sfx_idx)
                 b = sfx_boxes[matched_sfx_idx]
                 sfx_boxes[matched_sfx_idx] = (
                     min(b[0], poly_box[0]),
@@ -418,9 +431,14 @@ def build_masks_from_polygons(
                     max(b[3], poly_box[3]),
                 )
             else:
+                active_sfx_bubble_indices.add(len(sfx_boxes))
                 sfx_boxes.append(poly_box)
 
-    chat_boxes = bubble_boxes
+    if min_box_size > 0:
+        chat_boxes = [b for idx, b in enumerate(bubble_boxes) if idx in active_chat_bubble_indices]
+        sfx_boxes = [b for idx, b in enumerate(sfx_boxes) if idx in active_sfx_bubble_indices]
+    else:
+        chat_boxes = bubble_boxes
 
     chat_poly_mask = np.zeros((h, w), dtype=np.uint8)
     if chat_polys:

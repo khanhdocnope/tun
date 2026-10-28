@@ -182,6 +182,40 @@ def test_adaptive_font_size_dilation():
     assert large_height >= 75, f"Large font should get wider dilation! Got height {large_height}"
 
 
+def test_min_box_size_skips_small_bubbles():
+    img = np.full((200, 400, 3), 240, np.uint8)
+    # Draw black ink inside both boxes
+    img[52:58, 52:58] = 20
+    img[55:65, 160:200] = 20
+
+    # Tiny bubble text (12x10 px)
+    poly_tiny = np.array([[50, 50], [62, 50], [62, 60], [50, 60]], dtype=np.float32)
+    # Normal dialogue text (60x20 px)
+    poly_normal = np.array([[150, 50], [210, 50], [210, 70], [150, 70]], dtype=np.float32)
+    dets = [
+        Det(CLS_TEXT_BUBBLE, 0.9, (45.0, 45.0, 65.0, 65.0)),
+        Det(CLS_TEXT_BUBBLE, 0.9, (145.0, 45.0, 215.0, 75.0)),
+    ]
+
+    # Without filter (min_box_size=0): both are cleaned
+    ms_all = build_masks_from_polygons(img, [poly_tiny, poly_normal], dets, min_box_size=0)
+    assert ms_all.chat_erase[:, 45:65].any(), "Tiny box should be cleaned when min_box_size=0"
+    assert ms_all.chat_erase[:, 145:215].any(), "Normal box should be cleaned when min_box_size=0"
+
+    # With filter (min_box_size=18): tiny box (12px) is PRESERVED, normal box (60px) is CLEANED
+    ms_filtered = build_masks_from_polygons(img, [poly_tiny, poly_normal], dets, min_box_size=18)
+    assert not ms_filtered.chat_erase[:, 45:65].any(), "Tiny box MUST NOT be erased when min_box_size=18!"
+    assert ms_filtered.chat_erase[:, 145:215].any(), "Normal box MUST be erased when min_box_size=18!"
+
+
+def test_get_mini_boxes_oriented_box():
+    from text_detector import get_mini_boxes
+    rect = np.array([[10, 10], [50, 10], [50, 30], [10, 30]], dtype=np.float32)
+    box, sside = get_mini_boxes(rect)
+    assert 19.0 <= sside <= 21.0, f"Expected short side ~20, got {sside}"
+    assert box.shape == (4, 2)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

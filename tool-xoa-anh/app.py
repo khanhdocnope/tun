@@ -384,6 +384,7 @@ def process_manga_auto(
     det_threshold: float,
     compute_mode: str,
     inpaint_model: str = "anime-lama",
+    min_box_size: int = 0,
 ) -> Tuple[Optional[Image.Image], Optional[Image.Image], str, Dict[str, Any], Optional[str], Optional[str]]:
     """
     Main 2-column Auto-clean handler:
@@ -402,6 +403,7 @@ def process_manga_auto(
         det_threshold=float(det_threshold),
         force_cpu=force_cpu,
         inpaint_model=inpaint_model,
+        min_box_size=int(min_box_size),
     )
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
@@ -513,6 +515,7 @@ class CleanPagePayload(BaseModel):
     dilationPx: Optional[int] = 4
     detThreshold: Optional[float] = 0.20
     inpaintModel: Optional[str] = "anime-lama"
+    minBoxSize: Optional[int] = 0
 
 
 @api_router.get("/health")
@@ -615,6 +618,7 @@ async def api_clean_page(req: CleanPagePayload):
             dilation_px=int(req.dilationPx or 4),
             det_threshold=float(req.detThreshold or 0.20),
             inpaint_model=inpaint_model,
+            min_box_size=int(req.minBoxSize or 0),
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("clean_page failed")
@@ -719,6 +723,15 @@ def create_ui() -> gr.Blocks:
                                 info="Giá trị càng nhỏ càng bắt nhạy các ký tự mờ / nét mảnh.",
                             )
 
+                            min_box_slider = gr.Slider(
+                                minimum=0,
+                                maximum=60,
+                                step=2,
+                                value=0,
+                                label="Kích thước box tối thiểu để xóa (px)",
+                                info="0 = xóa toàn bộ. Đặt 15-25 px để giữ lại các box nhỏ (tiếng rên 'ん', tiếng thở dài, chú thích nhỏ).",
+                            )
+
                             compute_radio = gr.Radio(
                                 choices=[
                                     ("⚡ Tự động (Ưu tiên ZeroGPU A100)", "auto"),
@@ -750,7 +763,7 @@ def create_ui() -> gr.Blocks:
                                     label="Trang truyện đã làm sạch",
                                     interactive=False,
                                     format="png",
-                                )
+                                    )
                                 with gr.Row():
                                     download_jpg_btn = gr.DownloadButton(
                                         label="⬇️ Tải ảnh JPG chất lượng cao (98%)",
@@ -775,14 +788,14 @@ def create_ui() -> gr.Blocks:
 
                 # Ví dụ Manga mẫu
                 example_files = [
-                    ["examples/sample1.jpg", False, 4, 0.20, "auto", "anime-lama"],
-                    ["examples/sample2.jpg", False, 4, 0.20, "auto", "anime-lama"],
+                    ["examples/sample1.jpg", False, 4, 0.20, "auto", "anime-lama", 0],
+                    ["examples/sample2.jpg", False, 4, 0.20, "auto", "anime-lama", 0],
                 ]
                 valid_examples = [ex for ex in example_files if Path(ex[0]).is_file()]
                 if valid_examples:
                     gr.Examples(
                         examples=valid_examples,
-                        inputs=[input_image, clean_sfx_checkbox, dilation_slider, threshold_slider, compute_radio, inpaint_model_dropdown],
+                        inputs=[input_image, clean_sfx_checkbox, dilation_slider, threshold_slider, compute_radio, inpaint_model_dropdown, min_box_slider],
                         outputs=[output_image, mask_output, exec_time_box, stats_output, download_jpg_btn, download_png_btn],
                         fn=process_manga_auto,
                         cache_examples=False,
@@ -791,7 +804,7 @@ def create_ui() -> gr.Blocks:
 
                 clean_btn.click(
                     fn=process_manga_auto,
-                    inputs=[input_image, clean_sfx_checkbox, dilation_slider, threshold_slider, compute_radio, inpaint_model_dropdown],
+                    inputs=[input_image, clean_sfx_checkbox, dilation_slider, threshold_slider, compute_radio, inpaint_model_dropdown, min_box_slider],
                     outputs=[output_image, mask_output, exec_time_box, stats_output, download_jpg_btn, download_png_btn],
                     api_name="predict",
                 )
