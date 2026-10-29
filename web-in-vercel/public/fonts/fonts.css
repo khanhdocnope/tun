@@ -1,0 +1,90 @@
+/* Google Web Fonts for Manga */
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+/* Viet-Manga Fonts */
+@font-face {
+  font-family: 'Yuki Arenzi';
+  src: url('/fonts/Yuki-Arenzi.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Burobu';
+  src: url('/fonts/Yuki-Burobu.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Marian';
+  src: url('/fonts/Yuki-CCMarianChurchlandJournal.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Chicken Pie';
+  src: url('/fonts/Yuki-CHICKEN Pie.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki CrashLanding';
+  src: url('/fonts/Yuki-CrashLanding BB.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Downhill';
+  src: url('/fonts/Yuki-Downhill Dive.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Gorrilaz';
+  src: url('/fonts/Yuki-Gorrilaz_Story.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Only Angel';
+  src: url('/fonts/Yuki-KG Only Angel.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Yuki Tea And Oranges';
+  src: url('/fonts/Yuki-Tea And Oranges Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallback aliases */
+@font-face {
+  font-family: 'Anime Ace';
+  src: url('/fonts/Yuki-Burobu.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Manga Temple';
+  src: url('/fonts/Yuki-CrashLanding BB.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}

@@ -19,6 +19,7 @@ const batchZipHandler = require("./api/batch-zip");
 const translateHandler = require("./api/translate");
 const visionHandler = require("./api/vision");
 const detectBoxesHandler = require("./api/detect-boxes");
+const translateGoogleHandler = require("./api/translate-google");
 
 // Serverless API handlers (Batch Studio Pro Sub-Web)
 const configHandler = require("./api/config");
@@ -32,6 +33,7 @@ app.all("/api/ocr", (req, res) => ocrHandler(req, res));
 app.all("/api/detect-boxes", (req, res) => detectBoxesHandler(req, res));
 app.all("/api/batch-zip", (req, res) => batchZipHandler(req, res));
 app.all("/api/translate", (req, res) => translateHandler(req, res));
+app.all("/api/translate-google", (req, res) => translateGoogleHandler(req, res));
 app.all("/api/vision", (req, res) => visionHandler(req, res));
 
 // Batch Studio Pro routes
@@ -40,24 +42,29 @@ app.all("/api/process-batch", (req, res) => processBatchHandler(req, res));
 app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
-// Batch Studio Pro route (hỗ trợ trang chủ /, /batch-studio, và alias .html)
-app.get(["/", "/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) => {
+// Trang chủ phục vụ public/index.html (Manga Studio với 3 Tabs chính)
+app.get(["/", "/index.html"], (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Batch Studio Direct Link
+app.get(["/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
 });
 
 // Phục vụ tĩnh độc quyền từ public/ (chuẩn Vercel)
 app.use(express.static(path.join(__dirname, "public")));
 
-// Fallback to Batch Studio
+// Fallback to index.html
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(PORT, () => {
   console.log(`\n=================================================`);
-  console.log(`🚀 Batch Studio Pro Node.js Server đang chạy!`);
-  console.log(`📡 Trang chủ (Batch Studio): http://localhost:${PORT}`);
-  console.log(`📚 Đường dẫn trực tiếp: http://localhost:${PORT}/batch-studio`);
-  console.log(`☁️  Backend API: ${process.env.BACKEND_URL || "https://dobietdc-backe-manga-remove.hf.space"}`);
+  console.log(`🚀 Manga Translation & Typeset Studio đang chạy!`);
+  console.log(`📡 Trang chủ: http://localhost:${PORT}`);
+  console.log(`📚 Batch Studio: http://localhost:${PORT}/batch-studio`);
+  console.log(`☁️  Backend API: ${process.env.BACKEND_URL || "https://dobietdc-manga-text-cleaner.hf.space"}`);
   console.log(`=================================================\n`);
 });

@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/batch-studio/index.html"
+      "destination": "/index.html"
     },
     {
       "source": "/batch-studio",
