@@ -96,6 +96,7 @@ export class TypesetStudioApp {
         const zoomEl = document.getElementById("typesetZoomLevel");
         if (zoomEl) zoomEl.textContent = `${zoom}%`;
       },
+      onToolChanged: (tool) => this.handleToolChanged(tool),
     });
 
     // 3. Khởi tạo Reader Preview
@@ -247,6 +248,24 @@ export class TypesetStudioApp {
     }
   }
 
+  handleToolChanged(tool) {
+    const toolToBtn = {
+      select: "btnToolSelect",
+      pan: "btnToolHand",
+      region: "btnToolRegion",
+      brush: "btnToolBrush",
+      eraser: "btnToolEraser",
+      text: "btnToolText",
+    };
+    const targetBtnId = toolToBtn[tool];
+    if (targetBtnId) {
+      Object.values(toolToBtn).forEach((btnId) => {
+        document.getElementById(btnId)?.classList.remove("active");
+      });
+      document.getElementById(targetBtnId)?.classList.add("active");
+    }
+  }
+
   async handleAddImages(files) {
     if (!files || files.length === 0) return;
 
@@ -255,6 +274,7 @@ export class TypesetStudioApp {
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
     );
 
+    const prevCount = this.pages.length;
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
       if (!file.type.startsWith("image/")) continue;
@@ -276,11 +296,14 @@ export class TypesetStudioApp {
       this.pages.push(newPage);
     }
 
-    this.updateEmptyState(false);
-    this.renderPagesList();
-    this.reader.setPages(this.pages, this.currentPageIndex);
-    if (this.pages.length === fileList.length) {
-      this.selectPage(0);
+    const addedCount = this.pages.length - prevCount;
+    if (addedCount > 0) {
+      this.updateEmptyState(false);
+      this.renderPagesList();
+      this.reader.setPages(this.pages, this.currentPageIndex);
+      const targetIdx = prevCount === 0 ? 0 : prevCount;
+      this.selectPage(targetIdx);
+      this.showToast(`Đã nạp ${addedCount} trang vào Manga Studio!`, "success");
     }
   }
 
@@ -969,18 +992,68 @@ export class TypesetStudioApp {
     const fileInput = document.getElementById("typesetFileInput");
     fileInput?.addEventListener("change", (e) => this.handleAddImages(e.target.files));
 
-    // Thêm ảnh từ drag & drop
-    const dropzone = document.getElementById("typesetDropzoneArea");
-    if (dropzone) {
-      dropzone.addEventListener("dragover", (e) => {
+    // Thêm ảnh từ Drag & Drop toàn diện
+    const emptyDropzone = document.getElementById("typesetEmptyDropzone");
+    const canvasContainer = document.getElementById("typesetCanvasContainer");
+    const pagesList = document.getElementById("typesetPagesList");
+    const dragOverlay = document.getElementById("typesetDragOverlay");
+
+    // Click vào vùng dropzone trống để chọn ảnh
+    emptyDropzone?.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      document.getElementById("typesetFileInput")?.click();
+    });
+
+    // Ngăn chặn trình duyệt mở ảnh đè lên trang web khi kéo file vào window
+    window.addEventListener("dragover", (e) => e.preventDefault());
+    window.addEventListener("drop", (e) => e.preventDefault());
+
+    // Hiển thị Overlay khi kéo file ảnh từ Desktop/Explorer vào Studio
+    let dragCounter = 0;
+    window.addEventListener("dragenter", (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
+        dragCounter++;
+        if (dragOverlay) dragOverlay.style.display = "flex";
+      }
+    });
+
+    window.addEventListener("dragleave", (e) => {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        if (dragOverlay) dragOverlay.style.display = "none";
+      }
+    });
+
+    window.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      if (dragOverlay) dragOverlay.style.display = "none";
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        this.handleAddImages(e.dataTransfer.files);
+      }
+    });
+
+    // Kéo thả trực tiếp lên Empty Dropzone
+    if (emptyDropzone) {
+      emptyDropzone.addEventListener("dragover", (e) => {
         e.preventDefault();
-        dropzone.classList.add("dragover");
+        emptyDropzone.classList.add("dragover");
       });
-      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-      dropzone.addEventListener("drop", (e) => {
+      emptyDropzone.addEventListener("dragleave", () => emptyDropzone.classList.remove("dragover"));
+      emptyDropzone.addEventListener("drop", (e) => {
         e.preventDefault();
-        dropzone.classList.remove("dragover");
-        if (e.dataTransfer.files) this.handleAddImages(e.dataTransfer.files);
+        emptyDropzone.classList.remove("dragover");
+        if (e.dataTransfer && e.dataTransfer.files) this.handleAddImages(e.dataTransfer.files);
+      });
+    }
+
+    // Kéo thả lên sidebar danh sách trang
+    if (pagesList) {
+      pagesList.addEventListener("dragover", (e) => e.preventDefault());
+      pagesList.addEventListener("drop", (e) => {
+        e.preventDefault();
+        if (e.dataTransfer && e.dataTransfer.files) this.handleAddImages(e.dataTransfer.files);
       });
     }
 

@@ -34,6 +34,7 @@ export class TypesetCanvasEditor {
     this.onBoxesListChanged = options.onBoxesListChanged || (() => {});
     this.onRegionSelected = options.onRegionSelected || (() => {});
     this.onZoomChanged = options.onZoomChanged || (() => {});
+    this.onToolChanged = options.onToolChanged || (() => {});
 
     this.initCanvas();
     this.bindEvents();
@@ -42,7 +43,9 @@ export class TypesetCanvasEditor {
 
   initCanvas() {
     this.fabricCanvas = new fabric.Canvas(this.canvasId, {
-      selection: true,
+      selection: false,
+      defaultCursor: "grab",
+      hoverCursor: "move",
       preserveObjectStacking: true,
       fireRightClick: true,
       stopContextMenu: true,
@@ -162,14 +165,23 @@ export class TypesetCanvasEditor {
     this.fabricCanvas.isDrawingMode = false;
 
     if (tool === "select") {
-      this.fabricCanvas.selection = true;
-      this.fabricCanvas.defaultCursor = "default";
+      this.fabricCanvas.selection = false;
+      this.fabricCanvas.defaultCursor = "grab";
+      this.fabricCanvas.hoverCursor = "move";
       this.fabricCanvas.forEachObject((obj) => {
         if (obj instanceof fabric.Textbox) obj.selectable = true;
+      });
+    } else if (tool === "pan") {
+      this.fabricCanvas.selection = false;
+      this.fabricCanvas.defaultCursor = "grab";
+      this.fabricCanvas.hoverCursor = "grab";
+      this.fabricCanvas.forEachObject((obj) => {
+        if (obj instanceof fabric.Textbox) obj.selectable = false;
       });
     } else if (tool === "region") {
       this.fabricCanvas.selection = false;
       this.fabricCanvas.defaultCursor = "crosshair";
+      this.fabricCanvas.hoverCursor = "crosshair";
       this.fabricCanvas.forEachObject((obj) => {
         if (obj instanceof fabric.Textbox) obj.selectable = false;
       });
@@ -182,13 +194,9 @@ export class TypesetCanvasEditor {
     } else if (tool === "text") {
       this.fabricCanvas.selection = false;
       this.fabricCanvas.defaultCursor = "text";
-    } else if (tool === "pan") {
-      this.fabricCanvas.selection = false;
-      this.fabricCanvas.defaultCursor = "grab";
-      this.fabricCanvas.forEachObject((obj) => {
-        if (obj instanceof fabric.Textbox) obj.selectable = false;
-      });
     }
+
+    this.onToolChanged(tool);
   }
 
   // ---------------- Canvas Events & Mouse Interactions ----------------
@@ -196,6 +204,7 @@ export class TypesetCanvasEditor {
     let isPanning = false;
     let lastPosX = 0;
     let lastPosY = 0;
+    const canvasContainer = document.getElementById("typesetCanvasContainer");
 
     // Zoom & Pan qua lăn chuột (Mouse Wheel)
     this.fabricCanvas.on("mouse:wheel", (opt) => {
@@ -229,25 +238,33 @@ export class TypesetCanvasEditor {
     // Kéo pan canvas khi nhấn chuột
     this.fabricCanvas.on("mouse:down", (opt) => {
       const evt = opt.e;
+      const clientX = evt.clientX ?? (evt.touches && evt.touches[0]?.clientX);
+      const clientY = evt.clientY ?? (evt.touches && evt.touches[0]?.clientY);
       
       // Bắt đầu pan nếu:
       // 1. Nhấn nút giữa chuột (button === 1)
       // 2. Nhấn nút chuột phải (button === 2)
       // 3. Đang giữ phím Space
       // 4. Đang bật công cụ Pan (activeTool === "pan")
-      // 5. Công cụ Select và click vào nền trống (không click trúng textbox)
+      // 5. Công cụ Select và click vào nền trống / trang ảnh (không click trúng textbox)
       const isRightClick = evt.button === 2;
       const isMiddleClick = evt.button === 1;
       const isSpaceOrPan = this.isSpacePressed || this.activeTool === "pan";
-      const isSelectEmpty = this.activeTool === "select" && !opt.target && evt.button === 0;
+      const isSelectEmpty = (this.activeTool === "select" || !this.activeTool) && !opt.target && evt.button === 0;
 
       if (isRightClick || isMiddleClick || isSpaceOrPan || isSelectEmpty) {
         isPanning = true;
         this.fabricCanvas.selection = false;
-        lastPosX = evt.clientX;
-        lastPosY = evt.clientY;
+        lastPosX = clientX;
+        lastPosY = clientY;
         this.fabricCanvas.defaultCursor = "grabbing";
         this.fabricCanvas.setCursor("grabbing");
+        canvasContainer?.classList.add("panning");
+
+        if (isSelectEmpty && this.fabricCanvas.getActiveObject()) {
+          this.fabricCanvas.discardActiveObject();
+          this.fabricCanvas.requestRenderAll();
+        }
         return;
       }
 
@@ -279,13 +296,20 @@ export class TypesetCanvasEditor {
 
     this.fabricCanvas.on("mouse:move", (opt) => {
       const evt = opt.e;
+      const clientX = evt.clientX ?? (evt.touches && evt.touches[0]?.clientX);
+      const clientY = evt.clientY ?? (evt.touches && evt.touches[0]?.clientY);
+
       if (isPanning) {
-        const vpt = this.fabricCanvas.viewportTransform;
-        vpt[4] += evt.clientX - lastPosX;
-        vpt[5] += evt.clientY - lastPosY;
-        this.fabricCanvas.requestRenderAll();
-        lastPosX = evt.clientX;
-        lastPosY = evt.clientY;
+        const deltaX = clientX - lastPosX;
+        const deltaY = clientY - lastPosY;
+        if (deltaX !== 0 || deltaY !== 0) {
+          const vpt = this.fabricCanvas.viewportTransform;
+          vpt[4] += deltaX;
+          vpt[5] += deltaY;
+          this.fabricCanvas.requestRenderAll();
+          lastPosX = clientX;
+          lastPosY = clientY;
+        }
         return;
       }
 
@@ -304,9 +328,11 @@ export class TypesetCanvasEditor {
     const stopPanning = () => {
       if (isPanning) {
         isPanning = false;
-        this.fabricCanvas.defaultCursor = this.isSpacePressed || this.activeTool === "pan" ? "grab" : "default";
-        this.fabricCanvas.setCursor(this.fabricCanvas.defaultCursor);
-        this.fabricCanvas.selection = this.activeTool === "select";
+        canvasContainer?.classList.remove("panning");
+        const cur = (this.isSpacePressed || this.activeTool === "pan" || this.activeTool === "select" || !this.activeTool) ? "grab" : "default";
+        this.fabricCanvas.defaultCursor = cur;
+        this.fabricCanvas.setCursor(cur);
+        this.fabricCanvas.selection = false;
       }
     };
 
@@ -754,8 +780,9 @@ export class TypesetCanvasEditor {
     window.addEventListener("keyup", (e) => {
       if (e.code === "Space") {
         this.isSpacePressed = false;
-        this.fabricCanvas.defaultCursor = this.activeTool === "pan" ? "grab" : (this.activeTool === "select" ? "default" : "crosshair");
-        this.fabricCanvas.setCursor(this.fabricCanvas.defaultCursor);
+        const cur = (this.activeTool === "pan" || this.activeTool === "select") ? "grab" : "crosshair";
+        this.fabricCanvas.defaultCursor = cur;
+        this.fabricCanvas.setCursor(cur);
       }
     });
   }

@@ -714,7 +714,55 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: default;
+  cursor: grab;
+}
+
+.canvas-viewport-container.panning {
+  cursor: grabbing !important;
+}
+
+/* Drag & Drop Overlay khi kéo ảnh vào Studio */
+.typeset-drag-drop-overlay {
+  position: absolute;
+  inset: 16px;
+  z-index: 150;
+  background: rgba(10, 14, 26, 0.88);
+  backdrop-filter: blur(10px);
+  border: 2px dashed #6366f1;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: fadeInOverlay 0.15s ease-out;
+}
+
+.drag-drop-overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.drag-drop-overlay-box h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+
+.drag-drop-overlay-box p {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* Empty Dropzone */

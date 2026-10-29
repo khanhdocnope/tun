@@ -296,6 +296,15 @@
         <section class="typeset-workspace-middle">
           <!-- Viewport Chứa Canvas Fabric.js -->
           <div class="canvas-viewport-container" id="typesetCanvasContainer">
+            <!-- Drag & Drop Overlay khi kéo file ảnh từ máy tính vào -->
+            <div class="typeset-drag-drop-overlay" id="typesetDragOverlay" style="display: none;">
+              <div class="drag-drop-overlay-box">
+                <i class="fa-solid fa-cloud-arrow-down text-5xl text-indigo-400"></i>
+                <h3>Thả file ảnh Manga vào đây</h3>
+                <p>Hỗ trợ WebP, PNG, JPG, AVIF. Ảnh sẽ tự động được thêm vào Chapter.</p>
+              </div>
+            </div>
+
             <!-- Empty Dropzone khi chưa có ảnh -->
             <div class="typeset-empty-dropzone" id="typesetEmptyDropzone">
               <div class="empty-dropzone-icon">
