@@ -40,29 +40,24 @@ app.all("/api/process-batch", (req, res) => processBatchHandler(req, res));
 app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
-// Batch Studio Pro route (hỗ trợ cả có và không có dấu gạch chéo, và alias .html)
-app.get(["/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) => {
+// Batch Studio Pro route (hỗ trợ trang chủ /, /batch-studio, và alias .html)
+app.get(["/", "/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) => {
   res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
-});
-
-// Typeset Studio Pro route
-app.get(["/typeset-studio", "/typeset-studio/", "/typeset-studio.html"], (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "typeset-studio", "index.html"));
 });
 
 // Phục vụ tĩnh độc quyền từ public/ (chuẩn Vercel)
 app.use(express.static(path.join(__dirname, "public")));
 
-// Fallback to index.html for SPA
+// Fallback to Batch Studio
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
 });
 
 app.listen(PORT, () => {
   console.log(`\n=================================================`);
-  console.log(`🚀 Manga Studio Node.js Server đang chạy!`);
-  console.log(`📡 URL cục bộ: http://localhost:${PORT}`);
-  console.log(`📚 Batch Studio Pro (Web con): http://localhost:${PORT}/batch-studio`);
+  console.log(`🚀 Batch Studio Pro Node.js Server đang chạy!`);
+  console.log(`📡 Trang chủ (Batch Studio): http://localhost:${PORT}`);
+  console.log(`📚 Đường dẫn trực tiếp: http://localhost:${PORT}/batch-studio`);
   console.log(`☁️  Backend API: ${process.env.BACKEND_URL || "https://dobietdc-backe-manga-remove.hf.space"}`);
   console.log(`=================================================\n`);
 });

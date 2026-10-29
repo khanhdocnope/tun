@@ -5,6 +5,10 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/",
+      "destination": "/batch-studio/index.html"
+    },
+    {
       "source": "/batch-studio",
       "destination": "/batch-studio/index.html"
     },

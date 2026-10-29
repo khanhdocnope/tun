@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MangaStudio AI - Autonomous Cleaner & Speech Bubble Translator</title>
-  <meta name="description" content="Nền tảng AI xử lý truyện tranh đỉnh cao: Bóc tách bóng thoại, tẩy chữ giữ nguyên trame nét vẽ, OCR đa ngôn ngữ và dịch thuật ngữ cảnh Manga/Manhwa bằng DeepSeek LLM.">
+  <title>Manga OCR & Dịch Hàng Loạt | Batch Studio Pro</title>
   
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="/assets/ico/web.ico">
@@ -12,710 +11,603 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/ico/web.png">
   <link rel="apple-touch-icon" href="/assets/ico/web.png">
 
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-  
-  <link rel="stylesheet" href="/css/main.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script>window.JSZip || document.write('<script src="js/jszip.min.js"><\/script>')</script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/batch-studio/style.css">
+
 </head>
 <body>
+  <div class="app-layout">
+    <!-- Top Control Studio Bar -->
+    <header class="studio-header">
+      <div class="studio-header-row-1">
+        <div class="header-left">
+          <!-- Batch Studio Brand/Home -->
+          <a href="/" class="btn-back-home" title="Batch Studio Pro - Trang Chủ">
+            <img src="/assets/ico/web.png" alt="MangaStudio Logo" style="width: 18px; height: 18px; border-radius: 4px; object-fit: cover;">
+            <span>Batch Studio Pro</span>
+          </a>
+          <div class="studio-divider"></div>
 
-  <!-- Top Navbar -->
-  <header class="navbar">
-    <a href="#" class="brand">
-      <div class="brand-icon">
-        <img src="/assets/ico/web.png" alt="MangaStudio AI Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: inherit;">
+          <!-- Language Selectors -->
+          <div class="lang-selector-group">
+            <div class="lang-box">
+              <span class="lang-label">NGUỒN</span>
+              <select id="sourceLang" class="lang-select" disabled>
+                <option value="ja">JP (Nhật)</option>
+              </select>
+            </div>
+            <span class="lang-arrow">→</span>
+            <div class="lang-box">
+              <span class="lang-label">ĐÍCH</span>
+              <select id="targetLang" class="lang-select">
+                <option value="vi">VI (Việt)</option>
+                <option value="en">EN (Anh)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- Add Images Button (Đã dọn dẹp chữ, bỏ dấu + thừa) -->
+          <label class="btn btn-add-images" for="fileInputMultiple" title="Chọn nhiều ảnh từ máy (hỗ trợ tới 100 ảnh)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="btn-text-full">Thêm ảnh (tối đa 100)</span>
+            <span class="btn-text-short">Thêm ảnh</span>
+          </label>
+          <input type="file" id="fileInputMultiple" accept="image/*,.zip,application/zip,application/x-zip-compressed" multiple style="display:none;">
+
+          <!-- Preset / Settings / Export -->
+          <button class="btn btn-icon-text" id="btnSettings" title="Cài đặt Model & API">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="btn-text-full">Cài đặt</span>
+            <span class="btn-text-short">Cài đặt</span>
+          </button>
+
+          <!-- Quick Direct Download .txt Button -->
+          <button class="btn btn-direct-download" id="btnQuickDownloadTxt" title="Tải nhanh kịch bản dịch file .txt (BOM UTF-8 Notepad)" disabled>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span class="btn-text-full">Tải .txt</span>
+            <span class="btn-text-short">Tải .txt</span>
+          </button>
+
+          <div class="dropdown-wrapper" style="position:relative;">
+            <button class="btn btn-export" id="btnExportChapter" title="Xuất toàn bộ kịch bản của tất cả các trang" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span class="btn-text-full">Xuất Kịch Bản ▾</span>
+              <span class="btn-text-short">Xuất file ▾</span>
+            </button>
+            <div class="dropdown-menu" id="exportMenu" style="display:none;">
+              <button class="dropdown-item" id="btnExportTxt">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                <span>Tải file .txt (Notepad UTF-8)</span>
+              </button>
+              <button class="dropdown-item" id="btnExportDoc">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="14" y1="12" x2="18" y2="12"></line><line x1="14" y1="16" x2="18" y2="16"></line></svg>
+                <span>Tải file .doc (Microsoft Word)</span>
+              </button>
+              <button class="dropdown-item" id="btnExportZipClean">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                <span>Tải ZIP ảnh đã tẩy</span>
+              </button>
+              <button class="dropdown-item" id="btnExportZipBoth">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
+                <span>Tải ZIP ảnh tẩy + script</span>
+              </button>
+              <button class="dropdown-item" id="btnCopyChapter">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <span>Copy toàn bộ kịch bản</span>
+              </button>
+              <button class="dropdown-item" id="btnOpenExportModal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span>Xem trước & Tải file...</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="brand-text">
-        <h1>MangaStudio AI</h1>
-        <span>ZeroGPU A100 Manga Cleaner & Smart Bubble Translator</span>
+
+      <div class="studio-header-row-2">
+        <div class="row-2-left">
+          <!-- Manga vs Webtoon Reading Order Switcher -->
+          <div class="comic-mode-switcher" id="comicModeSwitcher" title="Thứ tự đọc bóng thoại theo thể loại truyện">
+            <button type="button" class="btn-comic-mode active" id="btnModeManga" data-mode="manga" title="Manga truyền thống: Đọc từ Phải sang Trái, Trên xuống Dưới">
+              <span class="mode-dot"></span>
+              <span class="mode-text">Manga</span>
+            </button>
+            <button type="button" class="btn-comic-mode" id="btnModeWebtoon" data-mode="webtoon" title="Webtoon / Manhwa dọc: Đọc từ Trên xuống Dưới, Trái sang Phải">
+              <span class="mode-dot"></span>
+              <span class="mode-text">Webtoon</span>
+            </button>
+          </div>
+
+          <!-- Skip SFX Toggle -->
+          <label class="toggle-switch-wrapper" title="Bỏ qua từ tượng thanh, âm thanh nền để tập trung vào lời thoại nhân vật">
+            <input type="checkbox" id="toggleSkipSFX" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-text">
+              <span class="toggle-text-full">Bỏ qua SFX</span>
+              <span class="toggle-text-med">Bỏ SFX</span>
+              <span class="toggle-text-short">SFX</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="row-2-right">
+          <!-- Thu gọn / Mở tất cả -->
+          <button type="button" class="btn btn-sm btn-outline-collapse" id="btnToggleCollapseAll" title="Thu gọn / Mở rộng tất cả thẻ trang">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 14 10 14 10 20"></polyline>
+              <polyline points="20 10 14 10 14 4"></polyline>
+              <line x1="14" y1="10" x2="21" y2="3"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+            <span id="btnToggleCollapseAllLabel">Thu gọn</span>
+          </button>
+          <!-- Soát bản dịch -->
+          <button type="button" class="btn btn-sm btn-outline-proofread" id="btnOpenProofread" title="Mở chế độ soát bản dịch toàn màn hình">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Soát bản dịch</span>
+          </button>
+        </div>
       </div>
-    </a>
-    
-    <div class="nav-actions">
-      <a href="/batch-studio" class="nav-batch-link" title="Chương (hàng loạt): tẩy chữ, OCR và dịch cả chapter">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-        <span class="lbl-full">Chương (hàng loạt)</span><span class="lbl-short">Chương</span>
-      </a>
-      <a href="/typeset-studio" class="nav-batch-link nav-typeset-link" title="Chèn chữ truyện tranh (Typeset Studio Pro)" style="border-color: rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.12);">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
-        <span class="lbl-full">Chèn chữ (Typeset)</span><span class="lbl-short">Typeset</span>
-      </a>
-      <div id="server-status-pill" class="status-pill" title="Nhấn để kiểm tra kết nối API">
-        <span class="status-dot"></span>
-        <span id="server-status-text">Đang kết nối backend...</span>
+    </header>
+
+    <!-- Batch Action Buttons Subbar -->
+    <div class="action-subbar">
+      <div class="step-toggles" role="group" aria-label="Các bước chạy cho cả chapter">
+        <label class="step-chip" title="Tẩy chữ bằng AI trên ảnh gốc (độ phân giải gốc)">
+          <input type="checkbox" id="toggleStepClean">
+          <span>Tẩy chữ</span>
+        </label>
+        <label class="step-chip" title="OCR tiếng Nhật rồi dịch bằng Gemini">
+          <input type="checkbox" id="toggleStepTranslate" checked>
+          <span>OCR + Dịch</span>
+        </label>
       </div>
-      <button id="btn-open-settings" class="btn-icon" title="Cài đặt API Server & Token"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+
+      <div class="batch-buttons">
+        <button class="btn btn-sub btn-clean-all" id="btnCleanAll" disabled>Tẩy chữ tất cả</button>
+        <button class="btn btn-sub btn-ocr-all" id="btnOcrAll" disabled>OCR tất cả</button>
+        <button class="btn btn-sub btn-trans-all" id="btnTranslateAll" disabled>Dịch tất cả</button>
+        <button class="btn btn-sub btn-clear-all" id="btnClearAll" disabled>Xóa tất cả</button>
+        <button class="btn btn-sub btn-primary-highlight" id="btnProcessAll" disabled>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span id="btnProcessAllLabel">OCR + Dịch tất cả</span>
+        </button>
+      </div>
+
+      <div class="batch-stats">
+        <span class="stat-badge" id="statBadge">0 trang trong danh sách</span>
+        <span class="model-badge" id="currentModelBadge">gemini-3.1-flash-lite (15 RPM)</span>
+      </div>
     </div>
-  </header>
 
-  <!-- Main Container -->
-  <main class="main-wrapper">
-
-    <!-- Tab Navigation -->
-    <nav class="tab-nav" id="main-tab-nav">
-      <button class="tab-btn active" data-tab="tab-cleaner" title="AI Manga Cleaner: xóa chữ 1 trang">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"></path><path d="M19 15l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"></path></svg><span>Xóa chữ</span>
-      </button>
-      <button class="tab-btn" data-tab="tab-script-retrans" title="Dịch lại kịch bản (.txt)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg><span>Dịch lại script</span>
-      </button>
-      <!-- LEGACY (ẩn khi LEGACY_TABS = false): tab-translator, tab-batch. Mã cũ vẫn còn nguyên, chỉ không có nút tab. -->
-      <button class="tab-btn legacy-tab" data-tab="tab-translator" hidden>
-        <span>Dịch Truyện Tranh (Bubble OCR)</span>
-      </button>
-      <button class="tab-btn legacy-tab" data-tab="tab-batch" hidden>
-        <span>Xử Lý Hàng Loạt Tệp ZIP (Batch)</span>
-      </button>
-    </nav>
-
-    <!-- ================= TAB 1: AI MANGA CLEANER ================= -->
-    <section id="tab-cleaner" class="tab-pane active">
-      <div class="studio-grid">
-        <!-- Controls Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Thiết Lập Xóa Chữ</span>
-            <span class="badge-tag badge-purple">Inpaint Engine</span>
-          </div>
-
-          <div id="cleaner-dropzone" class="dropzone">
-            <input type="file" id="cleaner-file-input" accept="image/*" style="display:none;">
-            <div class="drop-icon"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>
-            <div class="drop-text">
-              <h4>Kéo thả hoặc nhấn để chọn trang truyện</h4>
-              <p>Hỗ trợ JPG, PNG, WebP (Tối đa 50MB)</p>
-            </div>
-          </div>
-          
-          <div id="cleaner-preview-wrap" class="file-preview">
-            <img id="cleaner-preview-img" alt="Preview">
-            <button id="cleaner-clear-btn" class="btn-clear" title="Xóa ảnh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="cleaner-model-select">Mô hình Inpainting</label>
-            <select id="cleaner-model-select" class="form-select">
-              <option value="anime-lama" selected>Anime-Manga LaMa (Tốt nhất cho Manga B&W, trame, nét vẽ)</option>
-              <option value="big-lama">Big-LaMa Standard (Tốt nhất cho Manhwa / Webtoon màu)</option>
-              <option value="opencv-telea">OpenCV Telea (Siêu tốc độ CPU)</option>
-              <option value="opencv-ns">OpenCV Navier-Stokes (Mượt mà CPU)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <div class="form-label">
-              <span>Độ giãn viền nét (Dilation):</span>
-              <span id="val-dilation" class="range-val">4px</span>
-            </div>
-            <input type="range" id="cleaner-dilation" class="form-range" min="0" max="40" value="4">
-          </div>
-
-          <div class="form-group">
-            <div class="form-label">
-              <span>Ngưỡng nhận diện (Threshold):</span>
-              <span id="val-threshold" class="range-val">0.20</span>
-            </div>
-            <input type="range" id="cleaner-threshold" class="form-range" min="0.05" max="0.50" step="0.01" value="0.20">
-          </div>
-
-          <div class="toggle-card" id="cleaner-sfx-card">
-            <div class="toggle-info">
-              <h5>Xóa luôn cả SFX (Hiệu ứng âm thanh)</h5>
-              <p>Mặc định: Giữ nguyên nét vẽ tay và hiệu ứng tác giả</p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="cleaner-sfx-toggle">
-              <span class="slider-toggle"></span>
-            </label>
-          </div>
-
-          <button id="btn-run-clean" class="btn-primary" disabled>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg><span>AI Bóc Tách & Làm Sạch Nét Vẽ</span>
-          </button>
-        </div>
-
-        <!-- Result Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Kết Quả Phục Hồi Nét Tranh</span>
-            <span id="cleaner-stats-badge" class="badge-tag badge-cyan">Sẵn Sàng</span>
-          </div>
-
-          <div id="cleaner-result-container" class="comparison-container">
-            <img id="comp-before" class="comparison-before" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Ctext x='50%25' y='50%25' fill='%23475569' text-anchor='middle' font-family='sans-serif' font-size='16'%3EChưa có ảnh kết quả%3C/text%3E%3C/svg%3E" alt="Ảnh Gốc">
-            <div id="comp-after-wrap" class="comparison-after-wrapper">
-              <img id="comp-after" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Ctext x='50%25' y='50%25' fill='%23475569' text-anchor='middle' font-family='sans-serif' font-size='16'%3EChưa có ảnh kết quả%3C/text%3E%3C/svg%3E" alt="Ảnh Đã Xóa">
-            </div>
-            <div id="comp-handle" class="comparison-handle">
-              <div class="handle-button">↔</div>
-            </div>
-          </div>
-
-          <div class="view-modes">
-            <button id="btn-mode-split" class="btn-view-mode active">↔ So sánh kéo trượt (Split)</button>
-            <button id="btn-mode-cleaned" class="btn-view-mode">Chỉ xem ảnh đã xóa</button>
-            <button id="btn-mode-mask" class="btn-view-mode">Xem Color Mask (Xanh: Chat / Đỏ: SFX)</button>
-          </div>
-
-          <div style="display:flex; gap:1rem; margin-top:1.25rem;">
-            <a id="btn-download-jpg" class="btn-primary" style="flex:1; text-decoration:none; background: #059669; display:none;">
-              ⬇️ Tải Ảnh Đã Xóa (JPG Gốc 98%)
-            </a>
-            <a id="btn-download-png" class="btn-primary" style="flex:1; text-decoration:none; background: #2563eb; display:none;">
-              ⬇️ Tải Ảnh PNG Lossless
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= TAB 2: AI TRANSLATOR ================= -->
-    <section id="tab-translator" class="tab-pane">
-      <div class="studio-grid">
-        <!-- Controls Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Thiết Lập Dịch Thuật</span>
-            <span class="badge-tag badge-purple">Comic Bubble OCR</span>
-          </div>
-
-          <div id="trans-dropzone" class="dropzone">
-            <input type="file" id="trans-file-input" accept="image/*" style="display:none;">
-            <div class="drop-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
-            <div class="drop-text">
-              <h4>Tải trang truyện Manga/Manhwa cần dịch</h4>
-              <p>Hỗ trợ tiếng Nhật, Hàn, Trung, Anh</p>
-            </div>
-          </div>
-
-          <div id="trans-preview-wrap" class="file-preview">
-            <img id="trans-preview-img" alt="Preview">
-            <button id="trans-clear-btn" class="btn-clear" title="Xóa ảnh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-          </div>
-
-          <!-- AI Vision Mode Switcher (VisionBox inspired) -->
-          <div class="form-group" style="margin-bottom: 1.25rem;">
-            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>Chế độ dịch AI</span>
-              <span class="badge-tag badge-purple">Gemini 2.5 Flash Vision</span>
-            </label>
-            <div class="mode-segmented-tabs">
-              <button type="button" id="trans-btn-mode-quick" class="mode-segmented-btn active">
-                Quick (1-Click)
-              </button>
-              <button type="button" id="trans-btn-mode-pro" class="mode-segmented-btn">
-                Pro (OCR → Sửa)
-              </button>
-            </div>
-            <p id="trans-mode-hint" style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem; line-height:1.4;">
-              <b>Quick Mode</b>: Gửi ảnh trực tiếp tới Gemini Vision để nhận bản dịch tiếng Việt tức thì (~2s-4s).
-            </p>
-          </div>
-
-          <!-- Speech Bubble Only Filter (User Highlighted Request) -->
-          <div class="toggle-card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
-            <div class="toggle-info">
-              <h5 style="color: var(--emerald);">Chỉ nhận diện chữ trong Bong Bóng Thoại</h5>
-              <p>Tự động bỏ qua SFX vẽ tay ngoài nền artwork (Bubble Boundary Rule)</p>
-            </div>
-            <label class="switch">
-              <input type="checkbox" id="trans-chat-only-toggle" checked>
-              <span class="slider-toggle"></span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Thứ tự đọc logic</label>
-            <select id="trans-reading-order" class="form-select">
-              <option value="manga" selected>Manga truyền thống (Phải qua Trái, Trên xuống Dưới)</option>
-              <option value="webtoon">Webtoon / Manhwa (Trên xuống Dưới tuần tự)</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="trans-target-lang">Ngôn ngữ dịch đích</label>
-            <input type="text" id="trans-target-lang" class="form-input" value="Tiếng Việt">
-          </div>
-
-          <!-- Quick Mode Actions -->
-          <div id="trans-quick-controls">
-            <button id="btn-run-quick-trans" class="btn-primary" disabled style="background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%); font-weight:700; width:100%;">
-              <span>Dịch Thẳng 1-Click (Gemini Vision ~2s)</span>
-            </button>
-          </div>
-
-          <!-- Pro Mode Actions (Step-by-step: OCR -> Edit -> Translate) -->
-          <div id="trans-pro-controls" style="display:none; flex-direction:column; gap:0.6rem;">
-            <button id="btn-run-vision-ocr" class="btn-primary" disabled style="background: linear-gradient(135deg, #2563eb, #3b82f6); font-weight:700; width:100%;">
-              <span>Bước 1: Quét OCR & Tách Bóng Thoại (Temp 0.1)</span>
-            </button>
-            <button id="btn-run-vision-translate" class="btn-primary" disabled style="background: linear-gradient(135deg, #059669, #10b981); font-weight:700; width:100%;">
-              <span>Bước 2: Dịch Sang Tiếng Việt (Kèm Ảnh Bối Cảnh)</span>
-            </button>
-          </div>
-
-          <!-- Legacy / Advanced Detector Dropdown (Collapsible) -->
-          <details class="modern-details" style="margin-top:1.25rem;">
-            <summary>
-              <span>Tùy chọn nâng cao (Engine Bounding Box)</span>
-            </summary>
-            <div style="margin-top:0.85rem; display:flex; flex-direction:column; gap:0.75rem;">
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label">Công cụ nhận diện OCR</label>
-                <select id="trans-ocr-engine" class="form-select">
-                  <option value="ja_manga" selected>🇯🇵 manga-ocr (Chuyên tiếng Nhật, chữ dọc & ngang)</option>
-                  <option value="multilingual">PaddleOCR (Hàn, Trung, Anh, v.v.)</option>
-                </select>
-              </div>
-
-              <div class="form-group" id="trans-source-lang-group" style="display:none; margin-bottom:0;">
-                <label class="form-label">Ngôn ngữ gốc (khi dùng PaddleOCR)</label>
-                <select id="trans-source-lang" class="form-select">
-                  <option value="ch" selected>Tiếng Trung (ch)</option>
-                  <option value="korean">Tiếng Hàn (korean)</option>
-                  <option value="en">Tiếng Anh (en)</option>
-                  <option value="japan">Tiếng Nhật tiêu chuẩn (japan)</option>
-                </select>
-              </div>
-
-              <div class="form-group" style="margin-bottom:0;">
-                <label class="form-label" for="trans-llm-model">Mô hình AI Dịch</label>
-                <select id="trans-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
-              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
-            </select>
-              </div>
-
-              <button id="btn-run-translate" class="btn-secondary" disabled style="width:100%; justify-content:center; padding:0.75rem 1rem;">
-                <span>Chạy Python Bóc Tách Bounding Box (ZeroGPU)</span>
-              </button>
-            </div>
-          </details>
-        </div>
-
-        <!-- Result Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Bản Đồ Thứ Tự Thoại & Kịch Bản Dịch</span>
-            <span id="trans-stats-badge" class="badge-tag badge-cyan">Chưa Xử Lý</span>
-          </div>
-
-          <div class="bubble-map-container" id="bubble-map-container">
-            <div style="position:relative; display:inline-block;" id="bubble-canvas-wrap">
-              <img id="trans-annotated-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Ctext x='50%25' y='50%25' fill='%23475569' text-anchor='middle' font-family='sans-serif' font-size='16'%3EChưa có trang truyện%3C/text%3E%3C/svg%3E" alt="Bản đồ thoại">
-              <!-- Dynamic Overlay Badges inserted by JS -->
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table class="trans-table">
-              <thead>
-                <tr>
-                  <th style="width: 70px;">Thứ tự</th>
-                  <th style="width: 38%;">Chữ gốc (OCR)</th>
-                  <th>Bản dịch ngữ cảnh tiếng Việt</th>
-                </tr>
-              </thead>
-              <tbody id="trans-table-body">
-                <tr>
-                  <td colspan="3" style="text-align:center; color:var(--text-dim); padding:2rem;">
-                    Tải trang truyện lên và bấm bắt đầu để nhận kết quả dịch ngữ cảnh.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Refine Loop Toolbox (VisionBox feature) -->
-          <div id="trans-refine-box" style="display:none; margin-top:1rem; padding:0.85rem 1rem; border-radius:var(--radius-md); background:rgba(255,255,255,0.03); border:1px solid var(--border-subtle);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
-              <span style="font-size:0.85rem; font-weight:600; color:var(--text-main);">Tinh Chỉnh & Soát Lỗi (Refine Loop)</span>
-              <span style="font-size:0.72rem; color:var(--cyan); background:rgba(6,182,212,0.1); padding:0.15rem 0.5rem; border-radius:4px;">Gemini 3 Flash</span>
-            </div>
-            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-              <input type="text" id="trans-refine-input" class="form-input" placeholder="Chỉ đạo riêng: vd 'đổi xưng hô mày/tao', 'dịch sát nghĩa hơn'..." style="flex:1; min-width:200px; font-size:0.82rem; padding:0.4rem 0.75rem;">
-              <button id="btn-refine-translate" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
-                Sửa Bản Dịch
-              </button>
-              <button id="btn-refine-ocr" class="btn-secondary" style="font-size:0.82rem; padding:0.4rem 0.85rem; white-space:nowrap;">
-                Soát Lỗi OCR
-              </button>
-            </div>
-          </div>
-
-          <div style="display:flex; gap:1rem; margin-top:1.25rem;">
-            <button id="btn-copy-script" class="btn-primary" style="flex:1; background:#4f46e5;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Sao Chép Kịch Bản Dịch
-            </button>
-            <a id="btn-download-script-txt" class="btn-primary" style="flex:1; text-decoration:none; background:#0891b2; display:none;">
-              ⬇️ Tải Kịch Bản (.txt)
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= TAB 3: BATCH ZIP ================= -->
-    <section id="tab-batch" class="tab-pane">
-      <div class="studio-grid">
-        <!-- Controls Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Xử Lý Toàn Bộ Tệp ZIP</span>
-            <span class="badge-tag badge-purple">Batch Archive</span>
-          </div>
-
-          <div id="batch-dropzone" class="dropzone">
-            <input type="file" id="batch-file-input" accept=".zip" style="display:none;">
-            <div class="drop-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg></div>
-            <div class="drop-text">
-              <h4>Kéo thả tệp .ZIP chứa toàn bộ chapter (nhiều trang)</h4>
-              <p>Hỗ trợ tệp ZIP chứa nhiều file PNG/JPG/WebP</p>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Chọn tác vụ xử lý hàng loạt</label>
-            <select id="batch-mode-select" class="form-select">
-              <option value="clean" selected>Tẩy chữ & Inpainting hàng loạt (Batch Cleaner)</option>
-              <option value="translate">Dịch thuật & Xuất kịch bản hàng loạt (Batch Translator)</option>
-            </select>
-          </div>
-
-          <!-- Cleaner Options in Batch -->
-          <div id="batch-clean-options">
-            <div class="form-group">
-              <label class="form-label">Mô hình Inpainting</label>
-              <select id="batch-clean-model" class="form-select">
-                <option value="anime-lama" selected>Anime-Manga LaMa</option>
-                <option value="big-lama">Big-LaMa Standard</option>
-                <option value="opencv-telea">OpenCV Telea</option>
-              </select>
-            </div>
-            <div class="toggle-card">
-              <div class="toggle-info">
-                <h5>Xóa luôn cả SFX toàn bộ tập</h5>
-                <p>Mặc định chỉ xóa thoại</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="batch-clean-sfx-toggle">
-                <span class="slider-toggle"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Translate Options in Batch -->
-          <div id="batch-translate-options" style="display:none;">
-            <div class="toggle-card" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
-              <div class="toggle-info">
-                <h5 style="color:var(--emerald);">Chỉ dịch chữ trong Bong bóng chat</h5>
-                <p>Loại bỏ SFX vẽ tay để kịch bản thoại chuẩn 100%</p>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="batch-trans-chat-only" checked>
-                <span class="slider-toggle"></span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Thứ tự đọc</label>
-              <select id="batch-trans-order" class="form-select">
-                <option value="manga" selected>Manga (RTL)</option>
-                <option value="webtoon">Webtoon (TTB)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Bộ OCR</label>
-              <select id="batch-trans-engine" class="form-select">
-                <option value="ja_manga" selected>manga-ocr (Tiếng Nhật)</option>
-                <option value="multilingual">PaddleOCR (Đa ngôn ngữ)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="batch-llm-model">Mô hình AI Dịch Ngữ Cảnh</label>
-              <select id="batch-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
-              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
-              </select>
-            </div>
-          </div>
-
-          <button id="btn-run-batch" class="btn-primary" disabled>
-            <span>Bắt Đầu Xử Lý Hàng Loạt Tệp ZIP</span>
-          </button>
-
-          <!-- Progress -->
-          <div id="batch-progress-card" class="progress-card">
-            <div class="progress-header">
-              <span id="batch-progress-status">Đang xử lý...</span>
-              <span id="batch-progress-pct">0%</span>
-            </div>
-            <div class="progress-bar-bg">
-              <div id="batch-progress-bar" class="progress-bar-fill"></div>
-            </div>
-            <div id="batch-log-box" class="batch-log">
-              [SYSTEM] Đang khởi động tiến trình...
-            </div>
-          </div>
-        </div>
-
-        <!-- Result Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Kết Quả Xử Lý Hàng Loạt</span>
-            <span id="batch-result-badge" class="badge-tag badge-cyan">Chờ Tệp ZIP</span>
-          </div>
-
-          <div id="batch-empty-view" style="text-align:center; padding: 4rem 2rem; color:var(--text-muted);">
-            <div style="margin-bottom:1rem; color:#6366f1;"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
-            <h4>Chưa có dữ liệu xử lý ZIP</h4>
-            <p style="font-size:0.85rem; margin-top:0.5rem;">Tải tệp ZIP lên để xem tiến trình từng trang và tải gói kết quả hoàn chỉnh.</p>
-          </div>
-
-          <div id="batch-result-view" style="display:none;">
-            <div style="background:rgba(15,23,42,0.8); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:1.25rem; margin-bottom:1.5rem;">
-              <h4 id="batch-result-title" style="margin-bottom:0.5rem; color:#fff;">Tệp kết quả đã sẵn sàng</h4>
-              <p id="batch-result-desc" style="font-size:0.88rem; color:var(--text-muted);"></p>
-            </div>
-
-            <div class="table-wrap" id="batch-pages-table-wrap" style="display:none; margin-bottom:1.5rem;">
-              <table class="trans-table">
-                <thead>
-                  <tr>
-                    <th>Trang</th>
-                    <th>Tên tệp</th>
-                    <th>Số bóng thoại</th>
-                    <th>Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody id="batch-pages-table-body"></tbody>
-              </table>
-            </div>
-
-            <a id="btn-download-batch-zip" class="btn-primary" style="text-decoration:none; background: #059669;">
-              ⬇️ Tải Tệp ZIP Kết Quả Về Máy
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= TAB 4: RE-TRANSLATE SCRIPT (.TXT) ================= -->
-    <section id="tab-script-retrans" class="tab-pane">
-      <div class="studio-grid">
-        <!-- Controls & Input Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Nhập Kịch Bản Cần Dịch Lại</span>
-            <span class="badge-tag badge-cyan">Raw / Script .txt</span>
-          </div>
-
-          <div id="retrans-dropzone" class="dropzone" style="margin-bottom:1rem; padding:1.25rem;">
-            <input type="file" id="retrans-file-input" accept=".txt,text/plain" style="display:none;">
-            <div class="drop-icon" style="margin-bottom:0.25rem;"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
-            <div class="drop-text">
-              <h4 style="font-size:0.95rem;">Tải tệp .txt kịch bản dịch dở / câu tiếng Nhật</h4>
-              <p style="font-size:0.8rem;">Kéo thả hoặc nhấn để chọn file (Hỗ trợ UTF-8)</p>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-              <label class="form-label" style="margin:0;">Nội dung kịch bản văn bản</label>
-              <button id="btn-clear-retrans" class="btn-clear" style="position:static; padding:2px 8px; font-size:0.8rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:var(--text-muted);">Xóa trắng</button>
-            </div>
-            <textarea id="retrans-raw-input" class="form-input" rows="10" style="width:100%; resize:vertical; font-family:'JetBrains Mono', monospace; font-size:0.85rem; line-height:1.5; padding:0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); color:#fff;" placeholder="Dán nội dung tệp .txt vào đây hoặc tải tệp lên ở trên...
-Ví dụ:
-=== 02.webp ===
-提督、武蔵隊、城を向けた後愛シリーズ...
-=== 03.webp ===
-ん？
-なんだなんた？"></textarea>
-          </div>
-
-          <!-- Badges analysis -->
-          <div id="retrans-stats-box" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; font-size:0.82rem;">
-            <span class="badge-tag badge-purple"><span id="retrans-stat-pages">0</span> trang</span>
-            <span class="badge-tag badge-cyan"><span id="retrans-stat-lines">0</span> câu thoại</span>
-            <span class="badge-tag badge-rose">🇯🇵 <span id="retrans-stat-ja">0</span> câu tiếng Nhật</span>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="retrans-mode-select">Chế độ Dịch lại</label>
-            <select id="retrans-mode-select" class="form-select">
-              <option value="only_japanese" selected>Chỉ dịch các câu còn tiếng Nhật / chưa dịch (Giữ nguyên câu đã dịch tốt)</option>
-              <option value="all">Dịch lại toàn bộ kịch bản từ đầu</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="retrans-model-select">Mô hình AI Dịch Ngữ Cảnh (Tốc độ 1.5s/đợt)</label>
-            <select id="retrans-model-select" class="form-select">
-              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
-              <option value="minimax-m3">MiniMax-M3 (Siêu tốc độ, mượt mà)</option>
-              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ)</option>
-              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro)</option>
-            </select>
-          </div>
-
-          <button id="btn-run-retrans" class="btn-primary" disabled style="margin-top:0.5rem;">
-            <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>Bắt Đầu Dịch Lại Kịch Bản Bằng AI</span>
-          </button>
-
-          <!-- Progress -->
-          <div id="retrans-progress-card" class="progress-card" style="display:none; margin-top:1rem;">
-            <div class="progress-header">
-              <span id="retrans-progress-status">Đang dịch...</span>
-              <span id="retrans-progress-pct">0%</span>
-            </div>
-            <div class="progress-bar-bg">
-              <div id="retrans-progress-bar" class="progress-bar-fill"></div>
-            </div>
-            <div id="retrans-log-box" class="batch-log">
-              [SYSTEM] Sẵn sàng...
-            </div>
-          </div>
-        </div>
-
-        <!-- Output Column -->
-        <div class="panel">
-          <div class="panel-title">
-            <span>Kịch Bản Đã Dịch Hoàn Chỉnh</span>
-            <div style="display:flex; gap:0.5rem;">
-              <button id="btn-copy-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem;" disabled>Sao Chép</button>
-              <a id="btn-download-retrans" class="btn-secondary" style="font-size:0.8rem; padding:0.3rem 0.6rem; text-decoration:none; display:none;" download="kich_ban_hoan_chinh.txt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Tải .txt</a>
-            </div>
-          </div>
-
-          <div id="retrans-empty-view" style="text-align:center; padding: 4rem 2rem; color:var(--text-muted);">
-            <div style="margin-bottom:1rem; color:#8b5cf6;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
-            <h4>Chưa có kịch bản dịch mới</h4>
-            <p style="font-size:0.85rem; margin-top:0.5rem;">Tải tệp kịch bản hoặc dán câu tiếng Nhật ở cột bên trái và bấm dịch để nhận kết quả tiếng Việt sạch sẽ.</p>
-          </div>
-
-          <div id="retrans-result-view" style="display:none; height:100%;">
-            <textarea id="retrans-result-output" class="form-input" rows="22" style="width:100%; height:calc(100% - 10px); resize:vertical; font-family:'JetBrains Mono', monospace; font-size:0.88rem; line-height:1.6; padding:0.75rem; background:rgba(0,0,0,0.4); border:1px solid rgba(139,92,246,0.3); border-radius:var(--radius-sm); color:#fff;" readonly></textarea>
-          </div>
-        </div>
-      </div>
-    <!-- ================= TAB 5: BATCH STUDIO PRO (WEB CON) ================= -->
-    <!-- tab-batch-studio (iframe) đã bỏ: Batch Studio nay là trang /batch-studio, mở ngay trong tab hiện tại. -->
-
-  </main>
-
-  <!-- Settings Modal -->
-  <div id="settings-modal" class="modal-overlay">
-    <div class="modal-box" style="max-height: 90vh; overflow-y: auto;">
-      <div class="modal-header">
-        <h3 style="font-weight:700; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg> Cấu Hình Hệ Thống & Dịch Thuật</h3>
-        <button id="btn-close-settings" class="modal-close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-      </div>
-
-      <!-- Phần 1: Backend Vision -->
-      <div style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 1rem; margin-bottom: 1rem;">
-        <h4 style="font-size:0.95rem; color:var(--cyan); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Backend Tẩy Chữ & OCR
-        </h4>
-        <div class="form-group" style="margin-bottom:0.75rem;">
-          <label class="form-label" for="setting-backend-url">Địa chỉ Backend API</label>
-          <input type="text" id="setting-backend-url" class="form-input" value="https://dobietdc-backe-manga-remove.hf.space">
-          <small style="color:var(--text-dim); font-size:0.75rem; margin-top:0.3rem; display:block;">
-            Mặc định: <code>https://dobietdc-backe-manga-remove.hf.space</code> hoặc <code>http://localhost:7860</code>
-          </small>
-        </div>
-        <button id="btn-test-connection" class="btn-primary" style="background:#1e293b; padding:0.5rem 1rem; font-size:0.85rem; width:100%;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Kiểm Tra Kết Nối Backend
+    <!-- Filter & Progress Chips Bar (Giai đoạn 2) -->
+    <div class="filter-progress-bar" id="filterProgressBar">
+      <div class="filter-chips-group">
+        <button type="button" class="filter-chip active" id="filterAll" data-filter="all">
+          <span class="chip-label">Tất cả</span>
+          <span class="chip-count" id="countAll">0</span>
+        </button>
+        <button type="button" class="filter-chip" id="filterPending" data-filter="pending">
+          <span class="chip-label">Chưa xong</span>
+          <span class="chip-count" id="countPending">0</span>
+        </button>
+        <button type="button" class="filter-chip" id="filterError" data-filter="error">
+          <span class="chip-label">Lỗi</span>
+          <span class="chip-count" id="countError">0</span>
+        </button>
+        <button type="button" class="filter-chip" id="filterDone" data-filter="done">
+          <span class="chip-label">Đã xong</span>
+          <span class="chip-count" id="countDone">0</span>
         </button>
       </div>
+      <button type="button" class="btn-jump-pending" id="btnJumpPending" title="Cuộn nhanh tới trang chưa hoàn thành đầu tiên">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="7 13 12 18 17 13"></polyline>
+          <polyline points="7 6 12 11 17 6"></polyline>
+        </svg>
+        <span>Tới trang chưa xong</span>
+      </button>
+    </div>
 
-      <!-- Phần 2: Frontend LLM Translation -->
-      <div style="margin-bottom: 1rem;">
-        <h4 style="font-size:0.95rem; color:var(--primary); margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg> AI Dịch Thuật Trực Tiếp
-        </h4>
-        <div class="form-group" style="margin-bottom:0.75rem;">
-          <label class="form-label" for="setting-llm-base-url">OpenAI-Compatible Base URL</label>
-          <input type="text" id="setting-llm-base-url" class="form-input" placeholder="https://generativelanguage.googleapis.com/v1beta/openai" value="https://generativelanguage.googleapis.com/v1beta/openai">
-          <small style="color:var(--text-dim); font-size:0.75rem; margin-top:0.3rem; display:block;">
-            Ví dụ: <code>https://discovery-api.intern-ai.org.cn/v1</code> hoặc <code>https://api.deepseek.com/v1</code>
-          </small>
+    <!-- Sequential Queue Progress Bar (Active when batch running) -->
+    <div class="queue-progress-bar" id="queueProgressBar" style="display:none;">
+      <div class="progress-info">
+        <div class="progress-title">
+          <span class="spinner-mini"></span>
+          <span id="queueProgressText">Đang xử lý hàng loạt: 0 / 0 trang...</span>
         </div>
-
-        <div class="form-group" style="margin-bottom:0.75rem;">
-          <label class="form-label" for="setting-llm-model">Tên Mô Hình AI (Model)</label>
-          <select id="setting-llm-model" class="form-select">
-              <option value="gemini-2.5-flash" selected>Google Gemini 2.5 Flash (Ổn định 1500 RPD, Siêu tốc 1M Context)</option>
-              <option value="gemini-flash-latest">Google Gemini Flash Latest</option>
-              <option value="minimax-m3">MiniMax-M3 (Siêu tốc ~3s, Văn phong mượt mà)</option>
-              <option value="qwen3.8-27b">Qwen3.8-27B (Đa ngôn ngữ, Tốc độ cao)</option>
-              <option value="deepseek-v4-flash-0731">DeepSeek-V4-Flash (Tư duy sâu)</option>
-              <option value="deepseek-v4-pro-0813">DeepSeek-V4-Pro (Bản Pro ngữ cảnh sâu)</option>
-              <option value="glm-5.3">GLM-5.3 (Mạnh về ngôn ngữ Á Đông)</option>
-              <option value="kimi-k2.6">Kimi-K2.6 (Ngữ cảnh 256K)</option>
-          </select>
+        <div class="progress-actions">
+          <span id="queueRateNotice">Tuân thủ hạn mức Free (giãn cách ~2s/ảnh)</span>
+          <button class="btn btn-xs btn-outline" id="btnStopQueue">Dừng lại</button>
         </div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="queueProgressFill" style="width: 0%;"></div>
+      </div>
+    </div>
 
-        <div class="form-group" style="margin-bottom:0.75rem;">
-          <label class="form-label" for="setting-api-key">API Key (sk-...)</label>
-          <input type="password" id="setting-api-key" class="form-input" placeholder="sk-...">
-          <small style="color:var(--text-dim); font-size:0.75rem; margin-top:0.3rem; display:block;">
-            Lưu an toàn trong trình duyệt (localStorage), trình duyệt gọi trực tiếp không qua trung gian.
-          </small>
+    <!-- Main Scrollable Content: List of Manga Rows -->
+    <main class="batch-container" id="batchContainer">
+      <!-- Empty Dropzone State -->
+      <div class="empty-dropzone" id="emptyDropzone">
+        <div class="empty-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
         </div>
-
-        <button id="btn-test-llm" class="btn-primary" style="background:#1e293b; padding:0.5rem 1rem; font-size:0.85rem; width:100%;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line></svg> Kiểm Tra Kết Nối AI Dịch
+        <h2>Kéo thả nhiều ảnh Manga vào đây hoặc bấm <kbd>Ctrl + V</kbd></h2>
+        <p>Hỗ trợ tải toàn bộ chapter (10, 20, 50+ ảnh). Tự động nhận diện văn bản theo thứ tự đọc và dịch song song.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('fileInputMultiple').click()">
+          Chọn ảnh từ máy tính
         </button>
+        <div class="features-pill">
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> Không cần vẽ box</span>
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg> Trích xuất văn bản chuẩn Nhật</span>
+          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg> Tối ưu Quota Free Tier</span>
+        </div>
       </div>
 
-      <div style="display:flex; gap:0.75rem; margin-top:1.5rem;">
-        <button id="btn-save-settings" class="btn-primary" style="flex:1;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px; margin-right:4px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Lưu Cấu Hình
+      <!-- Rows List -->
+      <div class="manga-rows-list" id="mangaRowsList" style="display:none;">
+        <!-- Injected via JavaScript -->
+      </div>
+    </main>
+
+    <!-- Lightbox Modal for Full Image Zoom -->
+    <div class="lightbox-modal" id="lightboxModal" style="display:none;">
+      <div class="lightbox-content">
+        <button class="lightbox-close" id="btnCloseLightbox">&times;</button>
+        <img id="lightboxImg" alt="Manga Preview Fullscreen">
+      </div>
+    </div>
+
+    
+    <!-- Export Preview & Direct Download Modal -->
+    <div class="modal-backdrop" id="exportModal" style="display:none; z-index: 10000;">
+      <div class="modal-card" style="max-width: 650px; width: 92%;">
+        <div class="modal-header">
+          <h3 style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> Xuất Kịch Bản Dịch Manga
+          </h3>
+          <button class="btn-close" id="btnCloseExportModal">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px;">
+          <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px; line-height: 1.5;">
+            Chọn định dạng tải xuống file hoặc sao chép trực tiếp vào bộ nhớ tạm:
+          </p>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+            <button class="btn btn-primary" id="modalBtnDownloadTxt" style="flex: 1; min-width: 130px; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg> Tải File .txt
+            </button>
+            <button class="btn btn-primary" id="modalBtnDownloadDoc" style="flex: 1; min-width: 130px; padding: 10px 14px; background: linear-gradient(135deg, #0284c7, #0369a1);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="14" y1="12" x2="18" y2="12"></line><line x1="14" y1="16" x2="18" y2="16"></line></svg> Tải File .doc
+            </button>
+            <button class="btn btn-secondary" id="modalBtnCopyAll" style="flex: 1; min-width: 130px; padding: 10px 14px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> Sao Chép Toàn Bộ
+            </button>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="font-size: 0.8rem; color: #cbd5e1; display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span>Xem trước nội dung (Preview):</span>
+              <span id="exportTextLengthBadge" style="color: #38bdf8; font-weight: normal;">0 ký tự</span>
+            </label>
+            <textarea id="exportPreviewTextarea" class="form-control" readonly style="height: 230px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.82rem; line-height: 1.5; resize: vertical; white-space: pre-wrap; background: #070a12; color: #e2e8f0; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 10px;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 20px;">
+          <button class="btn btn-secondary" id="btnDismissExportModal" style="width: 100%;">Đóng Cửa Sổ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-backdrop" id="settingsModal" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Cấu hình Batch Studio & API</h3>
+          <button class="btn-close" id="btnCloseSettings">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="selectEngine">Model Gemini Ưu Tiên (Tự động Smart Fallback khi bận)</label>
+            <select id="selectEngine" class="form-control">
+              <option value="gemini-3.1-flash-lite" selected>Gemini 3.1 Flash Lite (Khuyên dùng: Hạn mức cao nhất 500 trang/ngày, 15 RPM)</option>
+              <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Dự phòng: 500 trang/ngày, 15 RPM)</option>
+            </select>
+            <small class="form-hint">Cơ chế <b>Smart Fallback</b> tự động kích hoạt model dự phòng khi model chính quá tải.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="inputGeminiApiKey">
+              Gemini API Key #1 (Chính)
+              <span class="badge-env" id="envKeyBadge">Có sẵn từ .env</span>
+            </label>
+            <input type="password" id="inputGeminiApiKey" class="form-control" placeholder="Để trống nếu đã cấu hình trong .env (API_KEY_GEMINI)">
+          </div>
+
+          <div class="form-group">
+            <label for="inputGeminiApiKey2">
+              Gemini API Key #2 (Dự phòng & Song song X2)
+              <span class="badge-env" id="envKeyBadge2" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">Tùy chọn</span>
+            </label>
+            <input type="password" id="inputGeminiApiKey2" class="form-control" placeholder="Nhập Key thứ 2 để tự động chạy song song 2 luồng (X2 tốc độ)">
+            <small class="form-hint" style="color: #38bdf8;"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px; margin-right:3px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg><b>Mẹo x2 tốc độ:</b> Key 2 nên thuộc Google Cloud Project khác để nhân đôi lên <b>30 RPM & 1.000 trang/ngày</b>.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="selectTone">Văn phong dịch Manga</label>
+            <select id="selectTone" class="form-control">
+              <option value="natural">Tự nhiên, đời thường (Phổ thông)</option>
+              <option value="shounen">Shounen (Hào sảng, kịch tính, tớ/cậu, mày/tao)</option>
+              <option value="romcom">Rom-Com (Nhẹ nhàng, anh/em, cậu/tớ)</option>
+              <option value="historical">Cổ trang / Kiếm hiệp (Huynh đệ, tại hạ, các hạ)</option>
+              <option value="raw">Sát nghĩa thô (Dễ biên tập)</option>
+            </select>
+          </div>
+
+          <!-- Collapsible Character Glossary & Notes (Optional & Minimalist) -->
+          <div class="form-group" style="margin-top: 6px;">
+            <details style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; cursor: pointer;">
+              <summary style="font-weight: 600; font-size: 0.83rem; color: #a5b4fc; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+                <span>📖 Ghi chú xưng hô & Thuật ngữ (Tùy chọn)</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">Thu gọn ▾</span>
+              </summary>
+              <div style="margin-top: 8px; cursor: default;">
+                <textarea id="inputGlossary" class="form-control" rows="3" style="font-size: 0.82rem; resize: vertical; line-height: 1.45;" placeholder="Ví dụ:&#10;- A gọi B là: anh / em (thân thiết)&#10;- Tên giữ nguyên: Satoru, Sukuna&#10;- Chiêu thức: Chidori (không dịch nghĩa)"></textarea>
+                <small class="form-hint" style="margin-top: 4px; display: block; font-size: 0.72rem; color: var(--text-muted);">
+                  Để trống nếu không dùng. Khi điền, Gemini sẽ ưu tiên áp dụng các xưng hô này xuyên suốt chapter.
+                </small>
+              </div>
+            </details>
+          </div>
+
+          <div class="form-group">
+            <label for="selectReadingOrder">Định dạng & Thứ tự đọc (Manga / Webtoon)</label>
+            <select id="selectReadingOrder" class="form-control">
+              <option value="manga" selected>Manga truyền thống (Phải sang Trái, Trên xuống Dưới)</option>
+              <option value="webtoon">Webtoon / Manhwa dọc (Trên xuống Dưới tuần tự)</option>
+            </select>
+            <small class="form-hint">Manga đọc từ phải qua trái. Webtoon/Manhwa đọc dọc theo dải tranh dài.</small>
+          </div>
+
+          <div class="form-group settings-section-title">Tẩy chữ (Inpainting)</div>
+
+          <div class="form-group">
+            <label for="selectCleanModel">Mô hình tẩy chữ</label>
+            <select id="selectCleanModel" class="form-control">
+              <option value="anime-lama">Anime-Manga LaMa (Manga đen trắng, nét vẽ)</option>
+              <option value="big-lama">Big-LaMa Standard (Manhwa / Webtoon màu)</option>
+              <option value="opencv-telea">OpenCV Telea (Rất nhanh)</option>
+              <option value="opencv-ns">OpenCV Navier-Stokes (Mượt)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="inline-check"><input type="checkbox" id="checkCleanSFX"> <span>Tẩy luôn cả SFX (hiệu ứng âm thanh)</span></label>
+          </div>
+
+          <div class="form-group">
+            <label for="rangeCleanDilation">Độ giãn viền nét: <b id="cleanDilationVal">4</b> px</label>
+            <input type="range" id="rangeCleanDilation" min="0" max="40" step="1" value="4" class="form-range-bs">
+          </div>
+
+          <div class="form-group">
+            <label for="rangeCleanThreshold">Ngưỡng nhận diện: <b id="cleanThresholdVal">0.20</b></label>
+            <input type="range" id="rangeCleanThreshold" min="0.05" max="0.50" step="0.01" value="0.20" class="form-range-bs">
+          </div>
+
+          <div class="form-group">
+            <label for="inputBackendUrl">Backend tẩy chữ (dùng chung với trang chính)</label>
+            <input type="text" id="inputBackendUrl" class="form-control" placeholder="https://dobietdc-backe-manga-remove.hf.space" autocomplete="off">
+            <small class="form-hint">Ảnh lớn hơn giới hạn của Vercel sẽ tự gọi thẳng backend này.</small>
+          </div>
+
+          <div class="quota-info-card" id="quotaInfoCard">
+            <div style="font-weight: 700; color: #a5b4fc; margin-bottom: 6px; display: flex; justify-content: space-between;">
+              <span id="quotaCardTitle" style="display:flex; align-items:center; gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>Hạn mức hoạt động của bạn</span>
+              <a href="https://aistudio.google.com/app/plan_information" target="_blank" style="color: #38bdf8; text-decoration: none;">Xem Google AI Studio ↗</a>
+            </div>
+            <ul style="list-style: none; padding-left: 0; color: #cbd5e1; line-height: 1.6; font-size: 0.78rem;">
+              <li id="quotaSpeedLine">• <b>Tốc độ xử lý:</b> <span id="quotaSpeedText">15 lượt / phút (1 luồng)</span></li>
+              <li id="quotaDailyLine">• <b>Hạn mức ngày:</b> <span id="quotaDailyText">500 trang truyện / ngày (RPD)</span></li>
+              <li>• <b>Cơ chế an toàn:</b> Tự động đảo Key khi chạm ngưỡng giới hạn (429/503).</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btnCancelSettings">Đóng</button>
+          <button class="btn btn-primary" id="btnSaveSettings">Lưu Cấu Hình</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixed Bottom Action Bar (Giai đoạn 2) -->
+    <div class="bottom-action-bar" id="bottomActionBar">
+      <div class="bottom-action-inner">
+        <!-- Nút Menu Thêm (Bottom Sheet) -->
+        <button type="button" class="btn-bottom-icon" id="btnOpenBottomSheet" title="Tác vụ nâng cao & Xuất file">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="1.5"></circle>
+            <circle cx="19" cy="12" r="1.5"></circle>
+            <circle cx="5" cy="12" r="1.5"></circle>
+          </svg>
+          <span class="bottom-btn-text">Thêm</span>
+        </button>
+
+        <!-- Nút Tẩy chữ nhanh ở đáy -->
+        <button type="button" class="btn-bottom-icon" id="btnBottomCleanAll" title="Tẩy chữ tất cả các trang">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <span class="bottom-btn-text">Tẩy chữ</span>
+        </button>
+
+        <!-- Nút chính trung tâm (Dùng chung với btnProcessAll / runSelectedSteps) -->
+        <button type="button" class="btn btn-bottom-primary" id="btnBottomProcessAll" title="Chạy các bước đã chọn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+          </svg>
+          <span id="btnBottomProcessAllLabel">OCR + Dịch tất cả</span>
+        </button>
+
+        <!-- Nút Tải .txt nhanh ở đáy -->
+        <button type="button" class="btn-bottom-icon" id="btnBottomQuickTxt" title="Tải nhanh file .txt">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span class="bottom-btn-text">Tải .txt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Sheet Modal (Giai đoạn 2) -->
+    <div class="bottom-sheet-backdrop" id="bottomSheetBackdrop" style="display:none;">
+      <div class="bottom-sheet-card" id="bottomSheetCard">
+        <div class="bottom-sheet-drag-handle"></div>
+        <div class="bottom-sheet-header">
+          <h3>Tác vụ & Xuất file</h3>
+          <button type="button" class="btn-close" id="btnCloseBottomSheet">&times;</button>
+        </div>
+        <div class="bottom-sheet-body">
+          <div class="sheet-action-list">
+            <button type="button" class="sheet-action-item" id="sheetBtnCleanAll">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              <span>Tẩy chữ tất cả</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnOcrAll">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <span>OCR tất cả</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnTranslateAll">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>Dịch tất cả</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnDownloadTxt">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+              <span>Tải .txt</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnExportZipClean">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <span>Tải ZIP ảnh sạch</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnExportZipBoth">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
+              <span>Tải ZIP ảnh sạch + script</span>
+            </button>
+            <button type="button" class="sheet-action-item" id="sheetBtnOpenExportModal">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              <span>Xuất file...</span>
+            </button>
+          </div>
+          <div class="sheet-divider"></div>
+          <!-- Nút Xóa tất cả riêng ở cuối, màu đỏ, giữ confirm(), không đặt sát nút dịch -->
+          <button type="button" class="sheet-btn-danger" id="sheetBtnClearAll">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Xóa tất cả</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proofreading Fullscreen Overlay (Giai đoạn 2) -->
+    <div class="proofread-overlay" id="proofreadOverlay" style="display:none;">
+      <div class="proofread-header">
+        <div class="proofread-header-left">
+          <span class="proofread-badge">Soát bản dịch</span>
+          <span class="proofread-page-indicator" id="proofreadPageIndicator">Trang 1 / 1</span>
+        </div>
+        <div class="proofread-header-actions">
+          <button type="button" class="btn btn-sm btn-proofread-toggle-clean" id="btnProofreadToggleClean" style="display:none;">
+            <span id="btnProofreadToggleCleanLabel">Xem ảnh sạch</span>
+          </button>
+          <button type="button" class="btn-close-proofread" id="btnCloseProofread" title="Đóng chế độ soát">&times;</button>
+        </div>
+      </div>
+
+      <div class="proofread-body">
+        <!-- Vùng ảnh phía trên (cuộn / zoom được, chuyển giữa ảnh gốc và ảnh đã tẩy) -->
+        <div class="proofread-img-wrapper" id="proofreadImgWrapper">
+          <div class="proofread-zoom-controls">
+            <button type="button" class="btn-zoom-step" id="btnProofreadZoomOut" title="Thu nhỏ">-</button>
+            <span class="zoom-level" id="proofreadZoomLevel">100%</span>
+            <button type="button" class="btn-zoom-step" id="btnProofreadZoomIn" title="Phóng to">+</button>
+            <button type="button" class="btn-zoom-step" id="btnProofreadZoomReset" title="Vừa màn hình">Fit</button>
+          </div>
+          <div class="proofread-img-viewport" id="proofreadImgViewport">
+            <img id="proofreadImg" src="" alt="Manga Proofread Image">
+          </div>
+        </div>
+
+        <!-- Vùng soạn thảo phía dưới (2 ô OCR và Dịch) -->
+        <div class="proofread-editors-wrapper">
+          <div class="proofread-editor-col">
+            <div class="proofread-editor-title">
+              <span>OCR (Tiếng Nhật)</span>
+              <button type="button" class="btn-copy-mini" id="btnProofreadCopyJp">Copy JP</button>
+            </div>
+            <textarea class="proofread-textarea" id="proofreadJpText" placeholder="Chưa có OCR tiếng Nhật..."></textarea>
+          </div>
+          <div class="proofread-editor-col">
+            <div class="proofread-editor-title">
+              <span>Dịch (Tiếng Việt)</span>
+              <button type="button" class="btn-copy-mini" id="btnProofreadCopyVi">Copy VI</button>
+            </div>
+            <textarea class="proofread-textarea" id="proofreadViText" placeholder="Chưa có bản dịch tiếng Việt..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="proofread-footer">
+        <button type="button" class="btn btn-proofread-nav" id="btnProofreadPrev">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <span>Trước (←)</span>
+        </button>
+        <div class="proofread-footer-info" id="proofreadFooterInfo">
+          <span id="proofreadFooterName">Tên ảnh</span>
+        </div>
+        <button type="button" class="btn btn-proofread-nav" id="btnProofreadNext">
+          <span>Sau (→)</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Toast Notification Container -->
-  <div id="toast-container"></div>
-
-  <!-- Scripts: Shared, Tabs, Legacy -->
-  <script>
-    const LEGACY_TABS = false;
-  </script>
-  <script src="/js/shared.js"></script>
-  <script src="/js/cleaner.js"></script>
-  <script src="/js/legacy.js"></script>
-  <script src="/js/retrans.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      initTabs();
-      initCleaner();
-      if (typeof initTranslator === "function") initTranslator();
-      if (typeof initBatch === "function") initBatch();
-      initScriptRetranslator();
-      initSettings();
-
-      checkBackendHealth();
-      setInterval(checkBackendHealth, 30000);
-    });
-  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script>window.JSZip || document.write('<script src="/js/jszip.min.js"><\/script>')</script>
+  <script type="module" src="/batch-studio/app.js"></script>
 </body>
 </html>
