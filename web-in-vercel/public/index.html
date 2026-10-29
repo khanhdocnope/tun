@@ -344,10 +344,11 @@
 
               <div class="floating-vdivider"></div>
 
-              <button type="button" class="btn-mask-action btn-mask-inpaint" id="btnMaskInpaint" title="Gửi mask sang AI Backend AOT để tẩy sạch chữ nền">
+              <button type="button" class="btn-mask-action btn-mask-inpaint" id="btnMaskInpaint" title="Xóa chữ bằng Web Manga LaMa hoặc Cloud Backend">
                 <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
-                <span>Xóa chữ (AOT)</span>
+                <span id="btnMaskInpaintText">Xóa chữ (LaMa)</span>
               </button>
+              <span id="maskEngineIndicator" class="mask-engine-indicator" title="Engine xóa chữ hiện tại: Đang kiểm tra...">☁️ Cloud</span>
               <button type="button" class="btn-mask-action" id="btnMaskOcr" title="Bóc chữ tiếng Nhật của bóng thoại">
                 <i class="fa-solid fa-magnifying-glass text-xs"></i>
                 <span>🔍 Tự OCR</span>
@@ -801,6 +802,52 @@
       </div>
       <div class="modal-body">
         
+        <!-- OFFLINE INPAINTING: MANGA LAMA WEBGPU / WASM -->
+        <div class="form-group settings-section-highlight" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.92rem;">
+              <span>⚡ Xóa chữ Offline (Manga LaMa WebGPU)</span>
+            </label>
+            <span class="badge-status-pill" id="webLamaStatusBadge" style="font-size: 11px; padding: 2px 10px; border-radius: 12px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; font-weight: 600;">Chưa tải model</span>
+          </div>
+
+          <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 10px 0; line-height: 1.45;">
+            Chạy mô hình xóa chữ Manga LaMa trực tiếp trên card đồ họa máy tính của bạn bằng WebGPU. Tốc độ cực nhanh (~0.1s), bảo mật và hoạt động hoàn toàn không cần Internet hay backend Python.
+          </p>
+
+          <!-- Progress Bar khi đang tải -->
+          <div id="webLamaDownloadProgressWrap" style="display: none; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #cbd5e1; margin-bottom: 4px;">
+              <span id="webLamaProgressLabel">Đang tải mô hình...</span>
+              <span id="webLamaProgressPercent">0%</span>
+            </div>
+            <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden;">
+              <div id="webLamaProgressBar" style="width: 0%; height: 100%; background: #6366f1; transition: width 0.15s ease;"></div>
+            </div>
+          </div>
+
+          <!-- Action buttons -->
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <button type="button" class="btn btn-sm btn-primary" id="btnDownloadWebLama">
+              <i class="fa-solid fa-cloud-arrow-down" style="margin-right: 4px;"></i>
+              <span id="btnDownloadWebLamaText">Tải Model Manga LaMa (~70MB)</span>
+            </button>
+            <label class="btn btn-sm btn-outline" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 4px;">
+              <i class="fa-solid fa-folder-open"></i>
+              <span>Nạp file .onnx từ máy</span>
+              <input type="file" id="inputWebLamaCustomFile" accept=".onnx" style="display: none;">
+            </label>
+            <button type="button" class="btn btn-sm btn-outline text-rose-400" id="btnClearWebLamaCache" style="display: none;">
+              <i class="fa-solid fa-trash-can"></i> Xóa Cache
+            </button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+            <input type="checkbox" id="settingPreferWebLama" style="cursor: pointer;" checked>
+            <label for="settingPreferWebLama" style="font-size: 0.8rem; color: #cbd5e1; cursor: pointer; margin: 0;">Ưu tiên xóa bằng WebGPU in-browser (Tự động fallback sang Cloud khi chưa nạp model)</label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="settingBackendUrl">Địa chỉ Backend AI (Hybrid Cloud & Local):</label>
           <div style="display: flex; gap: 8px; margin-bottom: 6px;">
@@ -1091,6 +1138,7 @@
   </div>
 
   <!-- External Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.all.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script>window.JSZip || document.write('<script src="/js/jszip.min.js"><\/script>')</script>
@@ -1135,6 +1183,7 @@
     const settingsModal = document.getElementById("globalSettingsModal");
     document.getElementById("btnOpenGlobalSettings")?.addEventListener("click", async () => {
       settingsModal.style.display = "flex";
+      document.getElementById("settingPreferWebLama").checked = await getSetting("prefer_web_lama", true);
       document.getElementById("settingBackendUrl").value = await getSetting("backend_url", "https://dobietdc-manga-text-cleaner.hf.space");
       document.getElementById("settingEngine").value = await getSetting("translation_engine", "google");
       document.getElementById("settingGenrePreset").value = await getSetting("genre_preset", "natural");
@@ -1151,6 +1200,7 @@
     });
 
     document.getElementById("btnSaveGlobalSettings")?.addEventListener("click", async () => {
+      await setSetting("prefer_web_lama", document.getElementById("settingPreferWebLama").checked);
       await setSetting("backend_url", document.getElementById("settingBackendUrl").value.trim());
       await setSetting("translation_engine", document.getElementById("settingEngine").value);
       await setSetting("genre_preset", document.getElementById("settingGenrePreset").value);

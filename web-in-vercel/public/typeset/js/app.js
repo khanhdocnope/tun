@@ -18,6 +18,7 @@ import { SmartMaskTool } from "./smart-mask.js";
 import { MangaReaderPreview } from "./reader-preview.js";
 import { translateText, runOcrOnRegion, GENRE_PRESETS } from "./translator.js";
 import { exportProjectJSON, importProjectJSON, exportChapterZip } from "./export-project.js";
+import { WebLamaEngine } from "./web-lama.js";
 
 export async function optimizeImageBase64(dataUrlOrFile, maxDim = 2048, quality = 0.92) {
   return new Promise((resolve, reject) => {
@@ -75,6 +76,10 @@ export class TypesetStudioApp {
     this.currentMaskRegion = null;
     this.currentMaskData = null;
 
+    this.webLama = new WebLamaEngine({
+      onStatusChange: (status) => this.handleWebLamaStatus(status),
+    });
+
     this.init();
   }
 
@@ -82,6 +87,9 @@ export class TypesetStudioApp {
     // 1. Khởi tạo fonts
     const fontSelect = document.getElementById("typesetFontFamily");
     await initFonts(fontSelect);
+
+    // 2. Khởi tạo WebLama Engine từ Cache nếu đã tải
+    await this.webLama.init();
 
     // 2. Khởi tạo Canvas Editor
     this.editor = new TypesetCanvasEditor("typesetCanvas", {
@@ -457,8 +465,32 @@ export class TypesetStudioApp {
 
     try {
       const page = this.pages[this.currentPageIndex];
-      const fullMaskB64 = this.smartMask.exportFullPageMaskB64(this.editor.pageWidth, this.editor.pageHeight);
+      const preferWebLama = await getSetting("prefer_web_lama", true);
 
+      // 1. Thử chạy trực tiếp trên trình duyệt bằng Web Manga LaMa (WebGPU / WASM)
+      if (preferWebLama && this.webLama && this.webLama.isReady && this.editor.backgroundImage?._element) {
+        try {
+          const imgEl = this.editor.backgroundImage._element;
+          const maskCanvas = this.smartMask.exportFullPageMaskCanvas(this.editor.pageWidth, this.editor.pageHeight);
+
+          const result = await this.webLama.inpaintCrop(imgEl, maskCanvas, this.currentMaskRegion);
+          if (result && result.cleanedDataUrl) {
+            page.cleanedImage = result.cleanedDataUrl;
+            await savePage(page);
+            await this.editor.setBackground(page.cleanedImage);
+            this.renderPagesList();
+            this.hideFloatingMask();
+            this.showToast(`⚡ Đã xóa chữ bằng Web LaMa (${result.device.toUpperCase()}) trong ${result.durationMs}ms!`, "success");
+            return;
+          }
+        } catch (webErr) {
+          console.warn("Web LaMa inpaint lỗi, tự động chuyển sang Cloud Backend:", webErr);
+          this.showToast(`WebGPU gặp lỗi (${webErr.message}), chuyển sang Cloud...`, "info");
+        }
+      }
+
+      // 2. Fallback sang Cloud Backend hoặc Local Backend
+      const fullMaskB64 = this.smartMask.exportFullPageMaskB64(this.editor.pageWidth, this.editor.pageHeight);
       const backendUrl = await getSetting("backend_url", "https://dobietdc-manga-text-cleaner.hf.space");
       const inpaintModel = "aot";
 
@@ -492,7 +524,7 @@ export class TypesetStudioApp {
         await this.editor.setBackground(page.cleanedImage);
         this.renderPagesList();
         this.hideFloatingMask();
-        this.showToast("Đã tẩy chữ vùng chọn thành công!", "success");
+        this.showToast("☁️ Đã tẩy chữ qua Cloud Backend thành công!", "success");
       }
     } catch (e) {
       console.error("Region inpaint error:", e);
@@ -500,7 +532,7 @@ export class TypesetStudioApp {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = `✨ Xóa chữ (Inpaint)`;
+        btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-xs"></i> <span>Xóa chữ (LaMa)</span>`;
       }
     }
   }
@@ -1217,7 +1249,94 @@ export class TypesetStudioApp {
   }
 
   // ---------------- Settings & Glossary ----------------
+  handleWebLamaStatus(status) {
+    const badge = document.getElementById("webLamaStatusBadge");
+    const indicator = document.getElementById("maskEngineIndicator");
+    const clearBtn = document.getElementById("btnClearWebLamaCache");
+    const dlBtnText = document.getElementById("btnDownloadWebLamaText");
+
+    if (badge) {
+      badge.className = "badge-status-pill";
+      if (status.state === "ready") {
+        badge.textContent = `⚡ Sẵn sàng (${status.device.toUpperCase()})`;
+        badge.classList.add(status.device === "webgpu" ? "ready-webgpu" : "ready-wasm");
+      } else if (status.state === "loading") {
+        badge.textContent = `Đang nạp (${status.percent}%)`;
+        badge.classList.add("loading");
+      } else {
+        badge.textContent = "Chưa tải model";
+      }
+    }
+
+    if (indicator) {
+      indicator.className = "mask-engine-indicator";
+      if (status.isReady) {
+        indicator.textContent = status.device === "webgpu" ? "⚡ WebGPU" : "⚙️ WASM";
+        indicator.classList.add(status.device === "webgpu" ? "webgpu" : "wasm");
+        indicator.title = `Xóa chữ trực tiếp trên trình duyệt bằng ${status.device.toUpperCase()} (100% Offline, siêu tốc)`;
+      } else {
+        indicator.textContent = "☁️ Cloud";
+        indicator.classList.add("cloud");
+        indicator.title = "Xóa chữ qua Backend Cloud / Local Server";
+      }
+    }
+
+    if (clearBtn) {
+      clearBtn.style.display = status.isReady ? "inline-flex" : "none";
+    }
+
+    if (dlBtnText) {
+      dlBtnText.textContent = status.isReady ? "Tải lại Model Manga LaMa" : "Tải Model Manga LaMa (~70MB)";
+    }
+  }
+
   bindSettingsEvents() {
+    // WebLama Inpainting Event Listeners
+    const btnDownloadWebLama = document.getElementById("btnDownloadWebLama");
+    const btnClearCache = document.getElementById("btnClearWebLamaCache");
+    const fileInputCustom = document.getElementById("inputWebLamaCustomFile");
+    const progressWrap = document.getElementById("webLamaDownloadProgressWrap");
+    const progressBar = document.getElementById("webLamaProgressBar");
+    const progressPercent = document.getElementById("webLamaProgressPercent");
+    const progressLabel = document.getElementById("webLamaProgressLabel");
+
+    btnDownloadWebLama?.addEventListener("click", async () => {
+      if (btnDownloadWebLama) btnDownloadWebLama.disabled = true;
+      if (progressWrap) progressWrap.style.display = "block";
+
+      try {
+        await this.webLama.downloadModel((percent, loaded, total) => {
+          if (progressBar) progressBar.style.width = `${percent}%`;
+          if (progressPercent) progressPercent.textContent = `${percent}%`;
+          if (progressLabel) progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`;
+        });
+        this.showToast("⚡ Đã tải thành công model Manga LaMa WebGPU! Bây giờ bạn có thể xóa chữ offline siêu tốc.", "success");
+      } catch (err) {
+        this.showToast(`Lỗi tải model: ${err.message}`, "error");
+      } finally {
+        if (btnDownloadWebLama) btnDownloadWebLama.disabled = false;
+        if (progressWrap) progressWrap.style.display = "none";
+      }
+    });
+
+    btnClearCache?.addEventListener("click", async () => {
+      await this.webLama.clearCache();
+      this.showToast("Đã xóa cache model Manga LaMa!", "info");
+    });
+
+    fileInputCustom?.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        try {
+          this.showToast("Đang nạp file .onnx từ máy tính...", "info");
+          await this.webLama.loadFromFile(file);
+          this.showToast(`⚡ Đã nạp thành công model ${file.name}!`, "success");
+        } catch (err) {
+          this.showToast(`Lỗi nạp model: ${err.message}`, "error");
+        }
+      }
+    });
+
     // Engine selector trong thanh công cụ
     const topEngineSelect = document.getElementById("typesetEngineSelect");
     topEngineSelect?.addEventListener("change", async (e) => {

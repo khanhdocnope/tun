@@ -229,10 +229,9 @@ export class SmartMaskTool {
   }
 
   /**
-   * Xuất full mask toàn trang dạng Base64 đen trắng (trắng = mask xóa chữ, đen = giữ nguyên)
-   * để gửi sang AI Inpainter Backend
+   * Xuất full mask toàn trang dạng Canvas đen trắng (trắng = mask xóa chữ, đen = giữ nguyên)
    */
-  exportFullPageMaskB64(pageWidth, pageHeight) {
+  exportFullPageMaskCanvas(pageWidth, pageHeight) {
     const fullCanvas = document.createElement("canvas");
     fullCanvas.width = pageWidth;
     fullCanvas.height = pageHeight;
@@ -270,7 +269,15 @@ export class SmartMaskTool {
       ctx.drawImage(monoCanvas, this.activeRect.x, this.activeRect.y);
     }
 
-    return fullCanvas.toDataURL("image/png");
+    return fullCanvas;
+  }
+
+  /**
+   * Xuất full mask toàn trang dạng Base64 đen trắng (trắng = mask xóa chữ, đen = giữ nguyên)
+   * để gửi sang AI Inpainter Backend
+   */
+  exportFullPageMaskB64(pageWidth, pageHeight) {
+    return this.exportFullPageMaskCanvas(pageWidth, pageHeight).toDataURL("image/png");
   }
 
   /**
