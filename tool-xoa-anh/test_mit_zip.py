@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-for mod in ["gradio", "torch", "spaces", "manga_translator", "manga_translator.config", "manga_translator.detection", "manga_translator.textline_merge", "manga_translator.mask_refinement", "manga_translator.inpainting"]:
+for mod in ["gradio", "torch", "spaces", "manga_translator", "manga_translator.config", "manga_translator.detection", "manga_translator.textline_merge", "manga_translator.mask_refinement", "manga_translator.inpainting", "manga_translator.utils", "manga_translator.utils.sort"]:
     if mod not in sys.modules:
         m = MagicMock()
         m.Progress = MagicMock
