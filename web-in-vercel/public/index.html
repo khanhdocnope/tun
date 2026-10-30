@@ -548,17 +548,29 @@
 
       <!-- VIEW 2: CHẾ ĐỘ TRÌNH ĐỌC (MANGA READER PREVIEW) -->
       <div class="typeset-reader-wrapper" id="typesetReaderWrapper" style="display: none;">
-        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 16px;">
+        <div class="reader-controls-bar">
           <div class="mode-toggle-group">
-            <button type="button" class="btn-mode-toggle active" id="btnReaderModeWebtoon">
-              Cuộn dọc (Webtoon)
+            <button type="button" class="btn-mode-toggle active" id="btnReaderModeWebtoon" title="Cuộn dọc liền mạch như Webtoon">
+              <i class="fa-solid fa-scroll text-xs"></i>
+              <span>Cuộn dọc (Webtoon)</span>
             </button>
-            <button type="button" class="btn-mode-toggle" id="btnReaderModeManga">
-              Lật trang (Manga)
+            <button type="button" class="btn-mode-toggle" id="btnReaderModeManga" title="Lật từng trang một (Phím mũi tên ← →)">
+              <i class="fa-solid fa-book-open text-xs"></i>
+              <span>Lật trang (Manga)</span>
             </button>
           </div>
+
+          <div class="studio-divider"></div>
+
+          <!-- Chiều rộng hiển thị Webtoon -->
+          <div class="reader-width-toggle" id="readerWidthToggleGroup">
+            <button type="button" class="btn-reader-width" data-width="compact" title="Chiều rộng 680px">Gọn</button>
+            <button type="button" class="btn-reader-width active" data-width="standard" title="Chiều rộng chuẩn 800px">Chuẩn</button>
+            <button type="button" class="btn-reader-width" data-width="wide" title="Chiều rộng 960px">Rộng</button>
+            <button type="button" class="btn-reader-width" data-width="full" title="Tối đa chiều ngang màn hình">Full</button>
+          </div>
         </div>
-        <div id="typesetReaderContainer"></div>
+        <div id="typesetReaderContainer" style="width: 100%;"></div>
       </div>
 
     </div>

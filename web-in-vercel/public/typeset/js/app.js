@@ -1082,6 +1082,16 @@ export class TypesetStudioApp {
       this.reader.setReadingMode("manga");
     });
 
+    // Reader Width Switcher (Gọn, Chuẩn, Rộng, Full)
+    document.querySelectorAll(".btn-reader-width").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-reader-width").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const width = btn.dataset.width || "standard";
+        this.reader.setWidthMode(width);
+      });
+    });
+
     // Tool Buttons trên top canvas bar
     const toolBtns = {
       btnToolSelect: "select",
@@ -1268,8 +1278,9 @@ export class TypesetStudioApp {
       this.editor.fabricCanvas.calcOffset();
       this.editor.fitToScreen();
     } else {
+      this.saveCurrentPageState();
       if (editorWrapper) editorWrapper.style.display = "none";
-      if (readerWrapper) readerWrapper.style.display = "block";
+      if (readerWrapper) readerWrapper.style.display = "flex";
       btnEditor?.classList.remove("active");
       btnReader?.classList.add("active");
       this.reader.setPages(this.pages, this.currentPageIndex);
