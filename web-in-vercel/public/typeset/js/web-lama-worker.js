@@ -3,25 +3,35 @@
  * Runs ONNX Runtime Web in a dedicated thread to completely eliminate UI freezes and "Page Unresponsive" dialogs.
  */
 
-self.importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.all.min.js");
-
-const CACHE_NAME = "manga-studio-lama-v1";
-const CACHE_KEY = "model_lama_manga.onnx";
-
-let session = null;
-let deviceMode = "none";
-let imageInputName = "image";
-let maskInputName = "mask";
-let outputName = "output";
-
-// Configure WASM paths and threading
-if (self.ort && self.ort.env && self.ort.env.wasm) {
-  self.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
-  self.ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
-  self.ort.env.wasm.simd = true;
+let ortLoaded = false;
+function ensureOrtLoaded() {
+  if (self.ort) {
+    ortLoaded = true;
+    return true;
+  }
+  try {
+    self.importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.all.min.js");
+    if (self.ort && self.ort.env && self.ort.env.wasm) {
+      self.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
+      self.ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+      self.ort.env.wasm.simd = true;
+    }
+    ortLoaded = true;
+    return true;
+  } catch (e) {
+    console.warn("[WebLamaWorker] Không thể nạp ONNX Runtime từ CDN:", e);
+    return false;
+  }
 }
 
+// Khởi động thử nạp thư viện
+ensureOrtLoaded();
+
 async function createInferenceSession(arrayBuffer) {
+  if (!ensureOrtLoaded()) {
+    throw new Error("Không thể tải thư viện onnxruntime-web vào Web Worker. Vui lòng kiểm tra kết nối mạng.");
+  }
+
   if (session) {
     try {
       if (typeof session.release === "function") await session.release();

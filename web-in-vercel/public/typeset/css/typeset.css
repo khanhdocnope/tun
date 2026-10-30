@@ -308,8 +308,11 @@
 
 .typeset-workspace-middle:has(.canvas-viewport-container.panning) .typeset-bottom-dock,
 .canvas-viewport-container.panning ~ .typeset-bottom-dock {
-  opacity: 0.25;
-  pointer-events: none;
+  opacity: 0.35;
+}
+
+.typeset-bottom-dock:hover {
+  opacity: 1 !important;
 }
 
 @keyframes floatDockIn {

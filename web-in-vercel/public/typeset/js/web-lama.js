@@ -56,7 +56,7 @@ export class WebLamaEngine {
     }
   }
 
-  _sendWorkerMessage(type, payload = {}, transferables = []) {
+  _sendWorkerMessage(type, payload = {}, transferables = [], timeoutMs = 60000) {
     return new Promise((resolve, reject) => {
       if (!this.worker) {
         this._initWorker();
@@ -66,7 +66,27 @@ export class WebLamaEngine {
       }
 
       const id = ++this._msgId;
-      this._pendingRequests.set(id, { resolve, reject });
+      let timer = null;
+      if (timeoutMs > 0) {
+        timer = setTimeout(() => {
+          if (this._pendingRequests.has(id)) {
+            this._pendingRequests.delete(id);
+            reject(new Error(`Thao tác Worker ${type} quá thời gian chờ (${timeoutMs}ms)`));
+          }
+        }, timeoutMs);
+      }
+
+      this._pendingRequests.set(id, {
+        resolve: (data) => {
+          if (timer) clearTimeout(timer);
+          resolve(data);
+        },
+        reject: (err) => {
+          if (timer) clearTimeout(timer);
+          reject(err);
+        },
+      });
+
       this.worker.postMessage({ id, type, payload }, transferables);
     });
   }
@@ -192,21 +212,21 @@ export class WebLamaEngine {
   }
 
   /**
-   * Tải model từ mạng với tiến trình % chi tiết, không làm đơ giao diện
+   * Tải model từ mạng với tiến trình % chi tiết, hỗ trợ đa luồng (HTTP Range Chunks) siêu tốc
    */
   async downloadModel(onProgress = () => {}) {
     if (this.isLoading) return;
     this.isLoading = true;
-    this.notifyStatus("loading", "Bắt đầu tải mô hình Manga LaMa...", 0);
+    this.notifyStatus("loading", "Bắt đầu kết nối tải mô hình Manga LaMa...", 0);
 
     let buffer = null;
     try {
-      // 1. Tải từ primary URL hoặc mirror URL
+      // 1. Tải từ primary URL bằng đa luồng (6 luồng đồng thời)
       try {
-        buffer = await this.fetchWithProgress(this.primaryUrl, onProgress);
+        buffer = await this.fetchWithParallelChunks(this.primaryUrl, onProgress, 6);
       } catch (errPrimary) {
-        console.warn("Primary URL tải thất bại, chuyển sang mirror:", errPrimary);
-        buffer = await this.fetchWithProgress(this.mirrorUrl, onProgress);
+        console.warn("Primary URL đa luồng tải thất bại, chuyển sang mirror:", errPrimary);
+        buffer = await this.fetchWithParallelChunks(this.mirrorUrl, onProgress, 4);
       }
 
       if (!buffer || buffer.byteLength < 1000000) {
@@ -225,7 +245,7 @@ export class WebLamaEngine {
       this.deviceMode = res.deviceMode || "wasm";
       this.isReady = true;
       this.isCached = true;
-      this.cachedSize = 204544673;
+      this.cachedSize = 207482644;
 
       this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`, 100);
       return true;
@@ -235,6 +255,95 @@ export class WebLamaEngine {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Tải đa luồng song song (Multi-threaded Range Download - IDM Style)
+   * Chia file thành N phần và tải đồng thời để bão hòa băng thông mạng.
+   */
+  async fetchWithParallelChunks(url, onProgress, concurrency = 6) {
+    let totalLength = 207482644;
+    let supportsRange = false;
+
+    // Kiểm tra hỗ trợ HTTP Range và lấy kích thước file chính xác
+    try {
+      const probeRes = await fetch(url, {
+        headers: { Range: "bytes=0-0" },
+      });
+      if (probeRes.status === 206) {
+        supportsRange = true;
+        const cr = probeRes.headers.get("content-range");
+        if (cr) {
+          const match = cr.match(/\/(\d+)$/);
+          if (match) totalLength = parseInt(match[1], 10);
+        }
+      }
+    } catch (e) {
+      console.warn("Probe range request failed, fallback sang tải đơn luồng:", e);
+    }
+
+    if (!supportsRange || totalLength <= 0) {
+      return await this.fetchWithProgress(url, onProgress);
+    }
+
+    const chunkSize = Math.ceil(totalLength / concurrency);
+    const finalBuffer = new Uint8Array(totalLength);
+    const loadedPerStream = new Array(concurrency).fill(0);
+    const startTime = performance.now();
+    let lastYieldTime = performance.now();
+
+    const updateCombinedProgress = () => {
+      const totalLoaded = loadedPerStream.reduce((a, b) => a + b, 0);
+      const percent = Math.min(96, Math.round((totalLoaded / totalLength) * 100));
+      const elapsedSec = (performance.now() - startTime) / 1000;
+      const speedMBs = elapsedSec > 0.1 ? ((totalLoaded / 1024 / 1024) / elapsedSec).toFixed(1) : "0.0";
+      onProgress(percent, totalLoaded, totalLength, speedMBs);
+      this.notifyStatus(
+        "loading",
+        `Đang tải đa luồng (${concurrency}x): ${percent}% (${Math.round(totalLoaded / 1024 / 1024)}MB / ${Math.round(totalLength / 1024 / 1024)}MB - ${speedMBs} MB/s)`,
+        percent
+      );
+    };
+
+    const downloadChunk = async (streamIndex) => {
+      const start = streamIndex * chunkSize;
+      const end = Math.min(start + chunkSize - 1, totalLength - 1);
+      if (start > end) return;
+
+      const res = await fetch(url, {
+        headers: { Range: `bytes=${start}-${end}` },
+      });
+
+      if (!res.ok && res.status !== 206) {
+        throw new Error(`Luồng ${streamIndex + 1} phản hồi lỗi HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      let offset = start;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        finalBuffer.set(value, offset);
+        offset += value.length;
+        loadedPerStream[streamIndex] += value.length;
+
+        const now = performance.now();
+        if (now - lastYieldTime > 60) {
+          lastYieldTime = now;
+          updateCombinedProgress();
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+      updateCombinedProgress();
+    };
+
+    await Promise.all(
+      Array.from({ length: concurrency }, (_, i) => downloadChunk(i))
+    );
+
+    return finalBuffer.buffer;
   }
 
   /**

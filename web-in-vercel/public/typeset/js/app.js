@@ -1470,10 +1470,13 @@ export class TypesetStudioApp {
       if (progressWrap) progressWrap.style.display = "block";
 
       try {
-        await this.webLama.downloadModel((percent, loaded, total) => {
+        await this.webLama.downloadModel((percent, loaded, total, speed) => {
           if (progressBar) progressBar.style.width = `${percent}%`;
           if (progressPercent) progressPercent.textContent = `${percent}%`;
-          if (progressLabel) progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`;
+          if (progressLabel) {
+            const speedText = speed ? ` - ⚡ ${speed} MB/s (6 luồng song song)` : "";
+            progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB${speedText}`;
+          }
         });
         await this.refreshWebLamaStorageStatus();
         this.showToast("⚡ Đã tải thành công model Manga LaMa! Chạy ngầm bằng Web Worker không bao giờ lag giao diện.", "success");
@@ -1513,7 +1516,6 @@ export class TypesetStudioApp {
           this.showToast(`Lỗi nạp model: ${err.message}`, "error");
         }
       }
-    });
     });
 
     // Engine selector trong thanh công cụ
