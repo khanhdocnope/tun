@@ -799,14 +799,25 @@
         <div class="form-group settings-section-highlight" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label style="font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.92rem;">
-              <span>⚡ Xóa chữ Offline (Manga LaMa WebGPU)</span>
+              <span>⚡ Xóa chữ Offline (Manga LaMa WebGPU / WASM)</span>
             </label>
             <span class="badge-status-pill" id="webLamaStatusBadge" style="font-size: 11px; padding: 2px 10px; border-radius: 12px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; font-weight: 600;">Chưa tải model</span>
           </div>
 
           <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 10px 0; line-height: 1.45;">
-            Chạy mô hình xóa chữ Manga LaMa trực tiếp trên card đồ họa máy tính của bạn bằng WebGPU. Tốc độ cực nhanh (~0.1s), bảo mật và hoạt động hoàn toàn không cần Internet hay backend Python.
+            Chạy mô hình xóa chữ Manga LaMa ngầm qua Web Worker bằng WebGPU / WASM. Tốc độ cực nhanh, bảo mật và 100% không làm treo/đơ giao diện trình duyệt.
           </p>
+
+          <!-- Storage Info Bar -->
+          <div id="webLamaStorageInfoWrap" style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; padding: 7px 12px; margin-bottom: 10px; font-size: 0.76rem;">
+            <div style="display: flex; align-items: center; gap: 8px; color: #cbd5e1;">
+              <i class="fa-solid fa-hard-drive text-indigo-400"></i>
+              <span id="webLamaStorageText">Bộ nhớ trình duyệt: Đang kiểm tra...</span>
+            </div>
+            <button type="button" class="btn btn-xs" id="btnQuickDeleteModel" style="display: none; background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.3); border-radius: 4px; padding: 3px 8px; font-weight: 600; cursor: pointer;" title="Xóa model khỏi bộ nhớ đệm trình duyệt">
+              <i class="fa-solid fa-trash-can"></i> Xóa model
+            </button>
+          </div>
 
           <!-- Progress Bar khi đang tải -->
           <div id="webLamaDownloadProgressWrap" style="display: none; margin-bottom: 10px;">
@@ -823,15 +834,15 @@
           <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
             <button type="button" class="btn btn-sm btn-primary" id="btnDownloadWebLama">
               <i class="fa-solid fa-cloud-arrow-down" style="margin-right: 4px;"></i>
-              <span id="btnDownloadWebLamaText">Tải Model Manga LaMa (~70MB)</span>
+              <span id="btnDownloadWebLamaText">Tải Model Manga LaMa (~198MB)</span>
             </button>
             <label class="btn btn-sm btn-outline" style="cursor: pointer; margin: 0; display: inline-flex; align-items: center; gap: 4px;">
               <i class="fa-solid fa-folder-open"></i>
               <span>Nạp file .onnx từ máy</span>
               <input type="file" id="inputWebLamaCustomFile" accept=".onnx" style="display: none;">
             </label>
-            <button type="button" class="btn btn-sm btn-outline text-rose-400" id="btnClearWebLamaCache" style="display: none;">
-              <i class="fa-solid fa-trash-can"></i> Xóa Cache
+            <button type="button" class="btn btn-sm text-rose-400" id="btnClearWebLamaCache" style="display: none; background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 6px; padding: 5px 12px; font-weight: 600; cursor: pointer;">
+              <i class="fa-solid fa-trash-can"></i> Xóa Model khỏi máy
             </button>
           </div>
 
@@ -1176,6 +1187,7 @@
     const settingsModal = document.getElementById("globalSettingsModal");
     document.getElementById("btnOpenGlobalSettings")?.addEventListener("click", async () => {
       settingsModal.style.display = "flex";
+      typesetApp?.refreshWebLamaStorageStatus?.();
       document.getElementById("settingPreferWebLama").checked = await getSetting("prefer_web_lama", true);
       document.getElementById("settingBackendUrl").value = await getSetting("backend_url", "https://dobietdc-manga-text-cleaner.hf.space");
       document.getElementById("settingEngine").value = await getSetting("translation_engine", "google");

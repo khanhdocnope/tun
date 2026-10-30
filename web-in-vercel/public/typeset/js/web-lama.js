@@ -1,17 +1,18 @@
 /**
  * Web Manga LaMa Inpainting Engine (100% Client-Side WebGPU / WASM)
- * Runs LaMa ONNX directly in the browser with zero server dependency.
- * Powered by ONNX Runtime Web (ort.all.min.js).
+ * Runs LaMa ONNX directly in a Background Web Worker with zero server dependency.
+ * Never blocks the main browser UI thread, completely preventing "Page Unresponsive" freezes.
  */
 
 export class WebLamaEngine {
   constructor(options = {}) {
     this.options = options;
-    this.session = null;
+    this.worker = null;
     this.isReady = false;
     this.isLoading = false;
     this.deviceMode = "none"; // 'webgpu' | 'wasm' | 'none'
-    this.cachedModelBuffer = null;
+    this.isCached = false;
+    this.cachedSize = 0;
 
     // Model URLs
     this.primaryUrl = "https://huggingface.co/mayocream/lama-manga-onnx/resolve/main/lama-manga.onnx";
@@ -20,30 +21,103 @@ export class WebLamaEngine {
     this.cacheKey = "model_lama_manga.onnx";
 
     this.onStatusChange = options.onStatusChange || (() => {});
+    this._msgId = 0;
+    this._pendingRequests = new Map();
+
+    this._initWorker();
   }
 
   /**
-   * Khởi tạo kiểm tra xem model đã được cache trong trình duyệt chưa.
-   * Nếu có, nạp sẵn vào bộ nhớ để khi người dùng cần xóa chữ là chạy ngay.
+   * Khởi tạo Web Worker chạy ngầm
+   */
+  _initWorker() {
+    try {
+      this.worker = new Worker("/typeset/js/web-lama-worker.js");
+      this.worker.onmessage = (e) => this._handleWorkerMessage(e);
+      this.worker.onerror = (err) => {
+        console.error("[WebLamaEngine] Worker error:", err);
+        this.notifyStatus("error", `Lỗi Web Worker: ${err.message || "Không thể khởi chạy worker"}`);
+      };
+    } catch (err) {
+      console.warn("[WebLamaEngine] Không thể tạo Web Worker:", err);
+    }
+  }
+
+  _handleWorkerMessage(e) {
+    const { id, success, data, error } = e.data;
+    if (this._pendingRequests.has(id)) {
+      const { resolve, reject } = this._pendingRequests.get(id);
+      this._pendingRequests.delete(id);
+      if (success) {
+        resolve(data);
+      } else {
+        reject(new Error(error || "Worker operation failed"));
+      }
+    }
+  }
+
+  _sendWorkerMessage(type, payload = {}, transferables = []) {
+    return new Promise((resolve, reject) => {
+      if (!this.worker) {
+        this._initWorker();
+      }
+      if (!this.worker) {
+        return reject(new Error("Web Worker không khả dụng trong trình duyệt này."));
+      }
+
+      const id = ++this._msgId;
+      this._pendingRequests.set(id, { resolve, reject });
+      this.worker.postMessage({ id, type, payload }, transferables);
+    });
+  }
+
+  /**
+   * Khởi tạo kiểm tra xem model đã được lưu trong trình duyệt chưa.
+   * Chạy hoàn toàn bất đồng bộ, KHÔNG làm đứng luồng chính (Main Thread).
    */
   async init() {
     try {
-      const isCached = await this.isModelCached();
-      if (isCached) {
-        this.notifyStatus("loading", "Đang nạp model từ bộ nhớ đệm...");
-        const buffer = await this.loadFromCache();
-        if (buffer) {
-          await this.initSession(buffer);
-          this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`);
-          return true;
-        }
+      const status = await this._sendWorkerMessage("CHECK_STATUS");
+      this.isCached = Boolean(status?.isCached);
+      this.cachedSize = status?.cachedSize || 0;
+
+      if (this.isCached) {
+        this.notifyStatus("idle", `Đã lưu trong máy (~${Math.round(this.cachedSize / 1024 / 1024 || 198)}MB)`);
+        // Khởi tạo phiên tính toán ngầm trong Worker mà không chặn trang web
+        this._warmupSessionInBackground();
+        return true;
       }
+
       this.notifyStatus("idle", "Chưa tải model");
       return false;
     } catch (e) {
-      console.warn("WebLamaEngine init error:", e);
-      this.notifyStatus("idle", "Chưa tải model");
+      console.warn("WebLamaEngine init check warning:", e);
+      // Fallback kiểm tra caches trực tiếp
+      const directCached = await this.isModelCached();
+      if (directCached) {
+        this.isCached = true;
+        this.notifyStatus("idle", "Đã lưu trong máy (~198MB)");
+      } else {
+        this.notifyStatus("idle", "Chưa tải model");
+      }
       return false;
+    }
+  }
+
+  /**
+   * Nạp trước session trong background worker khi máy rảnh rỗi (idle)
+   */
+  async _warmupSessionInBackground() {
+    if (this.isReady || this.isLoading) return;
+    try {
+      this.notifyStatus("loading", "Đang nạp model từ bộ nhớ...");
+      const res = await this._sendWorkerMessage("INIT_FROM_CACHE");
+      this.deviceMode = res.deviceMode || "wasm";
+      this.isReady = true;
+      this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`);
+    } catch (err) {
+      console.warn("[WebLamaEngine] Warmup model ngầm chưa thành công:", err);
+      this.notifyStatus("idle", "Đã lưu trong máy (Nhấn xóa chữ để nạp)");
     }
   }
 
@@ -54,6 +128,8 @@ export class WebLamaEngine {
       percent,
       device: this.deviceMode,
       isReady: this.isReady,
+      isCached: this.isCached,
+      cachedSize: this.cachedSize,
     });
   }
 
@@ -68,50 +144,55 @@ export class WebLamaEngine {
     }
   }
 
-  async loadFromCache() {
-    if (!("caches" in window)) return null;
+  async getStorageInfo() {
     try {
-      const cache = await caches.open(this.cacheName);
-      const match = await cache.match(this.cacheKey);
-      if (match) {
-        return await match.arrayBuffer();
+      const status = await this._sendWorkerMessage("CHECK_STATUS");
+      return {
+        isCached: Boolean(status?.isCached),
+        cachedSize: status?.cachedSize || 0,
+        formattedSize: status?.cachedSize ? `${Math.round(status.cachedSize / 1024 / 1024)} MB` : "0 MB",
+      };
+    } catch (_) {
+      const cached = await this.isModelCached();
+      return {
+        isCached: cached,
+        cachedSize: cached ? 204544673 : 0,
+        formattedSize: cached ? "~198 MB" : "0 MB",
+      };
+    }
+  }
+
+  /**
+   * Xóa hoàn toàn Model khỏi bộ nhớ trình duyệt và hủy Worker session
+   */
+  async clearCache() {
+    try {
+      if (this.worker) {
+        await this._sendWorkerMessage("CLEAR_CACHE");
       }
     } catch (e) {
-      console.error("Lỗi đọc cache model:", e);
+      console.warn("[WebLamaEngine] Worker clearCache warning:", e);
     }
-    return null;
-  }
 
-  async saveToCache(arrayBuffer) {
-    if (!("caches" in window)) return;
-    try {
-      const cache = await caches.open(this.cacheName);
-      const response = new Response(arrayBuffer, {
-        headers: { "Content-Type": "application/octet-stream" },
-      });
-      await cache.put(this.cacheKey, response);
-    } catch (e) {
-      console.error("Lỗi lưu cache model:", e);
-    }
-  }
-
-  async clearCache() {
+    // Đảm bảo xóa cả ở main thread CacheStorage
     if ("caches" in window) {
       try {
         await caches.delete(this.cacheName);
       } catch (e) {
-        console.error("Lỗi xóa cache model:", e);
+        console.error("Lỗi xóa CacheStorage:", e);
       }
     }
-    this.session = null;
+
     this.isReady = false;
+    this.isLoading = false;
+    this.isCached = false;
+    this.cachedSize = 0;
     this.deviceMode = "none";
-    this.cachedModelBuffer = null;
-    this.notifyStatus("idle", "Đã xóa cache model");
+    this.notifyStatus("idle", "Đã xóa model khỏi máy");
   }
 
   /**
-   * Tải model từ mạng với tiến trình % chi tiết
+   * Tải model từ mạng với tiến trình % chi tiết, không làm đơ giao diện
    */
   async downloadModel(onProgress = () => {}) {
     if (this.isLoading) return;
@@ -120,7 +201,7 @@ export class WebLamaEngine {
 
     let buffer = null;
     try {
-      // 1. Thử tải từ primary URL (HuggingFace mayocream manga-lama)
+      // 1. Tải từ primary URL hoặc mirror URL
       try {
         buffer = await this.fetchWithProgress(this.primaryUrl, onProgress);
       } catch (errPrimary) {
@@ -129,14 +210,22 @@ export class WebLamaEngine {
       }
 
       if (!buffer || buffer.byteLength < 1000000) {
-        throw new Error("Dữ liệu model tải về không hợp lệ hoặc bị lỗi mạng.");
+        throw new Error("Dữ liệu model tải về không hợp lệ hoặc bị gián đoạn mạng.");
       }
 
-      this.notifyStatus("loading", "Đang lưu vào bộ nhớ đệm trình duyệt...", 98);
-      await this.saveToCache(buffer);
+      this.notifyStatus("loading", "Đang nạp mô hình vào luồng xử lý Web Worker...", 98);
 
-      this.notifyStatus("loading", "Đang khởi tạo phiên tính toán WebGPU/WASM...", 99);
-      await this.initSession(buffer);
+      // Chuyển buffer sang Web Worker (Transferable 0-copy, không làm đứng giao diện!)
+      const res = await this._sendWorkerMessage(
+        "INIT_FROM_BUFFER",
+        { buffer, saveCache: true },
+        [buffer]
+      );
+
+      this.deviceMode = res.deviceMode || "wasm";
+      this.isReady = true;
+      this.isCached = true;
+      this.cachedSize = 204544673;
 
       this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`, 100);
       return true;
@@ -148,6 +237,9 @@ export class WebLamaEngine {
     }
   }
 
+  /**
+   * Tải file lớn có micro-yield để nhường luồng UI xử lý sự kiện
+   */
   async fetchWithProgress(url, onProgress) {
     const response = await fetch(url, { mode: "cors" });
     if (!response.ok) {
@@ -155,22 +247,36 @@ export class WebLamaEngine {
     }
 
     const contentLength = response.headers.get("content-length");
-    const total = contentLength ? parseInt(contentLength, 10) : 207482644; // ~197MB
+    const total = contentLength ? parseInt(contentLength, 10) : 204544673; // ~198MB
     let loaded = 0;
 
     const reader = response.body.getReader();
     const chunks = [];
+    let lastYieldTime = performance.now();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
       loaded += value.length;
+
+      // Nhường luồng cho UI mỗi 50ms để giao diện không bị giật lag
+      const now = performance.now();
+      if (now - lastYieldTime > 50) {
+        lastYieldTime = now;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
       const percent = Math.min(96, Math.round((loaded / total) * 100));
       onProgress(percent, loaded, total);
-      this.notifyStatus("loading", `Đang tải: ${percent}% (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`, percent);
+      this.notifyStatus(
+        "loading",
+        `Đang tải: ${percent}% (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`,
+        percent
+      );
     }
 
+    // Ghép các chunk lại
     const allChunks = new Uint8Array(loaded);
     let position = 0;
     for (const chunk of chunks) {
@@ -183,16 +289,28 @@ export class WebLamaEngine {
 
   /**
    * Nạp trực tiếp từ file .onnx do người dùng chọn từ máy tính
+   * Chuyển thẳng buffer sang Web Worker, giao diện giữ nguyên 60FPS
    */
   async loadFromFile(file) {
     if (!file) return;
     this.isLoading = true;
-    this.notifyStatus("loading", "Đang nạp file .onnx từ máy...", 50);
+    this.notifyStatus("loading", "Đang đọc file .onnx từ máy...", 30);
 
     try {
       const buffer = await file.arrayBuffer();
-      await this.saveToCache(buffer);
-      await this.initSession(buffer);
+      this.notifyStatus("loading", "Đang khởi tạo phiên tính toán trong Web Worker...", 70);
+
+      const res = await this._sendWorkerMessage(
+        "INIT_FROM_BUFFER",
+        { buffer, saveCache: true },
+        [buffer]
+      );
+
+      this.deviceMode = res.deviceMode || "wasm";
+      this.isReady = true;
+      this.isCached = true;
+      this.cachedSize = file.size;
+
       this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`, 100);
       return true;
     } catch (err) {
@@ -204,72 +322,25 @@ export class WebLamaEngine {
   }
 
   /**
-   * Khởi tạo ONNX Runtime InferenceSession
-   */
-  async initSession(arrayBuffer) {
-    if (!window.ort) {
-      throw new Error("Chưa nạp thư viện onnxruntime-web (window.ort không tồn tại).");
-    }
-
-    this.cachedModelBuffer = arrayBuffer;
-
-    // Cấu hình môi trường WASM đa luồng
-    if (window.ort.env && window.ort.env.wasm) {
-      window.ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
-      window.ort.env.wasm.simd = true;
-    }
-
-    // 1. Thử ưu tiên WebGPU (Card màn hình rời/onboard siêu nhanh)
-    try {
-      this.session = await window.ort.InferenceSession.create(arrayBuffer, {
-        executionProviders: ["webgpu"],
-        graphOptimizationLevel: "all",
-      });
-      this.deviceMode = "webgpu";
-      console.log("⚡ WebLama initialized successfully with WebGPU!");
-    } catch (gpuErr) {
-      console.warn("WebGPU không khả dụng hoặc bị lỗi, tự động chuyển sang WASM (CPU):", gpuErr);
-      // 2. Fallback sang WASM SIMD trên CPU
-      this.session = await window.ort.InferenceSession.create(arrayBuffer, {
-        executionProviders: ["wasm"],
-        graphOptimizationLevel: "all",
-      });
-      this.deviceMode = "wasm";
-      console.log("⚙️ WebLama initialized successfully with WASM CPU!");
-    }
-
-    // Tự động nhận diện tên input/output của model
-    const inputNames = this.session.inputNames || [];
-    this.imageInputName =
-      inputNames.find((n) => n.toLowerCase().includes("img") || n.toLowerCase().includes("image") || n.toLowerCase().includes("input")) ||
-      inputNames[0] ||
-      "image";
-
-    this.maskInputName =
-      inputNames.find((n) => n.toLowerCase().includes("mask")) ||
-      inputNames[1] ||
-      "mask";
-
-    this.outputName = this.session.outputNames?.[0] || "output";
-    this.isReady = true;
-  }
-
-  /**
    * Xóa chữ (Inpaint) vùng khoanh bằng thuật toán 512x512 Crop & Feathered Blend
-   * @param {HTMLImageElement|HTMLCanvasElement} sourceImage - Ảnh trang manga
-   * @param {HTMLCanvasElement} fullMaskCanvas - Canvas chứa mask toàn trang
-   * @param {Object} cropRect - { x, y, width, height }
+   * Toàn bộ bước nặng ONNX được chạy ngầm trong Web Worker!
    */
   async inpaintCrop(sourceImage, fullMaskCanvas, cropRect) {
-    if (!this.isReady || !this.session) {
-      throw new Error("Mô hình Web LaMa chưa sẵn sàng. Hãy tải model trong Cài đặt trước.");
+    if (!this.isReady) {
+      // Thử nạp từ cache nếu trước đó chưa nạp
+      if (this.isCached) {
+        await this._warmupSessionInBackground();
+      }
+      if (!this.isReady) {
+        throw new Error("Mô hình Web LaMa chưa sẵn sàng. Hãy tải model trong Cài đặt trước.");
+      }
     }
 
     const tStart = performance.now();
     const imgW = sourceImage.naturalWidth || sourceImage.width;
     const imgH = sourceImage.naturalHeight || sourceImage.height;
 
-    // 1. Tính toán Bounding Box có mở rộng lề (Padding ~35%)
+    // 1. Bounding Box mở rộng lề ~35%
     const padX = Math.max(32, Math.round(cropRect.width * 0.35));
     const padY = Math.max(32, Math.round(cropRect.height * 0.35));
 
@@ -283,122 +354,68 @@ export class WebLamaEngine {
     canvasImg512.width = 512;
     canvasImg512.height = 512;
     const ctxImg512 = canvasImg512.getContext("2d");
-
-    // Vẽ vùng crop ảnh gốc lên 512x512
     ctxImg512.drawImage(sourceImage, boxX, boxY, boxW, boxH, 0, 0, 512, 512);
 
     const canvasMask512 = document.createElement("canvas");
     canvasMask512.width = 512;
     canvasMask512.height = 512;
     const ctxMask512 = canvasMask512.getContext("2d");
-
-    // Vẽ vùng crop mask lên 512x512
     ctxMask512.drawImage(fullMaskCanvas, boxX, boxY, boxW, boxH, 0, 0, 512, 512);
 
-    // 3. Chuẩn bị Float32 Tensors
-    const imgPixelData = ctxImg512.getImageData(0, 0, 512, 512).data;
-    const maskPixelData = ctxMask512.getImageData(0, 0, 512, 512).data;
+    // Lấy pixel data (mỗi mảng 512*512*4 = 1MB)
+    const imgPixels = ctxImg512.getImageData(0, 0, 512, 512).data;
+    const maskPixels = ctxMask512.getImageData(0, 0, 512, 512).data;
 
-    const numPixels = 512 * 512;
-    const imgTensorData = new Float32Array(3 * numPixels);
-    const maskTensorData = new Float32Array(numPixels);
+    // 3. Gửi sang Web Worker xử lý (Truyền Transferable 0-copy)
+    const res = await this._sendWorkerMessage(
+      "INPAINT",
+      { imgPixels, maskPixels },
+      [imgPixels.buffer, maskPixels.buffer]
+    );
 
-    // Chuẩn hóa ảnh [1, 3, 512, 512] dạng RGB [0.0, 1.0]
-    // Chuẩn hóa mask [1, 1, 512, 512] dạng Binary [0.0 hoặc 1.0]
-    for (let i = 0; i < numPixels; i++) {
-      const pIdx = i * 4;
-      imgTensorData[i] = imgPixelData[pIdx] / 255.0; // R
-      imgTensorData[numPixels + i] = imgPixelData[pIdx + 1] / 255.0; // G
-      imgTensorData[numPixels * 2 + i] = imgPixelData[pIdx + 2] / 255.0; // B
+    const resultPixels = res.resultPixels;
 
-      // Mask: Bất kỳ pixel mask nào có alpha/màu > 15 thì coi là vùng cần xóa (1.0)
-      const maskVal = Math.max(maskPixelData[pIdx], maskPixelData[pIdx + 1], maskPixelData[pIdx + 2], maskPixelData[pIdx + 3]);
-      maskTensorData[i] = maskVal > 15 ? 1.0 : 0.0;
-    }
-
-    const imgTensor = new window.ort.Tensor("float32", imgTensorData, [1, 3, 512, 512]);
-    const maskTensor = new window.ort.Tensor("float32", maskTensorData, [1, 1, 512, 512]);
-
-    const feeds = {};
-    feeds[this.imageInputName] = imgTensor;
-    feeds[this.maskInputName] = maskTensor;
-
-    // 4. Chạy Inpainting Inference trực tiếp trên WebGPU / WASM
-    const results = await this.session.run(feeds);
-    const outputTensor = results[this.outputName];
-    if (!outputTensor || !outputTensor.data) {
-      throw new Error("Model Inpainting không trả về kết quả hợp lệ.");
-    }
-
-    const outData = outputTensor.data;
-
-    // 5. Chuyển tensor kết quả thành ImageData 512x512
+    // 4. Đưa pixel kết quả vào Canvas 512x512
     const resultImageData = ctxImg512.createImageData(512, 512);
-    const rPixels = resultImageData.data;
+    resultImageData.data.set(resultPixels);
 
-    // Tự động kiểm tra giá trị đầu ra (nếu là [0, 1] thì nhân 255, nếu đã là [0, 255] thì giữ nguyên)
-    let isNormalized = false;
-    for (let i = 0; i < 50; i++) {
-      if (outData[i] > 1.5) {
-        isNormalized = false;
-        break;
-      }
-      isNormalized = true;
-    }
-    const scale = isNormalized ? 255.0 : 1.0;
-
-    for (let i = 0; i < numPixels; i++) {
-      const pIdx = i * 4;
-      rPixels[pIdx] = Math.min(255, Math.max(0, Math.round(outData[i] * scale))); // R
-      rPixels[pIdx + 1] = Math.min(255, Math.max(0, Math.round(outData[numPixels + i] * scale))); // G
-      rPixels[pIdx + 2] = Math.min(255, Math.max(0, Math.round(outData[numPixels * 2 + i] * scale))); // B
-      rPixels[pIdx + 3] = 255;
-    }
-
-    // 6. Scale kết quả 512x512 về kích thước thật của vùng crop (boxW x boxH)
     const canvasResult512 = document.createElement("canvas");
     canvasResult512.width = 512;
     canvasResult512.height = 512;
     canvasResult512.getContext("2d").putImageData(resultImageData, 0, 0);
 
+    // 5. Scale 512x512 về kích thước thật (boxW x boxH)
     const canvasPatch = document.createElement("canvas");
     canvasPatch.width = boxW;
     canvasPatch.height = boxH;
     const ctxPatch = canvasPatch.getContext("2d");
     ctxPatch.drawImage(canvasResult512, 0, 0, 512, 512, 0, 0, boxW, boxH);
 
-    // 7. Tạo Alpha Feather Mask để hòa trộn viền siêu mềm mượt
+    // 6. Feather Mask hòa trộn viền mềm
     const canvasFeatherMask = document.createElement("canvas");
     canvasFeatherMask.width = boxW;
     canvasFeatherMask.height = boxH;
     const ctxFeather = canvasFeatherMask.getContext("2d");
-
-    // Lấy mask gốc của vùng crop
     ctxFeather.drawImage(fullMaskCanvas, boxX, boxY, boxW, boxH, 0, 0, boxW, boxH);
     ctxFeather.filter = "blur(4px)";
     ctxFeather.drawImage(canvasFeatherMask, 0, 0);
     ctxFeather.filter = "none";
 
-    // 8. Hòa trộn vào trang ảnh hoàn chỉnh
+    // 7. Hòa trộn hoàn chỉnh vào ảnh trang
     const outputFullCanvas = document.createElement("canvas");
     outputFullCanvas.width = imgW;
     outputFullCanvas.height = imgH;
     const ctxOut = outputFullCanvas.getContext("2d");
-
-    // Vẽ toàn bộ ảnh gốc
     ctxOut.drawImage(sourceImage, 0, 0);
 
-    // Tạo canvas patch có viền mềm
     const canvasBlendedPatch = document.createElement("canvas");
     canvasBlendedPatch.width = boxW;
     canvasBlendedPatch.height = boxH;
     const ctxBlend = canvasBlendedPatch.getContext("2d");
-
     ctxBlend.drawImage(canvasPatch, 0, 0);
     ctxBlend.globalCompositeOperation = "destination-in";
     ctxBlend.drawImage(canvasFeatherMask, 0, 0);
 
-    // Đè patch đã làm mềm viền lên ảnh gốc
     ctxOut.drawImage(canvasBlendedPatch, boxX, boxY);
 
     const tDuration = Math.round(performance.now() - tStart);

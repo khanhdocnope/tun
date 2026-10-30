@@ -89,8 +89,8 @@ export class TypesetStudioApp {
     await initFonts(fontSelect);
     this.availableFonts = await getAvailableFonts();
 
-    // 2. Khởi tạo WebLama Engine từ Cache nếu đã tải
-    await this.webLama.init();
+    // 2. Khởi tạo WebLama Engine trong Web Worker ngầm (không chặn giao diện)
+    this.webLama.init().catch((err) => console.warn("Lỗi khởi tạo WebLama:", err));
 
     // 2. Khởi tạo Canvas Editor
     this.editor = new TypesetCanvasEditor("typesetCanvas", {
@@ -1377,11 +1377,27 @@ export class TypesetStudioApp {
   }
 
   // ---------------- Settings & Glossary ----------------
+  async refreshWebLamaStorageStatus() {
+    if (!this.webLama) return;
+    const storage = await this.webLama.getStorageInfo();
+    this.handleWebLamaStatus({
+      state: this.webLama.isReady ? "ready" : "idle",
+      device: this.webLama.deviceMode,
+      isReady: this.webLama.isReady,
+      isCached: storage.isCached,
+      cachedSize: storage.cachedSize,
+    });
+  }
+
   handleWebLamaStatus(status) {
     const badge = document.getElementById("webLamaStatusBadge");
     const indicator = document.getElementById("maskEngineIndicator");
     const clearBtn = document.getElementById("btnClearWebLamaCache");
+    const quickDeleteBtn = document.getElementById("btnQuickDeleteModel");
     const dlBtnText = document.getElementById("btnDownloadWebLamaText");
+    const storageText = document.getElementById("webLamaStorageText");
+
+    const hasStoredModel = Boolean(status.isCached || status.isReady);
 
     if (badge) {
       badge.className = "badge-status-pill";
@@ -1391,8 +1407,20 @@ export class TypesetStudioApp {
       } else if (status.state === "loading") {
         badge.textContent = `Đang nạp (${status.percent}%)`;
         badge.classList.add("loading");
+      } else if (hasStoredModel) {
+        badge.textContent = `Đã lưu (~198MB)`;
+        badge.classList.add("ready-wasm");
       } else {
         badge.textContent = "Chưa tải model";
+      }
+    }
+
+    if (storageText) {
+      if (hasStoredModel) {
+        const mb = status.cachedSize ? Math.round(status.cachedSize / 1024 / 1024) : 198;
+        storageText.innerHTML = `Đã lưu model trong trình duyệt: <strong style="color: #818cf8;">~${mb} MB</strong>`;
+      } else {
+        storageText.textContent = "Chưa lưu model trong trình duyệt (0 MB)";
       }
     }
 
@@ -1402,6 +1430,10 @@ export class TypesetStudioApp {
         indicator.textContent = status.device === "webgpu" ? "⚡ WebGPU" : "⚙️ WASM";
         indicator.classList.add(status.device === "webgpu" ? "webgpu" : "wasm");
         indicator.title = `Xóa chữ trực tiếp trên trình duyệt bằng ${status.device.toUpperCase()} (100% Offline, siêu tốc)`;
+      } else if (hasStoredModel) {
+        indicator.textContent = "⚡ Web LaMa";
+        indicator.classList.add("wasm");
+        indicator.title = "Đã lưu model trong máy (tự động kích hoạt khi xóa chữ)";
       } else {
         indicator.textContent = "☁️ Cloud";
         indicator.classList.add("cloud");
@@ -1409,12 +1441,16 @@ export class TypesetStudioApp {
       }
     }
 
+    // Luôn hiển thị nút Xóa Model khi máy đã có model (kể cả khi chưa nạp vào RAM)
     if (clearBtn) {
-      clearBtn.style.display = status.isReady ? "inline-flex" : "none";
+      clearBtn.style.display = hasStoredModel ? "inline-flex" : "none";
+    }
+    if (quickDeleteBtn) {
+      quickDeleteBtn.style.display = hasStoredModel ? "inline-flex" : "none";
     }
 
     if (dlBtnText) {
-      dlBtnText.textContent = status.isReady ? "Tải lại Model Manga LaMa" : "Tải Model Manga LaMa (~70MB)";
+      dlBtnText.textContent = hasStoredModel ? "Tải lại Model Manga LaMa" : "Tải Model Manga LaMa (~198MB)";
     }
   }
 
@@ -1422,6 +1458,7 @@ export class TypesetStudioApp {
     // WebLama Inpainting Event Listeners
     const btnDownloadWebLama = document.getElementById("btnDownloadWebLama");
     const btnClearCache = document.getElementById("btnClearWebLamaCache");
+    const btnQuickDelete = document.getElementById("btnQuickDeleteModel");
     const fileInputCustom = document.getElementById("inputWebLamaCustomFile");
     const progressWrap = document.getElementById("webLamaDownloadProgressWrap");
     const progressBar = document.getElementById("webLamaProgressBar");
@@ -1438,7 +1475,8 @@ export class TypesetStudioApp {
           if (progressPercent) progressPercent.textContent = `${percent}%`;
           if (progressLabel) progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB`;
         });
-        this.showToast("⚡ Đã tải thành công model Manga LaMa WebGPU! Bây giờ bạn có thể xóa chữ offline siêu tốc.", "success");
+        await this.refreshWebLamaStorageStatus();
+        this.showToast("⚡ Đã tải thành công model Manga LaMa! Chạy ngầm bằng Web Worker không bao giờ lag giao diện.", "success");
       } catch (err) {
         this.showToast(`Lỗi tải model: ${err.message}`, "error");
       } finally {
@@ -1447,22 +1485,35 @@ export class TypesetStudioApp {
       }
     });
 
-    btnClearCache?.addEventListener("click", async () => {
-      await this.webLama.clearCache();
-      this.showToast("Đã xóa cache model Manga LaMa!", "info");
-    });
+    const doDeleteModel = async () => {
+      if (!confirm("Bạn có chắc chắn muốn xóa model Manga LaMa (~198MB) khỏi bộ nhớ máy tính không?")) {
+        return;
+      }
+      try {
+        await this.webLama.clearCache();
+        await this.refreshWebLamaStorageStatus();
+        this.showToast("Đã xóa hoàn toàn model Manga LaMa khỏi bộ nhớ trình duyệt!", "info");
+      } catch (err) {
+        this.showToast(`Lỗi xóa model: ${err.message}`, "error");
+      }
+    };
+
+    btnClearCache?.addEventListener("click", doDeleteModel);
+    btnQuickDelete?.addEventListener("click", doDeleteModel);
 
     fileInputCustom?.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (file) {
         try {
-          this.showToast("Đang nạp file .onnx từ máy tính...", "info");
+          this.showToast("Đang nạp file .onnx từ máy tính vào Web Worker...", "info");
           await this.webLama.loadFromFile(file);
+          await this.refreshWebLamaStorageStatus();
           this.showToast(`⚡ Đã nạp thành công model ${file.name}!`, "success");
         } catch (err) {
           this.showToast(`Lỗi nạp model: ${err.message}`, "error");
         }
       }
+    });
     });
 
     // Engine selector trong thanh công cụ
