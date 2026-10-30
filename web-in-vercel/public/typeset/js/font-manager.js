@@ -91,9 +91,23 @@ export async function loadUserFontFile(file) {
     name: fontName,
     displayName: rawName,
     buffer: arrayBuffer,
-    format: file.name.endsWith(".woff2") ? "woff2" : file.name.endsWith(".woff") ? "woff" : "truetype",
+    format: file.name.endsWith(".woff2")
+      ? "woff2"
+      : file.name.endsWith(".woff")
+      ? "woff"
+      : file.name.endsWith(".otf")
+      ? "opentype"
+      : "truetype",
     uploadedAt: Date.now(),
   });
 
   return fontName;
+}
+
+export async function getAvailableFonts() {
+  const customFonts = await getCustomFonts();
+  return {
+    builtin: BUILTIN_FONTS,
+    custom: customFonts,
+  };
 }

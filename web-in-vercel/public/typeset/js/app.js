@@ -12,7 +12,7 @@ import {
   saveGlossaryItem,
   deleteGlossaryItem,
 } from "./storage.js";
-import { initFonts, populateFontSelect, loadUserFontFile } from "./font-manager.js";
+import { initFonts, populateFontSelect, loadUserFontFile, BUILTIN_FONTS, getAvailableFonts } from "./font-manager.js";
 import { TypesetCanvasEditor } from "./canvas-editor.js";
 import { SmartMaskTool } from "./smart-mask.js";
 import { MangaReaderPreview } from "./reader-preview.js";
@@ -87,6 +87,7 @@ export class TypesetStudioApp {
     // 1. Khởi tạo fonts
     const fontSelect = document.getElementById("typesetFontFamily");
     await initFonts(fontSelect);
+    this.availableFonts = await getAvailableFonts();
 
     // 2. Khởi tạo WebLama Engine từ Cache nếu đã tải
     await this.webLama.init();
@@ -627,17 +628,41 @@ export class TypesetStudioApp {
       return;
     }
 
+    const builtinList = this.availableFonts?.builtin || BUILTIN_FONTS;
+    const customList = this.availableFonts?.custom || [];
+
     boxes.forEach((box) => {
       const item = document.createElement("div");
       item.className = "dialog-row-card";
       item.dataset.boxId = box.id;
+
+      const curFont = box.style?.fontFamily || "Yuki Burobu";
+      const curSize = box.style?.fontSize || 20;
+      const curAlign = box.style?.align || "center";
+      const isBold = Boolean(box.style?.bold);
+      const isItalic = Boolean(box.style?.italic);
+
+      // Render danh sách font
+      let fontOptionsHtml = "";
+      builtinList.forEach((f) => {
+        const isSel = f.name === curFont ? "selected" : "";
+        fontOptionsHtml += `<option value="${f.name}" ${isSel} style="font-family: '${f.name}', ${f.fallback}">${f.label}</option>`;
+      });
+      if (customList.length > 0) {
+        fontOptionsHtml += `<optgroup label="Font của bạn">`;
+        customList.forEach((cf) => {
+          const isSel = cf.name === curFont ? "selected" : "";
+          fontOptionsHtml += `<option value="${cf.name}" ${isSel}>${cf.name}</option>`;
+        });
+        fontOptionsHtml += `</optgroup>`;
+      }
 
       item.innerHTML = `
         <div class="dialog-row-header">
           <span class="dialog-order-badge">#${box.order}</span>
           <div class="dialog-row-actions">
             <button class="btn-mini-action btn-fit" title="Tự động co chữ vừa khung">↔ Auto Fit</button>
-            <button class="btn-mini-action btn-invert" title="Đảo màu theo nền">🌓 Đảo màu</button>
+            <button class="btn-mini-action btn-invert" title="Đảo màu theo nền (Trắng/Đen)">🌓 Đảo màu</button>
             <button class="btn-mini-action btn-del" title="Xóa bóng thoại này">&times;</button>
           </div>
         </div>
@@ -655,6 +680,38 @@ export class TypesetStudioApp {
             </div>
             <textarea class="textarea-vi" rows="2" placeholder="Nhập bản dịch tiếng Việt...">${box.textVi || ""}</textarea>
           </div>
+        </div>
+
+        <!-- Smart Inspector: Quick Typography Bar trực tiếp trên thẻ thoại -->
+        <div class="dialog-quick-toolbar">
+          <select class="quick-font-select" title="Đổi Font chữ cho câu này">
+            ${fontOptionsHtml}
+          </select>
+
+          <div class="quick-size-stepper" title="Tăng giảm cỡ chữ">
+            <button type="button" class="btn-step-size btn-dec-size" title="Giảm 1px">-</button>
+            <span class="badge-size-val">${curSize}px</span>
+            <button type="button" class="btn-step-size btn-inc-size" title="Tăng 1px">+</button>
+          </div>
+
+          <div class="quick-align-group">
+            <button type="button" class="btn-step-align ${curAlign === "left" ? "active" : ""}" data-align="left" title="Căn trái">
+              <i class="fa-solid fa-align-left"></i>
+            </button>
+            <button type="button" class="btn-step-align ${curAlign === "center" ? "active" : ""}" data-align="center" title="Căn giữa">
+              <i class="fa-solid fa-align-center"></i>
+            </button>
+            <button type="button" class="btn-step-align ${curAlign === "right" ? "active" : ""}" data-align="right" title="Căn phải">
+              <i class="fa-solid fa-align-right"></i>
+            </button>
+          </div>
+
+          <button type="button" class="btn-quick-btn btn-bold ${isBold ? "active" : ""}" title="In đậm">
+            <i class="fa-solid fa-bold"></i>
+          </button>
+          <button type="button" class="btn-quick-btn btn-italic ${isItalic ? "active" : ""}" title="In nghiêng">
+            <i class="fa-solid fa-italic"></i>
+          </button>
         </div>
       `;
 
@@ -687,11 +744,72 @@ export class TypesetStudioApp {
         this.editor.updateBoxText(box.id, newVi);
       });
 
+      // Smart Inspector: Đổi font
+      const quickFontSel = item.querySelector(".quick-font-select");
+      quickFontSel.addEventListener("change", (e) => {
+        e.stopPropagation();
+        this.editor.updateBoxStyle(box.id, { fontFamily: e.target.value });
+      });
+
+      // Smart Inspector: Tăng/giảm cỡ chữ
+      const sizeValBadge = item.querySelector(".badge-size-val");
+      item.querySelector(".btn-dec-size").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tb = this.editor.fabricCanvas.getObjects().find((o) => o.id === box.id);
+        const cur = tb ? tb.fontSize : curSize;
+        const next = Math.max(8, cur - 1);
+        sizeValBadge.textContent = `${next}px`;
+        this.editor.updateBoxStyle(box.id, { fontSize: next });
+      });
+
+      item.querySelector(".btn-inc-size").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tb = this.editor.fabricCanvas.getObjects().find((o) => o.id === box.id);
+        const cur = tb ? tb.fontSize : curSize;
+        const next = Math.min(140, cur + 1);
+        sizeValBadge.textContent = `${next}px`;
+        this.editor.updateBoxStyle(box.id, { fontSize: next });
+      });
+
+      // Smart Inspector: Căn lề
+      item.querySelectorAll(".btn-step-align").forEach((alignBtn) => {
+        alignBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const alignVal = alignBtn.dataset.align;
+          item.querySelectorAll(".btn-step-align").forEach((b) => b.classList.toggle("active", b === alignBtn));
+          this.editor.updateBoxStyle(box.id, { textAlign: alignVal });
+        });
+      });
+
+      // Smart Inspector: Bold & Italic
+      const boldBtn = item.querySelector(".btn-bold");
+      boldBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tb = this.editor.fabricCanvas.getObjects().find((o) => o.id === box.id);
+        const isCurrentlyBold = tb ? tb.fontWeight === "bold" : isBold;
+        const nextBold = !isCurrentlyBold;
+        boldBtn.classList.toggle("active", nextBold);
+        this.editor.updateBoxStyle(box.id, { fontWeight: nextBold ? "bold" : "normal" });
+      });
+
+      const italicBtn = item.querySelector(".btn-italic");
+      italicBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const tb = this.editor.fabricCanvas.getObjects().find((o) => o.id === box.id);
+        const isCurrentlyItalic = tb ? tb.fontStyle === "italic" : isItalic;
+        const nextItalic = !isCurrentlyItalic;
+        italicBtn.classList.toggle("active", nextItalic);
+        this.editor.updateBoxStyle(box.id, { fontStyle: nextItalic ? "italic" : "normal" });
+      });
+
       // Nút Auto Fit cỡ chữ
       item.querySelector(".btn-fit").addEventListener("click", (e) => {
         e.stopPropagation();
         const tb = this.editor.fabricCanvas.getObjects().find((o) => o.id === box.id);
-        if (tb) this.editor.autoFitFontSize(tb);
+        if (tb) {
+          this.editor.autoFitFontSize(tb);
+          sizeValBadge.textContent = `${tb.fontSize}px`;
+        }
       });
 
       // Nút Đảo màu
@@ -733,6 +851,14 @@ export class TypesetStudioApp {
       const ta = card.querySelector(".textarea-vi");
       if (ta && ta.value !== boxData.textVi) {
         ta.value = boxData.textVi;
+      }
+      const sizeBadge = card.querySelector(".badge-size-val");
+      if (sizeBadge && boxData.style?.fontSize) {
+        sizeBadge.textContent = `${boxData.style.fontSize}px`;
+      }
+      const fontSel = card.querySelector(".quick-font-select");
+      if (fontSel && boxData.style?.fontFamily && fontSel.value !== boxData.style.fontFamily) {
+        fontSel.value = boxData.style.fontFamily;
       }
     }
   }
@@ -878,6 +1004,8 @@ export class TypesetStudioApp {
           const fontName = await loadUserFontFile(fontInput.files[0]);
           await populateFontSelect(document.getElementById("typesetFontFamily"));
           document.getElementById("typesetFontFamily").value = fontName;
+          this.availableFonts = await getAvailableFonts();
+          this.renderParallelDialogs();
           const active = this.editor.fabricCanvas.getActiveObject();
           if (active) this.editor.updateBoxStyle(active.id, { fontFamily: fontName });
           this.showToast(`Đã nạp font thành công: ${fontInput.files[0].name}`, "success");

@@ -362,32 +362,26 @@
             </div>
           </div>
 
-          <!-- FLOATING BOTTOM COMMAND DOCK (FIGJAM / LYNX DOCK) -->
-          <div class="typeset-bottom-dock" id="typesetBottomDock">
+          <!-- FLOATING BOTTOM COMMAND DOCK (FIGMA / LYNX MICRO-DOCK) -->
+          <div class="typeset-bottom-dock micro-dock" id="typesetBottomDock">
             <div class="dock-pod">
-              <button class="btn-dock-tool active" id="btnToolSelect" title="Chọn & Chỉnh sửa ô thoại (V)">
+              <button class="btn-dock-tool btn-icon-only active" id="btnToolSelect" title="Chọn & Chỉnh sửa ô thoại (Phím tắt: V)">
                 <i class="fa-solid fa-arrow-pointer"></i>
-                <span>Chọn (V)</span>
               </button>
-              <button class="btn-dock-tool" id="btnToolHand" title="Bàn tay di chuyển canvas (H hoặc giữ chuột phải / Space)">
+              <button class="btn-dock-tool btn-icon-only" id="btnToolHand" title="Bàn tay di chuyển canvas (Phím tắt: H hoặc giữ chuột phải / Space)">
                 <i class="fa-solid fa-hand"></i>
-                <span>Di chuyển (H)</span>
               </button>
-              <button class="btn-dock-tool" id="btnToolRegion" title="Khoanh vùng bóng thoại thông minh (O)">
+              <button class="btn-dock-tool btn-icon-only" id="btnToolRegion" title="Khoanh vùng bóng thoại thông minh (Phím tắt: O)">
                 <i class="fa-solid fa-crop-simple"></i>
-                <span>Khoanh vùng (O)</span>
               </button>
-              <button class="btn-dock-tool" id="btnToolBrush" title="Cọ vẽ thêm mask (B)">
+              <button class="btn-dock-tool btn-icon-only" id="btnToolBrush" title="Cọ vẽ bù mask nét chữ (Phím tắt: B)">
                 <i class="fa-solid fa-paintbrush"></i>
-                <span>Cọ (B)</span>
               </button>
-              <button class="btn-dock-tool" id="btnToolEraser" title="Cục tẩy mask (E)">
+              <button class="btn-dock-tool btn-icon-only" id="btnToolEraser" title="Cục tẩy bớt mask lem (Phím tắt: E)">
                 <i class="fa-solid fa-eraser"></i>
-                <span>Tẩy (E)</span>
               </button>
-              <button class="btn-dock-tool" id="btnToolText" title="Thêm Textbox mới (T)">
-                <i class="fa-solid fa-square-plus"></i>
-                <span>Chữ (T)</span>
+              <button class="btn-dock-tool btn-icon-only" id="btnToolText" title="Thêm Textbox mới (Phím tắt: T)">
+                <i class="fa-solid fa-t"></i>
               </button>
             </div>
 
@@ -404,10 +398,10 @@
 
             <div class="dock-divider"></div>
 
-            <!-- Pipeline Tự động 1-Click nổi bật -->
-            <button class="btn-dock-fast-pipeline" id="btnAutoPipelinePage" title="Tự động nhận diện khung, dịch thuật, xóa chữ và chèn bóng thoại">
+            <!-- Pipeline Tự động 1-Click nổi bật dạng viên thuốc mỏng -->
+            <button class="btn-dock-fast-pipeline" id="btnAutoPipelinePage" title="Tự động nhận diện khung, dịch thuật, xóa chữ và chèn bóng thoại toàn trang">
               <i class="fa-solid fa-bolt text-amber-300"></i>
-              <span>⚡ Tự động cả trang</span>
+              <span>⚡ Tự động</span>
             </button>
           </div>
 
@@ -450,7 +444,6 @@
               <span>Kiểu chữ & Font</span>
             </button>
           </div>
-          </div>
 
           <div class="right-panel-body">
             <!-- TAB 1: Kịch bản thoại song song -->
@@ -483,8 +476,8 @@
               <div class="font-control-row">
                 <div class="font-control-label">
                   <span>Font Manga Việt hóa:</span>
-                  <label for="typesetUploadFontInput" class="btn-link-upload">+ Tải font (.ttf)</label>
-                  <input type="file" id="typesetUploadFontInput" accept=".ttf,.woff,.woff2" style="display:none;">
+                  <label for="typesetUploadFontInput" class="btn-link-upload">+ Tải font (.ttf, .otf)</label>
+                  <input type="file" id="typesetUploadFontInput" accept=".ttf,.otf,.woff,.woff2" style="display:none;">
                 </div>
                 <select id="typesetFontFamily" class="font-control-select">
                   <!-- Populated dynamically -->
