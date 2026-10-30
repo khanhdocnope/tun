@@ -377,6 +377,15 @@ export class TypesetCanvasEditor {
       this.onSelectionChanged(null);
     });
 
+    // Nhấp đúp để mở chế độ gõ chữ mượt mà ngay trên Canvas
+    this.fabricCanvas.on("mouse:dblclick", (opt) => {
+      if (opt.target instanceof fabric.Textbox) {
+        opt.target.enterEditing();
+        opt.target.selectAll();
+        this.fabricCanvas.renderAll();
+      }
+    });
+
     // Lắng nghe thay đổi vị trí / kích thước / nội dung Textbox
     this.fabricCanvas.on("object:modified", (e) => {
       if (e.target instanceof fabric.Textbox) {
@@ -416,6 +425,8 @@ export class TypesetCanvasEditor {
       fill: data.style?.fill || "#000000",
       stroke: data.style?.stroke || "#ffffff",
       strokeWidth: data.style?.strokeWidth !== undefined ? data.style?.strokeWidth : 3,
+      strokeLineJoin: "round", // Làm mượt viền stroke, không bị gai nhọn đâm lẹm dấu tiếng Việt
+      strokeLineCap: "round",
       textAlign: data.style?.align || "center",
       lineHeight: data.style?.lineHeight || 1.15,
       fontWeight: data.style?.bold ? "bold" : "normal",
@@ -423,10 +434,39 @@ export class TypesetCanvasEditor {
       paintFirst: "stroke", // Vẽ viền trước, chữ đè lên trên để viền không ăn lẹm vào lòng chữ
       originX: "left",
       originY: "top",
-      cornerColor: "#6366f1",
-      cornerStrokeColor: "#ffffff",
-      cornerSize: 8,
+      padding: 6, // Vùng đệm giúp click trúng dễ dàng
+      borderColor: "#6366f1",
+      cornerColor: "#ffffff",
+      cornerStrokeColor: "#6366f1",
+      cornerSize: 11, // Nút handle tròn 11px phong cách Figma/Canva
+      cornerStyle: "circle",
       transparentCorners: false,
+      touchCornerSize: 24,
+    });
+
+    // Ẩn 2 handle giữa trên/dưới để tránh người dùng kéo méo bẹp chữ theo trục dọc
+    box.setControlsVisibility({
+      mt: false,
+      mb: false,
+    });
+
+    // Co giãn tự do 4 góc: Cỡ chữ và kích thước khung tự động phóng to/thu nhỏ mượt mà
+    box.on("scaling", () => {
+      const scale = Math.max(box.scaleX || 1, box.scaleY || 1);
+      if (scale && scale !== 1) {
+        const curFont = box.fontSize || 20;
+        const newFontSize = Math.max(8, Math.min(140, Math.round(curFont * scale)));
+        const newWidth = Math.max(40, Math.round(box.width * scale));
+
+        box.set({
+          fontSize: newFontSize,
+          width: newWidth,
+          scaleX: 1,
+          scaleY: 1,
+        });
+        box.setCoords();
+        this.onBoxModified(this.getBoxData(box));
+      }
     });
 
     this.fabricCanvas.add(box);
@@ -463,28 +503,28 @@ export class TypesetCanvasEditor {
   }
 
   /**
-   * Tự động co cỡ chữ (Auto-fit font size) để vừa khít khung bóng thoại
+   * Tự động co cỡ chữ (Auto-fit font size) cân đối vừa khít khung bóng thoại Manga
    */
   autoFitFontSize(textbox, targetHeight) {
     if (!textbox) return;
-    const maxHeight = targetHeight || textbox.height || 100;
-    const targetWidth = textbox.width;
+    // Để chữ không bị chạm sát mép viền bóng thoại tròn/ovan, tính lề an toàn 88%
+    const maxHeight = Math.max(30, (targetHeight || textbox.height || 100) * 0.88);
 
     let min = 10;
     let max = 64;
     let best = textbox.fontSize || 20;
 
-    // Binary search cỡ chữ tối ưu
-    for (let i = 0; i < 6; i++) {
+    // Binary search cỡ chữ tối ưu vừa vặn trong bóng thoại
+    for (let i = 0; i < 7; i++) {
       const mid = Math.round((min + max) / 2);
       textbox.set("fontSize", mid);
       textbox.initDimensions();
 
       if (textbox.calcTextHeight() <= maxHeight) {
         best = mid;
-        min = mid + 1; // Thử tăng lên để to hơn
+        min = mid + 1;
       } else {
-        max = mid - 1; // Bị tràn chiều cao, phải giảm bớt
+        max = mid - 1;
       }
     }
 
