@@ -49,6 +49,8 @@ export class TypesetCanvasEditor {
       preserveObjectStacking: true,
       fireRightClick: true,
       stopContextMenu: true,
+      targetFindTolerance: 6, // Vùng đệm 6px giúp click trúng đối tượng cực nhạy
+      perPixelTargetFind: false, // Dùng bounding box để bắt trúng toàn bộ vùng chữ
     });
 
     // Custom properties to serialize
@@ -130,8 +132,23 @@ export class TypesetCanvasEditor {
     if (w > 0 && h > 0) {
       this.fabricCanvas.setWidth(w);
       this.fabricCanvas.setHeight(h);
+      this.updateObjectsCoords();
       this.fabricCanvas.renderAll();
     }
+  }
+
+  /**
+   * Cập nhật đồng bộ tọa độ hit-test (oCoords) cho toàn bộ Textbox sau khi Pan, Zoom hoặc Resize.
+   * Ngăn chặn triệt để lỗi click trúng bóng thoại nhưng không nhận diện được (phải click lệch ra ngoài).
+   */
+  updateObjectsCoords() {
+    if (!this.fabricCanvas) return;
+    this.fabricCanvas.calcOffset();
+    this.fabricCanvas.forEachObject((obj) => {
+      if (typeof obj.setCoords === "function") {
+        obj.setCoords();
+      }
+    });
   }
 
   /**
@@ -233,6 +250,7 @@ export class TypesetCanvasEditor {
       vpt[4] -= evt.deltaX;
       vpt[5] -= evt.deltaY;
       this.fabricCanvas.requestRenderAll();
+      this.updateObjectsCoords();
     });
 
     // Kéo pan canvas khi nhấn chuột
@@ -241,6 +259,25 @@ export class TypesetCanvasEditor {
       const clientX = evt.clientX ?? (evt.touches && evt.touches[0]?.clientX);
       const clientY = evt.clientY ?? (evt.touches && evt.touches[0]?.clientY);
       
+      let target = opt.target;
+
+      // Fallback hit-test chuẩn xác: Nếu Fabric chưa nhận target (do vừa pan/zoom),
+      // dùng canvas pointer để kiểm tra chính xác vùng bounding box của các textbox
+      if (!target && (this.activeTool === "select" || !this.activeTool) && evt.button === 0) {
+        const pointer = this.fabricCanvas.getPointer(evt);
+        const textboxes = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox && o.visible && o.selectable);
+        for (let i = textboxes.length - 1; i >= 0; i--) {
+          const tb = textboxes[i];
+          tb.setCoords();
+          if (tb.containsPoint(pointer)) {
+            target = tb;
+            this.fabricCanvas.setActiveObject(tb);
+            this.fabricCanvas.requestRenderAll();
+            break;
+          }
+        }
+      }
+
       // Bắt đầu pan nếu:
       // 1. Nhấn nút giữa chuột (button === 1)
       // 2. Nhấn nút chuột phải (button === 2)
@@ -250,7 +287,7 @@ export class TypesetCanvasEditor {
       const isRightClick = evt.button === 2;
       const isMiddleClick = evt.button === 1;
       const isSpaceOrPan = this.isSpacePressed || this.activeTool === "pan";
-      const isSelectEmpty = (this.activeTool === "select" || !this.activeTool) && !opt.target && evt.button === 0;
+      const isSelectEmpty = (this.activeTool === "select" || !this.activeTool) && !target && evt.button === 0;
 
       if (isRightClick || isMiddleClick || isSpaceOrPan || isSelectEmpty) {
         isPanning = true;
@@ -333,6 +370,7 @@ export class TypesetCanvasEditor {
         this.fabricCanvas.defaultCursor = cur;
         this.fabricCanvas.setCursor(cur);
         this.fabricCanvas.selection = false;
+        this.updateObjectsCoords();
       }
     };
 
@@ -434,14 +472,16 @@ export class TypesetCanvasEditor {
       paintFirst: "stroke", // Vẽ viền trước, chữ đè lên trên để viền không ăn lẹm vào lòng chữ
       originX: "left",
       originY: "top",
-      padding: 6, // Vùng đệm giúp click trúng dễ dàng
+      padding: 10, // Vùng đệm 10px giúp click trúng đối tượng cực nhạy
       borderColor: "#6366f1",
       cornerColor: "#ffffff",
       cornerStrokeColor: "#6366f1",
       cornerSize: 11, // Nút handle tròn 11px phong cách Figma/Canva
       cornerStyle: "circle",
       transparentCorners: false,
-      touchCornerSize: 24,
+      touchCornerSize: 28,
+      selectable: true,
+      evented: true,
     });
 
     // Ẩn 2 handle giữa trên/dưới để tránh người dùng kéo méo bẹp chữ theo trục dọc
@@ -470,6 +510,7 @@ export class TypesetCanvasEditor {
     });
 
     this.fabricCanvas.add(box);
+    box.setCoords();
     return box;
   }
 
@@ -709,6 +750,7 @@ export class TypesetCanvasEditor {
     vpt[5] = Math.round((contH - this.pageHeight * scale) / 2);
 
     this.fabricCanvas.setViewportTransform(vpt);
+    this.updateObjectsCoords();
     this.fabricCanvas.requestRenderAll();
     this.onZoomChanged(Math.round(scale * 100));
   }
@@ -720,6 +762,7 @@ export class TypesetCanvasEditor {
       y: this.fabricCanvas.getHeight() / 2,
     };
     this.fabricCanvas.zoomToPoint(new fabric.Point(center.x, center.y), zoom);
+    this.updateObjectsCoords();
     this.onZoomChanged(Math.round(zoom * 100));
   }
 
