@@ -360,6 +360,54 @@
 
               <button type="button" class="btn-close-mask" id="btnCloseMaskToolbar" title="Đóng">&times;</button>
             </div>
+
+            <!-- FLOATING CONTEXTUAL MICRO-TOOLBAR (FIGMA / CANVA STYLE) -->
+            <div class="typeset-micro-toolbar" id="typesetMicroToolbar" style="display: none;">
+              <!-- Quick Font Selector -->
+              <select class="micro-font-select" id="microFontSelect" title="Đổi Font chữ cho bóng thoại này"></select>
+
+              <!-- Size Stepper -->
+              <div class="micro-stepper-group">
+                <button type="button" class="btn-micro-step" id="btnMicroSizeDec" title="Giảm cỡ chữ 1px">-</button>
+                <span class="micro-size-badge" id="microSizeBadge">20px</span>
+                <button type="button" class="btn-micro-step" id="btnMicroSizeInc" title="Tăng cỡ chữ 1px">+</button>
+              </div>
+
+              <!-- ⚡ Auto-fit Elip Diamond Wrap -->
+              <button type="button" class="btn-micro-pill btn-micro-autofit" id="btnMicroAutoFit" title="⚡ Uốn chữ theo dáng bóng thoại (Elliptical Diamond Wrap)">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                <span>Auto-Fit</span>
+              </button>
+
+              <div class="micro-vsep"></div>
+
+              <!-- Typography Toggles -->
+              <button type="button" class="btn-micro-icon" id="btnMicroBold" title="In đậm (Bold)">
+                <i class="fa-solid fa-bold"></i>
+              </button>
+              <button type="button" class="btn-micro-icon" id="btnMicroItalic" title="In nghiêng (Italic)">
+                <i class="fa-solid fa-italic"></i>
+              </button>
+              <button type="button" class="btn-micro-icon" id="btnMicroCaps" title="Chuyển đổi VIẾT HOA toàn bộ (All-Caps)">
+                <span style="font-size: 11px; font-weight: 800; font-family: sans-serif;">AA</span>
+              </button>
+              <button type="button" class="btn-micro-icon" id="btnMicroInvert" title="Đảo màu chữ / viền tương phản (Trắng/Đen)">
+                <span style="font-size: 12px;">🌓</span>
+              </button>
+
+              <div class="micro-vsep"></div>
+
+              <!-- Actions: Duplicate, Lock, Delete -->
+              <button type="button" class="btn-micro-icon" id="btnMicroDuplicate" title="Nhân bản bóng thoại (Ctrl+D)">
+                <i class="fa-regular fa-clone"></i>
+              </button>
+              <button type="button" class="btn-micro-icon" id="btnMicroLock" title="Khóa / Mở khóa vị trí">
+                <i class="fa-solid fa-lock" id="iconMicroLock"></i>
+              </button>
+              <button type="button" class="btn-micro-icon text-rose-400" id="btnMicroDelete" title="Xóa bóng thoại (Delete)">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
           </div>
 
           <!-- FLOATING BOTTOM COMMAND DOCK (FIGMA / LYNX MICRO-DOCK) -->
@@ -420,7 +468,10 @@
               <i class="fa-solid fa-expand text-xs"></i>
             </button>
             <div class="zoom-divider"></div>
-            <button class="btn-zoom-action" id="btnTogglePreviewOriginal" title="Xem lại tranh gốc (P hoặc \)">
+            <button class="btn-zoom-action" id="btnToggleSplitCurtain" title="Rèm kéo so sánh Trước/Sau (\)">
+              <i class="fa-solid fa-table-columns text-xs"></i>
+            </button>
+            <button class="btn-zoom-action" id="btnTogglePreviewOriginal" title="Xem lại tranh gốc (P)">
               <i class="fa-solid fa-eye text-xs"></i>
             </button>
           </div>

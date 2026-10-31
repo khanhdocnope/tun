@@ -94,6 +94,7 @@ export class TypesetStudioApp {
 
     // 2. Khởi tạo Canvas Editor
     this.editor = new TypesetCanvasEditor("typesetCanvas", {
+      availableFonts: this.availableFonts,
       onSelectionChanged: (boxData) => this.handleBoxSelected(boxData),
       onBoxModified: (boxData) => this.handleBoxModified(boxData),
       onBoxesListChanged: (boxes) => {
@@ -1005,6 +1006,7 @@ export class TypesetStudioApp {
           await populateFontSelect(document.getElementById("typesetFontFamily"));
           document.getElementById("typesetFontFamily").value = fontName;
           this.availableFonts = await getAvailableFonts();
+          this.editor.refreshMicroToolbarFonts(this.availableFonts);
           this.renderParallelDialogs();
           const active = this.editor.fabricCanvas.getActiveObject();
           if (active) this.editor.updateBoxStyle(active.id, { fontFamily: fontName });
@@ -1127,6 +1129,9 @@ export class TypesetStudioApp {
     document.getElementById("btnTogglePreviewOriginal")?.addEventListener("click", () => {
       this.editor.togglePreviewOriginal(!this.editor.isShowingOriginal);
       document.getElementById("btnTogglePreviewOriginal")?.classList.toggle("active", this.editor.isShowingOriginal);
+    });
+    document.getElementById("btnToggleSplitCurtain")?.addEventListener("click", () => {
+      this.editor.toggleSplitCurtain();
     });
 
     // Sidebar Island Collapse Toggles (Lynx style)
@@ -1279,6 +1284,15 @@ export class TypesetStudioApp {
       this.editor.fitToScreen();
     } else {
       this.saveCurrentPageState();
+      // Tạo preview hợp nhất trang hiện tại với chữ typeset để xem trước trung thực trong Trình đọc
+      if (this.pages[this.currentPageIndex]?.boxes?.length > 0) {
+        this.editor.exportMergedPageBlob("image/jpeg", 0.92).then((previewBlob) => {
+          if (previewBlob) {
+            this.pages[this.currentPageIndex].renderedPreview = URL.createObjectURL(previewBlob);
+            this.reader.setPages(this.pages, this.currentPageIndex);
+          }
+        }).catch((err) => console.warn("Lỗi render preview Trình đọc:", err));
+      }
       if (editorWrapper) editorWrapper.style.display = "none";
       if (readerWrapper) readerWrapper.style.display = "flex";
       btnEditor?.classList.remove("active");

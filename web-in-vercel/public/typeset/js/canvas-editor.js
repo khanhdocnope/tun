@@ -1,7 +1,7 @@
 /**
  * Fabric.js Canvas Editor for Manga Typesetting Studio
- * Handles zoom, pan, textbox lifecycle, auto-fit font size, auto color inversion,
- * hotkeys (B, E, V, T, Space, Tab, Ctrl+Z, Ctrl+Y), and smart region selection.
+ * Re-architected with Elliptical Diamond Wrap, Floating Contextual Micro-Toolbar,
+ * Interactive Split-Curtain Diff, Memory Lifecycle Cleanup, and Pro-Typesetter Hotkeys.
  */
 
 export class TypesetCanvasEditor {
@@ -14,7 +14,16 @@ export class TypesetCanvasEditor {
     this.cleanedImageUrl = null;
     this.isShowingOriginal = false;
 
-    this.activeTool = "select"; // 'select' | 'region' | 'brush' | 'eraser'
+    // Memory & Blob Management
+    this._activeObjectUrls = [];
+    this.rawImageElement = null;
+
+    // Interactive Split-Curtain Diff Mode (Rèm kéo so sánh Trước / Sau)
+    this.isSplitCurtainActive = false;
+    this.splitCurtainRatio = 0.5; // 0.0 to 1.0 (mặc định ở giữa 50%)
+    this.isDraggingSplitCurtain = false;
+
+    this.activeTool = "select"; // 'select' | 'region' | 'brush' | 'eraser' | 'pan' | 'text'
     this.isDrawingRegion = false;
     this.regionStart = { x: 0, y: 0 };
     this.selectionRectObj = null;
@@ -39,6 +48,7 @@ export class TypesetCanvasEditor {
     this.initCanvas();
     this.bindEvents();
     this.bindHotkeys();
+    this.initMicroToolbar();
   }
 
   initCanvas() {
@@ -65,13 +75,83 @@ export class TypesetCanvasEditor {
   }
 
   /**
+   * Chuyển Base64 chuỗi dài sang Blob URL để tiết kiệm RAM & tránh nghẽn Event Loop
+   */
+  _toBlobUrl(src) {
+    if (!src) return null;
+    if (src.startsWith("blob:") || src.startsWith("http")) return src;
+    try {
+      const parts = src.split(",");
+      const byteString = atob(parts[1] || parts[0]);
+      const mime = parts[0]?.match(/:(.*?);/)?.[1] || "image/png";
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mime });
+      const blobUrl = URL.createObjectURL(blob);
+      this._activeObjectUrls.push(blobUrl);
+      return blobUrl;
+    } catch (e) {
+      console.warn("Chuyển blob URL thất bại, giữ URL gốc:", e);
+      return src;
+    }
+  }
+
+  /**
+   * Giải phóng bộ nhớ khi đổi trang trong Chapter
+   */
+  _cleanupPageMemory() {
+    if (Array.isArray(this._activeObjectUrls)) {
+      this._activeObjectUrls.forEach((url) => {
+        try {
+          if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
+        } catch (_) {}
+      });
+    }
+    this._activeObjectUrls = [];
+
+    if (this.fabricCanvas) {
+      this.fabricCanvas.forEachObject((obj) => {
+        if (obj._cacheCanvas) {
+          obj._cacheCanvas.width = 0;
+          obj._cacheCanvas.height = 0;
+          obj._cacheCanvas = null;
+          obj._cacheContext = null;
+        }
+      });
+      try {
+        this.fabricCanvas.clearContext(this.fabricCanvas.contextTop);
+      } catch (_) {}
+    }
+
+    this.rawImageElement = null;
+    this.hideMicroToolbar();
+  }
+
+  /**
    * Load một trang lên Canvas (ảnh gốc hoặc ảnh đã xóa chữ)
+   * Tối ưu hiệu năng: Tắt renderOnAddRemove khi nạp hàng loạt box
    */
   async loadPage(pageData) {
     if (!pageData) return;
-    this.rawImageUrl = pageData.rawImage || null;
-    this.cleanedImageUrl = pageData.cleanedImage || pageData.rawImage || null;
+    this._cleanupPageMemory();
+
+    // Chuyển ảnh sang Blob URL để giải phóng RAM V8 heap
+    this.rawImageUrl = this._toBlobUrl(pageData.rawImage || null);
+    this.cleanedImageUrl = this._toBlobUrl(pageData.cleanedImage || pageData.rawImage || null);
     this.currentPageId = pageData.id;
+
+    // Preload ảnh gốc cho chế độ Split-Curtain Diff
+    if (this.rawImageUrl) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        this.rawImageElement = img;
+      };
+      img.src = this.rawImageUrl;
+    }
 
     // Xóa toàn bộ canvas và lịch sử cũ
     this.fabricCanvas.clear();
@@ -84,14 +164,17 @@ export class TypesetCanvasEditor {
       await this.setBackground(bgUrl);
     }
 
-    // Load các box thoại nếu có
+    // Nạp các box thoại hàng loạt (renderOnAddRemove = false)
     if (Array.isArray(pageData.boxes)) {
       this.isHistoryLocked = true;
+      this.fabricCanvas.renderOnAddRemove = false;
       pageData.boxes.forEach((b) => this.addTextBoxFromData(b));
+      this.fabricCanvas.renderOnAddRemove = true;
       this.isHistoryLocked = false;
     }
 
     this.fitToScreen();
+    this.updateObjectsCoords();
     this.pushHistoryState();
   }
 
@@ -116,8 +199,10 @@ export class TypesetCanvasEditor {
             evented: false,
           });
 
-          this.fabricCanvas.setBackgroundImage(img, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
-          resolve(img);
+          this.fabricCanvas.setBackgroundImage(img, () => {
+            this.fabricCanvas.renderAll();
+            resolve(img);
+          });
         },
         { crossOrigin: "anonymous" }
       );
@@ -152,7 +237,7 @@ export class TypesetCanvasEditor {
   }
 
   /**
-   * Tạm ẩn/hiện chữ để xem lại tranh gốc (Hold Space to Preview Original)
+   * Tạm ẩn/hiện chữ để xem lại tranh gốc (Hold Space hoặc phím P)
    */
   togglePreviewOriginal(showOriginal) {
     if (this.isShowingOriginal === showOriginal) return;
@@ -165,7 +250,6 @@ export class TypesetCanvasEditor {
       }
     });
 
-    // Đổi background sang raw image nếu có
     const targetUrl = showOriginal && this.rawImageUrl ? this.rawImageUrl : this.cleanedImageUrl || this.rawImageUrl;
     if (this.backgroundImage && targetUrl) {
       this.backgroundImage.setSrc(targetUrl, () => {
@@ -174,6 +258,30 @@ export class TypesetCanvasEditor {
     } else {
       this.fabricCanvas.renderAll();
     }
+  }
+
+  /**
+   * Bật / Tắt chế độ rèm kéo so sánh Trước/Sau (Interactive Split-Curtain Diff)
+   */
+  toggleSplitCurtain(enable) {
+    const targetState = enable !== undefined ? Boolean(enable) : !this.isSplitCurtainActive;
+    this.isSplitCurtainActive = targetState;
+
+    if (this.isSplitCurtainActive && !this.rawImageElement && this.rawImageUrl) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        this.rawImageElement = img;
+        this.fabricCanvas.requestRenderAll();
+      };
+      img.src = this.rawImageUrl;
+    }
+
+    const btn = document.getElementById("btnToggleSplitCurtain");
+    if (btn) btn.classList.toggle("active", this.isSplitCurtainActive);
+
+    this.fabricCanvas.requestRenderAll();
+    return this.isSplitCurtainActive;
   }
 
   // ---------------- Tool Switcher ----------------
@@ -223,6 +331,11 @@ export class TypesetCanvasEditor {
     let lastPosY = 0;
     const canvasContainer = document.getElementById("typesetCanvasContainer");
 
+    // Hook render: Vẽ rèm so sánh Trước/Sau (Split-Curtain)
+    this.fabricCanvas.on("after:render", (opt) => {
+      this._renderSplitCurtainOverlay(opt.ctx);
+    });
+
     // Zoom & Pan qua lăn chuột (Mouse Wheel)
     this.fabricCanvas.on("mouse:wheel", (opt) => {
       const evt = opt.e;
@@ -241,6 +354,8 @@ export class TypesetCanvasEditor {
         zoom = Math.min(Math.max(0.08, zoom * factor), 10.0);
 
         this.fabricCanvas.zoomToPoint(new fabric.Point(mouseX, mouseY), zoom);
+        this.updateObjectsCoords();
+        this.positionMicroToolbar();
         this.onZoomChanged(Math.round(zoom * 100));
         return;
       }
@@ -251,14 +366,30 @@ export class TypesetCanvasEditor {
       vpt[5] -= evt.deltaY;
       this.fabricCanvas.requestRenderAll();
       this.updateObjectsCoords();
+      this.positionMicroToolbar();
     });
 
-    // Kéo pan canvas khi nhấn chuột
+    // Kéo pan canvas hoặc kéo vạch rèm Split-Curtain
     this.fabricCanvas.on("mouse:down", (opt) => {
       const evt = opt.e;
       const clientX = evt.clientX ?? (evt.touches && evt.touches[0]?.clientX);
       const clientY = evt.clientY ?? (evt.touches && evt.touches[0]?.clientY);
-      
+
+      // 1. Kiểm tra kéo vạch chia Split-Curtain
+      if (this.isSplitCurtainActive) {
+        const canvasEl = this.fabricCanvas.upperCanvasEl;
+        const rect = canvasEl.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const canvasW = this.fabricCanvas.getWidth();
+        const splitX = canvasW * this.splitCurtainRatio;
+
+        if (Math.abs(mouseX - splitX) <= 14) {
+          this.isDraggingSplitCurtain = true;
+          this.fabricCanvas.setCursor("ew-resize");
+          return;
+        }
+      }
+
       let target = opt.target;
 
       // Fallback hit-test chuẩn xác: Nếu Fabric chưa nhận target (do vừa pan/zoom),
@@ -301,6 +432,7 @@ export class TypesetCanvasEditor {
         if (isSelectEmpty && this.fabricCanvas.getActiveObject()) {
           this.fabricCanvas.discardActiveObject();
           this.fabricCanvas.requestRenderAll();
+          this.hideMicroToolbar();
         }
         return;
       }
@@ -336,6 +468,30 @@ export class TypesetCanvasEditor {
       const clientX = evt.clientX ?? (evt.touches && evt.touches[0]?.clientX);
       const clientY = evt.clientY ?? (evt.touches && evt.touches[0]?.clientY);
 
+      // Kéo rèm Split-Curtain
+      if (this.isDraggingSplitCurtain) {
+        const canvasEl = this.fabricCanvas.upperCanvasEl;
+        const rect = canvasEl.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const canvasW = this.fabricCanvas.getWidth();
+        this.splitCurtainRatio = Math.max(0.02, Math.min(0.98, mouseX / canvasW));
+        this.fabricCanvas.setCursor("ew-resize");
+        this.fabricCanvas.requestRenderAll();
+        return;
+      }
+
+      // Hover gần vạch chia Split-Curtain
+      if (this.isSplitCurtainActive && !isPanning && !this.isDrawingRegion) {
+        const canvasEl = this.fabricCanvas.upperCanvasEl;
+        const rect = canvasEl.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const canvasW = this.fabricCanvas.getWidth();
+        const splitX = canvasW * this.splitCurtainRatio;
+        if (Math.abs(mouseX - splitX) <= 12) {
+          this.fabricCanvas.setCursor("ew-resize");
+        }
+      }
+
       if (isPanning) {
         const deltaX = clientX - lastPosX;
         const deltaY = clientY - lastPosY;
@@ -346,6 +502,7 @@ export class TypesetCanvasEditor {
           this.fabricCanvas.requestRenderAll();
           lastPosX = clientX;
           lastPosY = clientY;
+          this.positionMicroToolbar();
         }
         return;
       }
@@ -363,6 +520,9 @@ export class TypesetCanvasEditor {
     });
 
     const stopPanning = () => {
+      if (this.isDraggingSplitCurtain) {
+        this.isDraggingSplitCurtain = false;
+      }
       if (isPanning) {
         isPanning = false;
         canvasContainer?.classList.remove("panning");
@@ -371,6 +531,7 @@ export class TypesetCanvasEditor {
         this.fabricCanvas.setCursor(cur);
         this.fabricCanvas.selection = false;
         this.updateObjectsCoords();
+        this.positionMicroToolbar();
       }
     };
 
@@ -402,16 +563,17 @@ export class TypesetCanvasEditor {
       e.preventDefault();
     });
 
-    // Dừng pan nếu thả chuột ngoài window
     window.addEventListener("mouseup", stopPanning);
     window.addEventListener("resize", () => {
       this.resizeCanvasToContainer();
+      this.positionMicroToolbar();
     });
 
     // Lắng nghe chọn Textbox
     this.fabricCanvas.on("selection:created", (e) => this.handleSelectionEvent(e));
     this.fabricCanvas.on("selection:updated", (e) => this.handleSelectionEvent(e));
     this.fabricCanvas.on("selection:cleared", () => {
+      this.hideMicroToolbar();
       this.onSelectionChanged(null);
     });
 
@@ -425,9 +587,13 @@ export class TypesetCanvasEditor {
     });
 
     // Lắng nghe thay đổi vị trí / kích thước / nội dung Textbox
+    this.fabricCanvas.on("object:moving", () => this.positionMicroToolbar());
+    this.fabricCanvas.on("object:scaling", () => this.positionMicroToolbar());
+
     this.fabricCanvas.on("object:modified", (e) => {
       if (e.target instanceof fabric.Textbox) {
         this.onBoxModified(this.getBoxData(e.target));
+        this.positionMicroToolbar();
         this.pushHistoryState();
       }
     });
@@ -436,6 +602,7 @@ export class TypesetCanvasEditor {
       if (e.target instanceof fabric.Textbox) {
         e.target.textVi = e.target.text;
         this.onBoxModified(this.getBoxData(e.target));
+        this.positionMicroToolbar();
       }
     });
   }
@@ -443,8 +610,335 @@ export class TypesetCanvasEditor {
   handleSelectionEvent(e) {
     const selected = e.selected?.[0] || e.target;
     if (selected instanceof fabric.Textbox) {
+      this.positionMicroToolbar(selected);
       this.onSelectionChanged(this.getBoxData(selected));
     }
+  }
+
+  // ---------------- Interactive Split-Curtain Rendering ----------------
+  _renderSplitCurtainOverlay(ctx) {
+    if (!this.isSplitCurtainActive || !this.rawImageElement) return;
+
+    const canvasW = this.fabricCanvas.getWidth();
+    const canvasH = this.fabricCanvas.getHeight();
+    const splitX = Math.round(canvasW * this.splitCurtainRatio);
+
+    // 1. Vẽ nửa trái là tranh gốc (rawImageElement) theo đúng viewport zoom/pan
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Về không gian màn hình để cắt hình chữ nhật rèm
+    ctx.beginPath();
+    ctx.rect(0, 0, splitX, canvasH);
+    ctx.clip();
+
+    // Dùng viewportTransform của Fabric để vẽ tranh gốc khớp tuyệt đối từng pixel
+    const vpt = this.fabricCanvas.viewportTransform;
+    ctx.setTransform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5]);
+    ctx.drawImage(this.rawImageElement, 0, 0, this.pageWidth, this.pageHeight);
+    ctx.restore();
+
+    // 2. Vẽ đường rèm neon chia đôi & con trỏ kéo
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // Vạch sáng thẳng đứng
+    ctx.beginPath();
+    ctx.moveTo(splitX, 0);
+    ctx.lineTo(splitX, canvasH);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#818cf8";
+    ctx.shadowColor = "rgba(99, 102, 241, 0.75)";
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+
+    // Nút kéo tròn ở chính giữa
+    const handleY = canvasH / 2;
+    ctx.beginPath();
+    ctx.arc(splitX, handleY, 15, 0, Math.PI * 2);
+    ctx.fillStyle = "#6366f1";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    // Mũi tên 2 chiều
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowBlur = 0;
+    ctx.fillText("⇄", splitX, handleY);
+
+    // Badge nhãn Bên Trái (GỐC) & Bên Phải (TYPESET)
+    ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(splitX - 68, 14, 56, 22, 6);
+    ctx.roundRect(splitX + 12, 14, 76, 22, 6);
+    ctx.fill();
+
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText("GỐC", splitX - 40, 25);
+    ctx.fillStyle = "#818cf8";
+    ctx.fillText("TYPESET", splitX + 50, 25);
+
+    ctx.restore();
+  }
+
+  // ---------------- Floating Contextual Micro-Toolbar ----------------
+  refreshMicroToolbarFonts(availableFonts) {
+    if (availableFonts) {
+      this.options.availableFonts = availableFonts;
+    }
+    const fontSelect = document.getElementById("microFontSelect");
+    if (!fontSelect) return;
+    fontSelect.innerHTML = "";
+
+    const builtin = this.options.availableFonts?.builtin || [
+      { name: "Yuki Burobu", label: "Yuki Burobu (Manga chuẩn)" },
+      { name: "CC Wild Words", label: "CC Wild Words (Hành động)" },
+      { name: "Anime Ace", label: "Anime Ace (Hài hước)" },
+    ];
+    builtin.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.name;
+      opt.textContent = f.label;
+      fontSelect.appendChild(opt);
+    });
+
+    const custom = this.options.availableFonts?.custom || [];
+    if (Array.isArray(custom) && custom.length > 0) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Font tự nạp";
+      custom.forEach((cf) => {
+        const opt = document.createElement("option");
+        opt.value = cf.name;
+        opt.textContent = cf.name;
+        grp.appendChild(opt);
+      });
+      fontSelect.appendChild(grp);
+    }
+  }
+
+  initMicroToolbar() {
+    const toolbar = document.getElementById("typesetMicroToolbar");
+    if (!toolbar) return;
+
+    // 1. Populate danh sách Font chữ
+    const fontSelect = document.getElementById("microFontSelect");
+    if (fontSelect) {
+      this.refreshMicroToolbarFonts();
+
+      fontSelect.addEventListener("change", (e) => {
+        const active = this.fabricCanvas.getActiveObject();
+        if (active instanceof fabric.Textbox) {
+          this.updateBoxStyle(active.id, { fontFamily: e.target.value });
+        }
+      });
+    }
+
+    // 2. Stepper cỡ chữ (+/-)
+    document.getElementById("btnMicroSizeDec")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        const cur = active.fontSize || 20;
+        this.updateBoxStyle(active.id, { fontSize: Math.max(8, cur - 1) });
+        this.positionMicroToolbar(active);
+      }
+    });
+
+    document.getElementById("btnMicroSizeInc")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        const cur = active.fontSize || 20;
+        this.updateBoxStyle(active.id, { fontSize: Math.min(140, cur + 1) });
+        this.positionMicroToolbar(active);
+      }
+    });
+
+    // 3. ⚡ Nút Auto-Fit Elip Diamond Wrap
+    document.getElementById("btnMicroAutoFit")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        this.autoFitFontSize(active);
+      }
+    });
+
+    // 4. In đậm (Bold)
+    document.getElementById("btnMicroBold")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        const next = active.fontWeight === "bold" ? "normal" : "bold";
+        this.updateBoxStyle(active.id, { fontWeight: next });
+        this.positionMicroToolbar(active);
+      }
+    });
+
+    // 5. In nghiêng (Italic)
+    document.getElementById("btnMicroItalic")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        const next = active.fontStyle === "italic" ? "normal" : "italic";
+        this.updateBoxStyle(active.id, { fontStyle: next });
+        this.positionMicroToolbar(active);
+      }
+    });
+
+    // 6. Chuyển đổi Viết HOA Toàn Bộ (All-Caps)
+    document.getElementById("btnMicroCaps")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        this.toggleCapsAll(active);
+      }
+    });
+
+    // 7. Đảo màu chữ / viền tương phản (Trắng/Đen)
+    document.getElementById("btnMicroInvert")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        this.autoInvertColors(active);
+        this.positionMicroToolbar(active);
+      }
+    });
+
+    // 8. Nhân bản box (Duplicate)
+    document.getElementById("btnMicroDuplicate")?.addEventListener("click", () => {
+      this.duplicateSelectedBox();
+    });
+
+    // 9. Khóa / Mở khóa box (Lock)
+    document.getElementById("btnMicroLock")?.addEventListener("click", () => {
+      const active = this.fabricCanvas.getActiveObject();
+      if (active instanceof fabric.Textbox) {
+        this.toggleLockBox(active.id);
+      }
+    });
+
+    // 10. Xóa box (Delete)
+    document.getElementById("btnMicroDelete")?.addEventListener("click", () => {
+      this.deleteSelectedBox();
+    });
+  }
+
+  /**
+   * Định vị thanh công cụ ngữ cảnh nổi neo ngay trên đầu Textbox đang chọn
+   */
+  positionMicroToolbar(box) {
+    const active = box || this.fabricCanvas?.getActiveObject();
+    const toolbar = document.getElementById("typesetMicroToolbar");
+    if (!toolbar) return;
+
+    if (!active || !(active instanceof fabric.Textbox)) {
+      this.hideMicroToolbar();
+      return;
+    }
+
+    // 1. Tính toán tọa độ màn hình từ không gian world coordinates
+    const vpt = this.fabricCanvas.viewportTransform;
+    const rect = active.getBoundingRect(true, true);
+
+    const screenLeft = rect.left * vpt[0] + vpt[4];
+    const screenTop = rect.top * vpt[3] + vpt[5];
+    const screenWidth = rect.width * vpt[0];
+    const screenHeight = rect.height * vpt[3];
+
+    const tbW = toolbar.offsetWidth || 340;
+    const tbH = toolbar.offsetHeight || 38;
+    const centerX = screenLeft + screenWidth / 2;
+
+    let posX = centerX - tbW / 2;
+    const containerW = this.fabricCanvas.getWidth();
+    posX = Math.max(12, Math.min(containerW - tbW - 12, posX));
+
+    // Ưu tiên hiển thị phía trên Textbox 10px, nếu sát mép trên thì lật xuống dưới
+    let posY = screenTop - tbH - 12;
+    if (posY < 12) {
+      posY = screenTop + screenHeight + 12;
+    }
+
+    toolbar.style.left = `${Math.round(posX)}px`;
+    toolbar.style.top = `${Math.round(posY)}px`;
+    toolbar.style.display = "flex";
+    toolbar.classList.add("visible");
+
+    // 2. Đồng bộ trạng thái vào UI toolbar
+    const fontSel = document.getElementById("microFontSelect");
+    if (fontSel && active.fontFamily) fontSel.value = active.fontFamily;
+
+    const sizeBadge = document.getElementById("microSizeBadge");
+    if (sizeBadge) sizeBadge.textContent = `${active.fontSize || 20}px`;
+
+    const btnBold = document.getElementById("btnMicroBold");
+    if (btnBold) btnBold.classList.toggle("active", active.fontWeight === "bold");
+
+    const btnItalic = document.getElementById("btnMicroItalic");
+    if (btnItalic) btnItalic.classList.toggle("active", active.fontStyle === "italic");
+
+    const iconLock = document.getElementById("iconMicroLock");
+    if (iconLock) {
+      iconLock.className = active.isLocked ? "fa-solid fa-lock text-amber-400" : "fa-solid fa-lock";
+    }
+  }
+
+  hideMicroToolbar() {
+    const toolbar = document.getElementById("typesetMicroToolbar");
+    if (toolbar) {
+      toolbar.classList.remove("visible");
+      toolbar.style.display = "none";
+    }
+  }
+
+  /**
+   * Chuyển đổi Viết hoa toàn bộ (All-Caps) hoặc viết thường
+   */
+  toggleCapsAll(textbox) {
+    if (!textbox) return;
+    const cur = textbox.text || "";
+    const isAllUpper = cur.length > 0 && cur === cur.toUpperCase();
+    const next = isAllUpper ? cur.toLowerCase() : cur.toUpperCase();
+    this.updateBoxText(textbox.id, next);
+  }
+
+  /**
+   * Khóa / Mở khóa di chuyển và chỉnh sửa box
+   */
+  toggleLockBox(id) {
+    const box = this.fabricCanvas.getObjects().find((o) => o instanceof fabric.Textbox && o.id === id);
+    if (!box) return;
+    box.isLocked = !box.isLocked;
+    box.lockMovementX = box.isLocked;
+    box.lockMovementY = box.isLocked;
+    box.lockScalingX = box.isLocked;
+    box.lockScalingY = box.isLocked;
+    box.lockRotation = box.isLocked;
+    box.borderColor = box.isLocked ? "#f59e0b" : "#6366f1";
+    this.fabricCanvas.renderAll();
+    this.positionMicroToolbar(box);
+    this.onBoxModified(this.getBoxData(box));
+  }
+
+  /**
+   * Nhân bản Textbox hiện tại với offset nhẹ (+20px, +20px)
+   */
+  duplicateSelectedBox() {
+    const active = this.fabricCanvas.getActiveObject();
+    if (!(active instanceof fabric.Textbox)) return;
+
+    const boxData = this.getBoxData(active);
+    const newBox = this.addTextBoxFromData({
+      ...boxData,
+      id: `box_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      order: this.getNextOrder(),
+      x: boxData.x + 20,
+      y: boxData.y + 20,
+    });
+
+    this.fabricCanvas.setActiveObject(newBox);
+    this.fabricCanvas.renderAll();
+    this.pushHistoryState();
+    this.onBoxesListChanged(this.getAllBoxesData());
+    this.positionMicroToolbar(newBox);
   }
 
   // ---------------- Textbox Creation & Typesetting ----------------
@@ -505,6 +999,7 @@ export class TypesetCanvasEditor {
           scaleY: 1,
         });
         box.setCoords();
+        this.positionMicroToolbar(box);
         this.onBoxModified(this.getBoxData(box));
       }
     });
@@ -539,41 +1034,238 @@ export class TypesetCanvasEditor {
     this.fabricCanvas.renderAll();
     this.pushHistoryState();
     this.onBoxesListChanged(this.getAllBoxesData());
-    this.onSelectionChanged(this.getBoxData(box));
+    this.positionMicroToolbar(box);
     return box;
   }
 
+  getNextOrder() {
+    const boxes = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox);
+    if (boxes.length === 0) return 1;
+    const maxOrder = Math.max(...boxes.map((b) => b.order || 0));
+    return maxOrder + 1;
+  }
+
+  getBoxData(textbox) {
+    if (!textbox) return null;
+    return {
+      id: textbox.id,
+      order: textbox.order,
+      textJa: textbox.textJa || "",
+      textVi: textbox.textVi || textbox.text || "",
+      text: textbox.text || "",
+      x: Math.round(textbox.left),
+      y: Math.round(textbox.top),
+      width: Math.round(textbox.width * (textbox.scaleX || 1)),
+      height: Math.round(textbox.height * (textbox.scaleY || 1)),
+      style: {
+        fontSize: Math.round((textbox.fontSize || 20) * (textbox.scaleX || 1)),
+        fontFamily: textbox.fontFamily || "Yuki Burobu",
+        fill: textbox.fill || "#000000",
+        stroke: textbox.stroke || "#ffffff",
+        strokeWidth: textbox.strokeWidth !== undefined ? textbox.strokeWidth : 3,
+        align: textbox.textAlign || "center",
+        bold: textbox.fontWeight === "bold",
+        italic: textbox.fontStyle === "italic",
+        lineHeight: textbox.lineHeight || 1.15,
+      },
+      isLocked: Boolean(textbox.isLocked),
+    };
+  }
+
+  // ---------------- THUẬT TOÁN ĐỘT PHÁ: ELLIPTICAL DIAMOND WRAP ----------------
   /**
-   * Tự động co cỡ chữ (Auto-fit font size) cân đối vừa khít khung bóng thoại Manga
+   * Thuật toán "Elliptical Diamond Wrap" dành riêng cho Manga Typesetting.
+   * Uốn dòng chữ và căn chỉnh cỡ font sao cho chữ khít đều vào dáng elip của bóng thoại,
+   * dòng ở giữa dài nhất, các dòng trên/dưới thu hẹp dần theo tỷ lệ hình học:
+   * (x / a)^2 + (y / b)^2 <= 1.
+   * Kèm khoảng đệm an toàn tối thiểu 12% và chống rớt chữ côi cút (orphan words).
+   *
+   * @param {string} text - Nội dung câu thoại
+   * @param {number} boxWidth - Chiều rộng khung bóng thoại
+   * @param {number} boxHeight - Chiều cao khung bóng thoại
+   * @param {string} fontFamily - Tên font chữ
+   * @param {number} [initialFontSize=22] - Cỡ chữ gợi ý ban đầu
+   * @returns {{ lines: string[], text: string, fontSize: number }}
    */
-  autoFitFontSize(textbox, targetHeight) {
-    if (!textbox) return;
-    // Để chữ không bị chạm sát mép viền bóng thoại tròn/ovan, tính lề an toàn 88%
-    const maxHeight = Math.max(30, (targetHeight || textbox.height || 100) * 0.88);
+  ellipticalDiamondWrap(text, boxWidth, boxHeight, fontFamily = "Yuki Burobu", initialFontSize = 22) {
+    const cleanText = (text || "").replace(/\r\n/g, "\n").replace(/\s+/g, " ").trim();
+    if (!cleanText) return { lines: [""], text: "", fontSize: initialFontSize };
 
-    let min = 10;
-    let max = 64;
-    let best = textbox.fontSize || 20;
+    const words = cleanText.split(" ");
+    if (words.length <= 1) {
+      return { lines: [cleanText], text: cleanText, fontSize: initialFontSize };
+    }
 
-    // Binary search cỡ chữ tối ưu vừa vặn trong bóng thoại
-    for (let i = 0; i < 7; i++) {
-      const mid = Math.round((min + max) / 2);
-      textbox.set("fontSize", mid);
-      textbox.initDimensions();
+    // Safety margin 14% (chống chạm nét viền vẽ bóng thoại của tác giả)
+    const aEff = (boxWidth / 2) * 0.86;
+    const bEff = (boxHeight / 2) * 0.86;
 
-      if (textbox.calcTextHeight() <= maxHeight) {
-        best = mid;
-        min = mid + 1;
-      } else {
-        max = mid - 1;
+    // Đo đạc text chính xác qua Canvas context ẩn
+    const measureCanvas = document.createElement("canvas");
+    const mctx = measureCanvas.getContext("2d");
+
+    const measureWord = (str, sz) => {
+      mctx.font = `${sz}px '${fontFamily}', sans-serif`;
+      return mctx.measureText(str).width;
+    };
+
+    let bestConfig = null;
+
+    // Quét tìm cỡ chữ từ lớn xuống nhỏ để chữ dễ đọc nhất
+    const startSize = Math.max(14, Math.min(60, Math.round(boxHeight * 0.38)));
+    const minSize = 10;
+
+    for (let sz = startSize; sz >= minSize; sz -= 2) {
+      const lineHeight = sz * 1.18;
+      const maxLines = Math.max(1, Math.min(8, Math.floor((bEff * 2) / lineHeight)));
+
+      // Thử số lượng dòng từ 2 đến maxLines
+      for (let N = 2; N <= maxLines; N++) {
+        // Tính độ rộng khả dụng cho từng dòng i theo phương trình Elip: (y/b)^2 + (w/2a)^2 = 1
+        const allowedWidths = [];
+        let isFeasible = true;
+
+        for (let i = 0; i < N; i++) {
+          const y = (i - (N - 1) / 2) * lineHeight;
+          const normY = Math.abs(y) / bEff;
+          if (normY >= 0.96) {
+            isFeasible = false;
+            break;
+          }
+          const w = 2 * aEff * Math.sqrt(Math.max(0.08, 1 - normY * normY));
+          allowedWidths.push(w);
+        }
+
+        if (!isFeasible) continue;
+
+        // Phân phối từ vào N dòng tôn trọng hình dạng kim cương / elip
+        const candidateLines = this._distributeWordsIntoEllipticalLines(words, allowedWidths, sz, measureWord);
+        if (candidateLines) {
+          bestConfig = { lines: candidateLines, fontSize: sz };
+          break;
+        }
+      }
+
+      if (bestConfig) break;
+    }
+
+    if (!bestConfig) {
+      return { lines: [cleanText], text: cleanText, fontSize: Math.max(12, Math.round(initialFontSize * 0.8)) };
+    }
+
+    return {
+      lines: bestConfig.lines,
+      text: bestConfig.lines.join("\n"),
+      fontSize: bestConfig.fontSize,
+    };
+  }
+
+  _distributeWordsIntoEllipticalLines(words, allowedWidths, sz, measureWord) {
+    const N = allowedWidths.length;
+    const lines = [];
+    let wordIdx = 0;
+
+    for (let i = 0; i < N; i++) {
+      let curLine = "";
+      while (wordIdx < words.length) {
+        const testLine = curLine ? `${curLine} ${words[wordIdx]}` : words[wordIdx];
+        const w = measureWord(testLine, sz);
+        if (w <= allowedWidths[i] || !curLine) {
+          curLine = testLine;
+          wordIdx++;
+        } else {
+          break;
+        }
+      }
+      if (!curLine) return null;
+      lines.push(curLine);
+    }
+
+    if (wordIdx < words.length) return null;
+
+    // Chống từ côi cút (Orphan word): Nếu dòng cuối chỉ có đúng 1 từ ngắn (< 6 ký tự)
+    if (lines.length > 1) {
+      const lastLineWords = lines[lines.length - 1].split(" ");
+      if (lastLineWords.length === 1 && lastLineWords[0].length < 6) {
+        const prevLineWords = lines[lines.length - 2].split(" ");
+        if (prevLineWords.length > 2) {
+          const stolenWord = prevLineWords.pop();
+          const newPrev = prevLineWords.join(" ");
+          const newLast = `${stolenWord} ${lastLineWords[0]}`;
+          if (measureWord(newLast, sz) <= allowedWidths[N - 1]) {
+            lines[lines.length - 2] = newPrev;
+            lines[lines.length - 1] = newLast;
+          }
+        }
       }
     }
 
-    textbox.set("fontSize", best);
+    return lines;
+  }
+
+  /**
+   * Tự động uốn chữ & co cỡ font theo dáng elip bóng thoại Manga
+   */
+  autoFitFontSize(textbox, targetHeight) {
+    if (!textbox) return;
+
+    const rawContent = textbox.textVi || textbox.text || "";
+    const boxW = Math.max(60, textbox.width * (textbox.scaleX || 1));
+    const boxH = Math.max(40, targetHeight || textbox.height * (textbox.scaleY || 1));
+    const font = textbox.fontFamily || "Yuki Burobu";
+
+    const wrapResult = this.ellipticalDiamondWrap(rawContent, boxW, boxH, font, textbox.fontSize || 20);
+
+    textbox.set({
+      text: wrapResult.text,
+      fontSize: wrapResult.fontSize,
+      textAlign: "center",
+      scaleX: 1,
+      scaleY: 1,
+    });
+    textbox.textVi = wrapResult.text;
     textbox.initDimensions();
+    textbox.setCoords();
+
     this.fabricCanvas.renderAll();
+    this.positionMicroToolbar(textbox);
     this.onBoxModified(this.getBoxData(textbox));
     this.pushHistoryState();
+  }
+
+  /**
+   * Chạy Auto-Fit Elip cho toàn bộ các bóng thoại trong trang hiện tại (Ctrl + Shift + F)
+   */
+  autoFitAllBoxes() {
+    const textboxes = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox);
+    if (textboxes.length === 0) return;
+
+    this.fabricCanvas.renderOnAddRemove = false;
+    textboxes.forEach((tb) => {
+      const rawContent = tb.textVi || tb.text || "";
+      const boxW = Math.max(60, tb.width * (tb.scaleX || 1));
+      const boxH = Math.max(40, tb.height * (tb.scaleY || 1));
+      const font = tb.fontFamily || "Yuki Burobu";
+
+      const wrapResult = this.ellipticalDiamondWrap(rawContent, boxW, boxH, font, tb.fontSize || 20);
+      tb.set({
+        text: wrapResult.text,
+        fontSize: wrapResult.fontSize,
+        textAlign: "center",
+        scaleX: 1,
+        scaleY: 1,
+      });
+      tb.textVi = wrapResult.text;
+      tb.initDimensions();
+      tb.setCoords();
+    });
+    this.fabricCanvas.renderOnAddRemove = true;
+
+    this.updateObjectsCoords();
+    this.fabricCanvas.requestRenderAll();
+    this.positionMicroToolbar();
+    this.pushHistoryState();
+    this.onBoxesListChanged(this.getAllBoxesData());
   }
 
   /**
@@ -586,43 +1278,51 @@ export class TypesetCanvasEditor {
       const canvas = document.createElement("canvas");
       canvas.width = Math.max(1, w);
       canvas.height = Math.max(1, h);
-      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
 
-      ctx.drawImage(img, Math.max(0, x), Math.max(0, y), w, h, 0, 0, w, h);
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const data = imgData.data;
+      let rSum = 0;
+      let gSum = 0;
+      let bSum = 0;
+      let count = 0;
 
-      let lumSum = 0;
-      const count = w * h;
-      for (let i = 0; i < count; i++) {
-        lumSum += 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+      for (let i = 0; i < data.length; i += 16) {
+        rSum += data[i];
+        gSum += data[i + 1];
+        bSum += data[i + 2];
+        count++;
       }
-      const avgLum = lumSum / count;
-      return avgLum > 128; // true = nền sáng/trắng
-    } catch (e) {
+
+      const luma = (0.299 * rSum + 0.587 * gSum + 0.114 * bSum) / count;
+      return luma > 128;
+    } catch (_) {
       return true;
     }
   }
 
   autoInvertColors(textbox) {
     if (!textbox) return;
-    const isLight = this.detectBackgroundLuminance(textbox.left, textbox.top, textbox.width, textbox.height);
+    const isCurBlack = textbox.fill === "#000000" || textbox.fill === "black";
     textbox.set({
-      fill: isLight ? "#000000" : "#ffffff",
-      stroke: isLight ? "#ffffff" : "#000000",
+      fill: isCurBlack ? "#ffffff" : "#000000",
+      stroke: isCurBlack ? "#000000" : "#ffffff",
       strokeWidth: 3,
     });
     this.fabricCanvas.renderAll();
+    this.positionMicroToolbar(textbox);
     this.onBoxModified(this.getBoxData(textbox));
     this.pushHistoryState();
   }
 
-  // ---------------- Textbox Selection & Manipulation ----------------
+  // ---------------- Textbox Management ----------------
   selectBoxById(id) {
     const box = this.fabricCanvas.getObjects().find((o) => o instanceof fabric.Textbox && o.id === id);
     if (box) {
+      box.setCoords();
       this.fabricCanvas.setActiveObject(box);
       this.fabricCanvas.renderAll();
+      this.positionMicroToolbar(box);
       this.onSelectionChanged(this.getBoxData(box));
     }
   }
@@ -633,7 +1333,9 @@ export class TypesetCanvasEditor {
       box.set("text", newTextVi);
       box.textVi = newTextVi;
       box.initDimensions();
+      box.setCoords();
       this.fabricCanvas.renderAll();
+      this.positionMicroToolbar(box);
       this.pushHistoryState();
     }
   }
@@ -643,9 +1345,23 @@ export class TypesetCanvasEditor {
     if (box) {
       box.set(styleUpdates);
       box.initDimensions();
+      box.setCoords();
       this.fabricCanvas.renderAll();
-      this.onBoxModified(this.getBoxData(box));
+      this.positionMicroToolbar(box);
       this.pushHistoryState();
+      this.onBoxModified(this.getBoxData(box));
+    }
+  }
+
+  deleteBoxById(id) {
+    const box = this.fabricCanvas.getObjects().find((o) => o instanceof fabric.Textbox && o.id === id);
+    if (box) {
+      this.fabricCanvas.remove(box);
+      this.fabricCanvas.discardActiveObject();
+      this.hideMicroToolbar();
+      this.fabricCanvas.renderAll();
+      this.pushHistoryState();
+      this.onBoxesListChanged(this.getAllBoxesData());
     }
   }
 
@@ -654,10 +1370,10 @@ export class TypesetCanvasEditor {
     if (active && active instanceof fabric.Textbox) {
       this.fabricCanvas.remove(active);
       this.fabricCanvas.discardActiveObject();
+      this.hideMicroToolbar();
       this.fabricCanvas.renderAll();
       this.pushHistoryState();
       this.onBoxesListChanged(this.getAllBoxesData());
-      this.onSelectionChanged(null);
     }
   }
 
@@ -670,48 +1386,39 @@ export class TypesetCanvasEditor {
     if (boxes.length === 0) return;
 
     const current = this.fabricCanvas.getActiveObject();
-    let idx = boxes.indexOf(current);
+    let nextIndex = 0;
 
-    if (idx === -1) {
-      idx = reverse ? boxes.length - 1 : 0;
-    } else {
-      idx = reverse ? (idx - 1 + boxes.length) % boxes.length : (idx + 1) % boxes.length;
+    if (current) {
+      const curIndex = boxes.indexOf(current);
+      if (reverse) {
+        nextIndex = curIndex > 0 ? curIndex - 1 : boxes.length - 1;
+      } else {
+        nextIndex = curIndex < boxes.length - 1 ? curIndex + 1 : 0;
+      }
     }
 
-    const nextBox = boxes[idx];
+    const nextBox = boxes[nextIndex];
+    nextBox.setCoords();
     this.fabricCanvas.setActiveObject(nextBox);
     this.fabricCanvas.renderAll();
-    this.onSelectionChanged(this.getBoxData(nextBox));
+    this.positionMicroToolbar(nextBox);
   }
 
-  getNextOrder() {
+  reorderBoxes() {
     const boxes = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox);
-    if (boxes.length === 0) return 1;
-    return Math.max(...boxes.map((b) => b.order || 0)) + 1;
-  }
+    boxes.sort((a, b) => {
+      const topDiff = a.top - b.top;
+      if (Math.abs(topDiff) > 80) return topDiff;
+      return b.left - a.left; // Manga đọc từ Phải sang Trái (RTL)
+    });
 
-  getBoxData(textbox) {
-    return {
-      id: textbox.id,
-      order: textbox.order,
-      x: Math.round(textbox.left),
-      y: Math.round(textbox.top),
-      width: Math.round(textbox.width),
-      height: Math.round(textbox.height),
-      textJa: textbox.textJa || "",
-      textVi: textbox.text || "",
-      style: {
-        fontFamily: textbox.fontFamily,
-        fontSize: textbox.fontSize,
-        fill: textbox.fill,
-        stroke: textbox.stroke,
-        strokeWidth: textbox.strokeWidth,
-        align: textbox.textAlign,
-        lineHeight: textbox.lineHeight,
-        bold: textbox.fontWeight === "bold",
-        italic: textbox.fontStyle === "italic",
-      },
-    };
+    boxes.forEach((box, index) => {
+      box.order = index + 1;
+    });
+
+    this.fabricCanvas.renderAll();
+    this.pushHistoryState();
+    this.onBoxesListChanged(this.getAllBoxesData());
   }
 
   getAllBoxesData() {
@@ -735,7 +1442,6 @@ export class TypesetCanvasEditor {
     this.fabricCanvas.setWidth(contW);
     this.fabricCanvas.setHeight(contH);
 
-    // Padding để trang truyện hiển thị vừa vặn và thẩm mỹ
     const padX = 40;
     const padY = 40;
     const availW = Math.max(80, contW - padX);
@@ -751,6 +1457,7 @@ export class TypesetCanvasEditor {
 
     this.fabricCanvas.setViewportTransform(vpt);
     this.updateObjectsCoords();
+    this.positionMicroToolbar();
     this.fabricCanvas.requestRenderAll();
     this.onZoomChanged(Math.round(scale * 100));
   }
@@ -763,6 +1470,7 @@ export class TypesetCanvasEditor {
     };
     this.fabricCanvas.zoomToPoint(new fabric.Point(center.x, center.y), zoom);
     this.updateObjectsCoords();
+    this.positionMicroToolbar();
     this.onZoomChanged(Math.round(zoom * 100));
   }
 
@@ -792,45 +1500,89 @@ export class TypesetCanvasEditor {
   }
 
   restoreHistoryState(stateStr) {
-    if (!stateStr) return;
-    this.isHistoryLocked = true;
     try {
       const boxesData = JSON.parse(stateStr);
-      // Remove current textboxes
+      this.isHistoryLocked = true;
+
       const current = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox);
       current.forEach((c) => this.fabricCanvas.remove(c));
 
-      boxesData.forEach((b) => this.addTextBoxFromData(b));
+      boxesData.forEach((d) => this.addTextBoxFromData(d));
+
+      this.updateObjectsCoords();
       this.fabricCanvas.renderAll();
+      this.positionMicroToolbar();
       this.onBoxesListChanged(this.getAllBoxesData());
-      this.onSelectionChanged(null);
-    } catch (e) {
-      console.warn("Restore history error:", e);
     } finally {
       this.isHistoryLocked = false;
     }
   }
 
-  // ---------------- Hotkeys ----------------
+  // ---------------- Hotkeys Scanlation Chuyên Nghiệp ----------------
   bindHotkeys() {
     this.isSpacePressed = false;
 
     window.addEventListener("keydown", (e) => {
-      // Bỏ qua khi đang gõ phím trong ô input/textarea
       const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : "";
       const isInput = tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable;
       if (isInput) return;
 
-      // Phím tắt Scanlation
+      // 1. Phím tắt Space (Pan canvas mượt mà)
       if (e.code === "Space" && !this.isSpacePressed) {
         e.preventDefault();
         this.isSpacePressed = true;
         this.fabricCanvas.defaultCursor = "grab";
         this.fabricCanvas.setCursor("grab");
-      } else if (e.key === "h" || e.key === "H") {
+      }
+      // 2. Phím F: Fit to Screen
+      else if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        this.fitToScreen();
+      }
+      // 3. Phím \ : Bật/Tắt rèm kéo so sánh Trước/Sau (Split-Curtain Diff)
+      else if (e.key === "\\") {
+        e.preventDefault();
+        this.toggleSplitCurtain();
+      }
+      // 4. Ctrl + Shift + F: Auto-Fit Elip toàn bộ box trên trang
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+        e.preventDefault();
+        this.autoFitAllBoxes();
+      }
+      // 5. Ctrl + D: Nhân bản box
+      else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        this.duplicateSelectedBox();
+      }
+      // 6. Tab / Shift+Tab: Nhảy giữa các box theo thứ tự đọc
+      else if (e.key === "Tab") {
+        e.preventDefault();
+        this.cycleNextBox(e.shiftKey);
+      }
+      // 7. Hoàn tác / Làm lại (Ctrl+Z / Ctrl+Y)
+      else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) this.redo();
+        else this.undo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        this.redo();
+      }
+      // 8. Delete / Backspace: Xóa box
+      else if (e.key === "Delete" || e.key === "Backspace") {
+        if (this.fabricCanvas.getActiveObject() instanceof fabric.Textbox) {
+          this.deleteSelectedBox();
+        }
+      }
+      // 9. Escape: Bỏ chọn box
+      else if (e.key === "Escape") {
+        this.fabricCanvas.discardActiveObject();
+        this.fabricCanvas.renderAll();
+        this.hideMicroToolbar();
+      }
+      // 10. Chuyển đổi Tool nhanh
+      else if (e.key === "h" || e.key === "H") {
         this.setTool("pan");
-      } else if (e.key === "\\" || e.key === "p" || e.key === "P") {
-        this.togglePreviewOriginal(!this.isShowingOriginal);
       } else if (e.key === "b" || e.key === "B") {
         this.setTool("brush");
       } else if (e.key === "e" || e.key === "E") {
@@ -839,24 +1591,8 @@ export class TypesetCanvasEditor {
         this.setTool("select");
       } else if (e.key === "t" || e.key === "T") {
         this.setTool("text");
-      } else if (e.key === "Tab") {
-        e.preventDefault();
-        this.cycleNextBox(e.shiftKey);
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z")) {
-        e.preventDefault();
-        if (e.shiftKey) {
-          this.redo();
-        } else {
-          this.undo();
-        }
-      } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) {
-        e.preventDefault();
-        this.redo();
-      } else if (e.key === "Delete" || e.key === "Backspace") {
-        // Chỉ xóa box nếu đang select
-        if (this.fabricCanvas.getActiveObject() instanceof fabric.Textbox) {
-          this.deleteSelectedBox();
-        }
+      } else if (e.key === "p" || e.key === "P") {
+        this.togglePreviewOriginal(!this.isShowingOriginal);
       }
     });
 
@@ -878,7 +1614,6 @@ export class TypesetCanvasEditor {
     const currentW = this.fabricCanvas.getWidth();
     const currentH = this.fabricCanvas.getHeight();
 
-    // Tạm thời đặt canvas về kích thước thực của trang truyện để xuất ảnh chuẩn nét 100%
     this.fabricCanvas.setWidth(this.pageWidth);
     this.fabricCanvas.setHeight(this.pageHeight);
     this.fabricCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
@@ -890,13 +1625,11 @@ export class TypesetCanvasEditor {
       multiplier: 1,
     });
 
-    // Khôi phục lại kích thước viewport và zoom
     this.fabricCanvas.setWidth(currentW);
     this.fabricCanvas.setHeight(currentH);
     this.fabricCanvas.setViewportTransform(currentVpt);
     this.fabricCanvas.renderAll();
 
-    // Convert dataUrl sang Blob
     const resp = await fetch(dataUrl);
     return await resp.blob();
   }
