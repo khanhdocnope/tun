@@ -1489,8 +1489,12 @@ export class TypesetStudioApp {
             progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB${speedText}`;
           }
         });
+        if (progressBar) progressBar.style.width = "100%";
+        if (progressPercent) progressPercent.textContent = "100%";
+        if (progressLabel) progressLabel.textContent = "Hoàn tất 100%! Đã lưu model vào máy tính.";
         await this.refreshWebLamaStorageStatus();
         this.showToast("⚡ Đã tải thành công model Manga LaMa! Chạy ngầm bằng Web Worker không bao giờ lag giao diện.", "success");
+        await new Promise((r) => setTimeout(r, 1200));
       } catch (err) {
         this.showToast(`Lỗi tải model: ${err.message}`, "error");
       } finally {

@@ -14,11 +14,11 @@ export class WebLamaEngine {
     this.isCached = false;
     this.cachedSize = 0;
 
-    // Model URLs
+    // Model URLs & Valid Cache Key
     this.primaryUrl = "https://huggingface.co/mayocream/lama-manga-onnx/resolve/main/lama-manga.onnx";
     this.mirrorUrl = "https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama.onnx";
     this.cacheName = "manga-studio-lama-v1";
-    this.cacheKey = "model_lama_manga.onnx";
+    this.cacheKey = "https://huggingface.co/mayocream/lama-manga-onnx/resolve/main/lama-manga.onnx";
 
     this.onStatusChange = options.onStatusChange || (() => {});
     this._msgId = 0;
@@ -97,13 +97,24 @@ export class WebLamaEngine {
    */
   async init() {
     try {
-      const status = await this._sendWorkerMessage("CHECK_STATUS");
+      // 1. Kiểm tra nhanh trực tiếp trong CacheStorage của Main Thread
+      const directCached = await this.isModelCached();
+      if (directCached) {
+        this.isCached = true;
+        const info = await this.getStorageInfo();
+        this.cachedSize = info.cachedSize || 207482644;
+        this.notifyStatus("idle", `Đã lưu trong máy (~${Math.round(this.cachedSize / 1024 / 1024 || 198)}MB)`);
+        this._warmupSessionInBackground();
+        return true;
+      }
+
+      // 2. Nếu chưa thấy ở main thread, hỏi Worker
+      const status = await this._sendWorkerMessage("CHECK_STATUS", {}, [], 5000);
       this.isCached = Boolean(status?.isCached);
       this.cachedSize = status?.cachedSize || 0;
 
       if (this.isCached) {
         this.notifyStatus("idle", `Đã lưu trong máy (~${Math.round(this.cachedSize / 1024 / 1024 || 198)}MB)`);
-        // Khởi tạo phiên tính toán ngầm trong Worker mà không chặn trang web
         this._warmupSessionInBackground();
         return true;
       }
@@ -112,10 +123,10 @@ export class WebLamaEngine {
       return false;
     } catch (e) {
       console.warn("WebLamaEngine init check warning:", e);
-      // Fallback kiểm tra caches trực tiếp
       const directCached = await this.isModelCached();
       if (directCached) {
         this.isCached = true;
+        this.cachedSize = 207482644;
         this.notifyStatus("idle", "Đã lưu trong máy (~198MB)");
       } else {
         this.notifyStatus("idle", "Chưa tải model");
@@ -131,7 +142,7 @@ export class WebLamaEngine {
     if (this.isReady || this.isLoading) return;
     try {
       this.notifyStatus("loading", "Đang nạp model từ bộ nhớ...");
-      const res = await this._sendWorkerMessage("INIT_FROM_CACHE");
+      const res = await this._sendWorkerMessage("INIT_FROM_CACHE", {}, [], 120000);
       this.deviceMode = res.deviceMode || "wasm";
       this.isReady = true;
       this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`);
@@ -158,26 +169,47 @@ export class WebLamaEngine {
     try {
       const cache = await caches.open(this.cacheName);
       const match = await cache.match(this.cacheKey);
-      return Boolean(match);
+      if (match) {
+        const blob = await match.blob();
+        return blob.size > 1000000;
+      }
+      return false;
     } catch (_) {
       return false;
     }
   }
 
   async getStorageInfo() {
+    if ("caches" in window) {
+      try {
+        const cache = await caches.open(this.cacheName);
+        const match = await cache.match(this.cacheKey);
+        if (match) {
+          const blob = await match.blob();
+          const size = blob.size;
+          if (size > 1000000) {
+            return {
+              isCached: true,
+              cachedSize: size,
+              formattedSize: `${Math.round(size / 1024 / 1024)} MB`,
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
     try {
-      const status = await this._sendWorkerMessage("CHECK_STATUS");
+      const status = await this._sendWorkerMessage("CHECK_STATUS", {}, [], 5000);
       return {
         isCached: Boolean(status?.isCached),
         cachedSize: status?.cachedSize || 0,
         formattedSize: status?.cachedSize ? `${Math.round(status.cachedSize / 1024 / 1024)} MB` : "0 MB",
       };
     } catch (_) {
-      const cached = await this.isModelCached();
       return {
-        isCached: cached,
-        cachedSize: cached ? 204544673 : 0,
-        formattedSize: cached ? "~198 MB" : "0 MB",
+        isCached: false,
+        cachedSize: 0,
+        formattedSize: "0 MB",
       };
     }
   }
@@ -188,7 +220,7 @@ export class WebLamaEngine {
   async clearCache() {
     try {
       if (this.worker) {
-        await this._sendWorkerMessage("CLEAR_CACHE");
+        await this._sendWorkerMessage("CLEAR_CACHE", {}, [], 10000);
       }
     } catch (e) {
       console.warn("[WebLamaEngine] Worker clearCache warning:", e);
@@ -233,19 +265,46 @@ export class WebLamaEngine {
         throw new Error("Dữ liệu model tải về không hợp lệ hoặc bị gián đoạn mạng.");
       }
 
-      this.notifyStatus("loading", "Đang nạp mô hình vào luồng xử lý Web Worker...", 98);
+      // Thông báo 100% hoàn thành tải xuống
+      onProgress(100, buffer.byteLength, buffer.byteLength, "");
+      this.notifyStatus("loading", "Đang lưu model vào bộ nhớ máy tính...", 100);
+
+      // Lưu NGAY vào CacheStorage ở Main Thread để đảm bảo vĩnh viễn không bị mất file
+      if ("caches" in window) {
+        try {
+          const cache = await caches.open(this.cacheName);
+          const blob = new Blob([buffer], { type: "application/octet-stream" });
+          await cache.put(
+            this.cacheKey,
+            new Response(blob, {
+              headers: {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": String(buffer.byteLength),
+              },
+            })
+          );
+          this.isCached = true;
+          this.cachedSize = buffer.byteLength;
+          console.log("[WebLamaEngine] Đã lưu model an toàn vào CacheStorage");
+        } catch (cacheErr) {
+          console.warn("[WebLamaEngine] Lưu CacheStorage trên main thread thất bại:", cacheErr);
+        }
+      }
+
+      this.notifyStatus("loading", "Đang nạp mô hình vào luồng xử lý Web Worker...", 100);
 
       // Chuyển buffer sang Web Worker (Transferable 0-copy, không làm đứng giao diện!)
       const res = await this._sendWorkerMessage(
         "INIT_FROM_BUFFER",
-        { buffer, saveCache: true },
-        [buffer]
+        { buffer, saveCache: false }, // Đã lưu ở main thread rồi
+        [buffer],
+        120000 // 2 phút timeout cho init
       );
 
       this.deviceMode = res.deviceMode || "wasm";
       this.isReady = true;
       this.isCached = true;
-      this.cachedSize = 207482644;
+      this.cachedSize = buffer.byteLength || 207482644;
 
       this.notifyStatus("ready", `Sẵn sàng (${this.deviceMode.toUpperCase()})`, 100);
       return true;
@@ -292,15 +351,17 @@ export class WebLamaEngine {
     const startTime = performance.now();
     let lastYieldTime = performance.now();
 
-    const updateCombinedProgress = () => {
+    const updateCombinedProgress = (isFinished = false) => {
       const totalLoaded = loadedPerStream.reduce((a, b) => a + b, 0);
-      const percent = Math.min(96, Math.round((totalLoaded / totalLength) * 100));
+      const percent = isFinished ? 100 : Math.min(99, Math.round((totalLoaded / totalLength) * 100));
       const elapsedSec = (performance.now() - startTime) / 1000;
       const speedMBs = elapsedSec > 0.1 ? ((totalLoaded / 1024 / 1024) / elapsedSec).toFixed(1) : "0.0";
       onProgress(percent, totalLoaded, totalLength, speedMBs);
       this.notifyStatus(
         "loading",
-        `Đang tải đa luồng (${concurrency}x): ${percent}% (${Math.round(totalLoaded / 1024 / 1024)}MB / ${Math.round(totalLength / 1024 / 1024)}MB - ${speedMBs} MB/s)`,
+        isFinished
+          ? `Tải hoàn tất 100% (${Math.round(totalLength / 1024 / 1024)}MB - ${speedMBs} MB/s). Đang lưu vào máy...`
+          : `Đang tải đa luồng (${concurrency}x): ${percent}% (${Math.round(totalLoaded / 1024 / 1024)}MB / ${Math.round(totalLength / 1024 / 1024)}MB - ${speedMBs} MB/s)`,
         percent
       );
     };
@@ -332,16 +393,19 @@ export class WebLamaEngine {
         const now = performance.now();
         if (now - lastYieldTime > 60) {
           lastYieldTime = now;
-          updateCombinedProgress();
+          updateCombinedProgress(false);
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       }
-      updateCombinedProgress();
+      updateCombinedProgress(false);
     };
 
     await Promise.all(
       Array.from({ length: concurrency }, (_, i) => downloadChunk(i))
     );
+
+    // Kích hoạt tiến trình 100% khi toàn bộ các luồng đã xong
+    updateCombinedProgress(true);
 
     return finalBuffer.buffer;
   }
@@ -376,7 +440,7 @@ export class WebLamaEngine {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
-      const percent = Math.min(96, Math.round((loaded / total) * 100));
+      const percent = Math.min(99, Math.round((loaded / total) * 100));
       onProgress(percent, loaded, total);
       this.notifyStatus(
         "loading",
@@ -384,6 +448,8 @@ export class WebLamaEngine {
         percent
       );
     }
+
+    onProgress(100, loaded, total);
 
     // Ghép các chunk lại
     const allChunks = new Uint8Array(loaded);
@@ -407,12 +473,36 @@ export class WebLamaEngine {
 
     try {
       const buffer = await file.arrayBuffer();
-      this.notifyStatus("loading", "Đang khởi tạo phiên tính toán trong Web Worker...", 70);
+      this.notifyStatus("loading", "Đang lưu model vào bộ nhớ máy...", 60);
+
+      // Lưu vào CacheStorage
+      if ("caches" in window) {
+        try {
+          const cache = await caches.open(this.cacheName);
+          const blob = new Blob([buffer], { type: "application/octet-stream" });
+          await cache.put(
+            this.cacheKey,
+            new Response(blob, {
+              headers: {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": String(buffer.byteLength),
+              },
+            })
+          );
+          this.isCached = true;
+          this.cachedSize = file.size;
+        } catch (e) {
+          console.warn("Lưu file custom vào cache thất bại:", e);
+        }
+      }
+
+      this.notifyStatus("loading", "Đang khởi tạo phiên tính toán trong Web Worker...", 80);
 
       const res = await this._sendWorkerMessage(
         "INIT_FROM_BUFFER",
-        { buffer, saveCache: true },
-        [buffer]
+        { buffer, saveCache: false },
+        [buffer],
+        120000
       );
 
       this.deviceMode = res.deviceMode || "wasm";
@@ -479,7 +569,8 @@ export class WebLamaEngine {
     const res = await this._sendWorkerMessage(
       "INPAINT",
       { imgPixels, maskPixels },
-      [imgPixels.buffer, maskPixels.buffer]
+      [imgPixels.buffer, maskPixels.buffer],
+      60000
     );
 
     const resultPixels = res.resultPixels;

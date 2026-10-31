@@ -3,7 +3,16 @@
  * Runs ONNX Runtime Web in a dedicated thread to completely eliminate UI freezes and "Page Unresponsive" dialogs.
  */
 
+const CACHE_NAME = "manga-studio-lama-v1";
+const CACHE_KEY = "https://huggingface.co/mayocream/lama-manga-onnx/resolve/main/lama-manga.onnx";
+
+let session = null;
+let deviceMode = "none";
+let imageInputName = "image";
+let maskInputName = "mask";
+let outputName = "output";
 let ortLoaded = false;
+
 function ensureOrtLoaded() {
   if (self.ort) {
     ortLoaded = true;
@@ -13,8 +22,10 @@ function ensureOrtLoaded() {
     self.importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.all.min.js");
     if (self.ort && self.ort.env && self.ort.env.wasm) {
       self.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/";
-      self.ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2);
+      const hasSharedBuffer = typeof SharedArrayBuffer !== "undefined";
+      self.ort.env.wasm.numThreads = hasSharedBuffer ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
       self.ort.env.wasm.simd = true;
+      self.ort.env.wasm.proxy = false;
     }
     ortLoaded = true;
     return true;
@@ -24,7 +35,7 @@ function ensureOrtLoaded() {
   }
 }
 
-// Khởi động thử nạp thư viện
+// Khởi động nạp thư viện
 ensureOrtLoaded();
 
 async function createInferenceSession(arrayBuffer) {
@@ -39,6 +50,8 @@ async function createInferenceSession(arrayBuffer) {
     session = null;
   }
 
+  let sessionCreated = false;
+
   // 1. Thử ưu tiên WebGPU (Card màn hình / GPU)
   try {
     session = await self.ort.InferenceSession.create(arrayBuffer, {
@@ -46,10 +59,29 @@ async function createInferenceSession(arrayBuffer) {
       graphOptimizationLevel: "all",
     });
     deviceMode = "webgpu";
+    sessionCreated = true;
     console.log("[WebLamaWorker] Initialized successfully with WebGPU!");
   } catch (gpuErr) {
     console.warn("[WebLamaWorker] WebGPU unavailable or failed, falling back to WASM CPU:", gpuErr);
-    // 2. Fallback sang WASM SIMD trên CPU
+  }
+
+  // 2. Fallback sang WASM SIMD trên CPU
+  if (!sessionCreated) {
+    // Nếu arrayBuffer bị detached sau khi WebGPU thử thất bại, lấy lại từ cache
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      if ("caches" in self) {
+        try {
+          const cache = await self.caches.open(CACHE_NAME);
+          const match = await cache.match(CACHE_KEY);
+          if (match) arrayBuffer = await match.arrayBuffer();
+        } catch (_) {}
+      }
+    }
+
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      throw new Error("Dữ liệu model bị rỗng hoặc không thể giải mã.");
+    }
+
     session = await self.ort.InferenceSession.create(arrayBuffer, {
       executionProviders: ["wasm"],
       graphOptimizationLevel: "all",
@@ -141,9 +173,11 @@ self.onmessage = async (e) => {
           const cache = await self.caches.open(CACHE_NAME);
           const match = await cache.match(CACHE_KEY);
           if (match) {
-            isCached = true;
             const blob = await match.blob();
-            cachedSize = blob.size;
+            if (blob.size > 1000000) {
+              isCached = true;
+              cachedSize = blob.size;
+            }
           }
         } catch (_) {}
       }
@@ -167,13 +201,14 @@ self.onmessage = async (e) => {
       self.postMessage({ id, success: true, data: meta });
     } else if (type === "INIT_FROM_BUFFER") {
       const { buffer, saveCache } = payload;
-      if (saveCache && "caches" in self) {
+      if (saveCache && "caches" in self && buffer && buffer.byteLength > 0) {
         try {
           const cache = await self.caches.open(CACHE_NAME);
-          const response = new Response(buffer.slice(0), {
+          const response = new Response(buffer.slice ? buffer.slice(0) : buffer, {
             headers: { "Content-Type": "application/octet-stream" },
           });
           await cache.put(CACHE_KEY, response);
+          console.log("[WebLamaWorker] Đã lưu model vào CacheStorage thành công");
         } catch (cacheErr) {
           console.warn("[WebLamaWorker] Không thể ghi cache:", cacheErr);
         }
