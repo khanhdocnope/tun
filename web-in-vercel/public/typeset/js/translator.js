@@ -273,3 +273,73 @@ export async function runOcrOnRegion(croppedImageB64) {
 
   return "";
 }
+
+/**
+ * 1-Pass Unified Vision & Spatial Pipeline
+ * Gọi Gemini Vision API qua /api/process-batch với mode: "unified_spatial"
+ * Trả về danh sách bubbles đã chuẩn hóa với toạ độ 2D [ymin, xmin, ymax, xmax], emotion type, OCR & Bản dịch
+ *
+ * @param {string} imageBase64 - Ảnh trang manga (Data URL hoặc Base64)
+ * @param {Object} [options]
+ * @returns {Promise<{ bubbles: Array, ocrTextBlock: string, viTextBlock: string, lineCount: number }>}
+ */
+export async function runUnifiedSpatialPipeline(imageBase64, options = {}) {
+  if (!imageBase64) throw new Error("Thiếu dữ liệu ảnh để chạy Unified Spatial Pipeline.");
+
+  const apiKey = (options.apiKey || (await getSetting("gemini_api_key", ""))).trim();
+  const apiKey2 = (options.apiKey2 || (await getSetting("gemini_api_key2", ""))).trim();
+  const model = options.model || (await getSetting("gemini_model", "gemini-3.1-flash-lite"));
+  const sourceLang = options.sourceLang || (await getSetting("source_lang", "ja"));
+  const targetLang = options.targetLang || (await getSetting("target_lang", "vi"));
+  const tone = options.tone || (await getSetting("genre_preset", "natural"));
+  const readingOrder = options.readingOrder || (await getSetting("reading_order", "manga"));
+  const skipSFX = options.skipSFX !== undefined ? options.skipSFX : (await getSetting("skip_sfx", false));
+
+  // Lấy danh sách thuật ngữ glossary
+  let glossaryText = options.glossary || "";
+  if (!glossaryText) {
+    try {
+      const glossaryList = await getGlossary();
+      if (glossaryList && glossaryList.length > 0) {
+        glossaryText = glossaryList
+          .map((g) => `${g.original} -> ${g.translated}${g.notes ? ` (${g.notes})` : ""}`)
+          .join("\n");
+      }
+    } catch (_) {}
+  }
+
+  const payload = {
+    mode: "unified_spatial",
+    imageBase64,
+    apiKey,
+    apiKey2,
+    model,
+    sourceLang,
+    targetLang,
+    tone,
+    readingOrder,
+    skipSFX,
+    glossary: glossaryText,
+    prevContext: options.prevContext || [],
+  };
+
+  const resp = await fetch("/api/process-batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Unified Spatial Pipeline error (${resp.status}): ${errText}`);
+  }
+
+  const data = await resp.json();
+  return {
+    bubbles: data.bubbles || [],
+    ocrTextBlock: data.ocrTextBlock || "",
+    viTextBlock: data.viTextBlock || "",
+    lineCount: data.lineCount || (data.bubbles ? data.bubbles.length : 0),
+  };
+}
