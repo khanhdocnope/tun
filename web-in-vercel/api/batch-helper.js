@@ -393,6 +393,158 @@ function isBlankCell(v) {
   return !v || BLANK_MARKER_RE.test(v);
 }
 
+/**
+ * Prompt cho chế độ 1-Pass Unified Vision & Spatial Pipeline
+ * Trả về JSON chứa Bounding Box 2D [ymin, xmin, ymax, xmax] (thang 0-1000), Loại thoại (emotion/type), Text gốc & Bản dịch
+ */
+function buildUnifiedSpatialPrompt({
+  sourceLang = "ja",
+  targetLang = "vi",
+  skipSfx = false,
+  readingOrder = "manga",
+  tone = "natural",
+  prevContext = [],
+  glossary = ""
+} = {}) {
+  const { isWebtoon, orderDirective, bubbleRule, sfxInstruction } = getOcrRuleBlocks(skipSfx, readingOrder);
+  const sourceName = LANG_NAMES[sourceLang] || sourceLang;
+  const targetName = LANG_NAMES[targetLang] || targetLang;
+  const toneNote = getToneNote(tone);
+  const furigana = sourceLang === "ja"
+    ? "\n- If kanji has furigana, transcribe only the main kanji, omit furigana."
+    : "";
+
+  return `You are a comic localization AI and Vision Expert.
+Analyze this ${sourceName} ${isWebtoon ? "webtoon" : "manga"} page and output a 1-Pass Unified Vision & Spatial JSON structure.
+
+For every speech bubble, caption, or narrative box on the page:
+1. Detect 2D bounding box "box_2d": [ymin, xmin, ymax, xmax] as 4 integers normalized from 0 to 1000 (top, left, bottom, right).
+2. Classify emotion/bubble "type":
+   - "dialogue": Standard conversation inside normal elliptical bubble.
+   - "shout": Scream, intense shouting, anger, spiky or lightning burst bubble.
+   - "whisper": Whisper, secret, small text, dashed/dotted bubble, or soft thought.
+   - "narration": Rectangular caption/narrative box explaining context.
+   - "sfx": Onomatopoeia / sound effect outside dialogue bubbles (only if relevant).
+3. Transcribe original text in "text_original" exactly as written.${furigana}
+4. Translate into natural, high-quality ${targetName} comic dialogue in "text_translated".${toneNote}
+
+=== READING ORDER & GEOMETRY ===
+${orderDirective}
+${bubbleRule}
+${sfxInstruction}
+- Sort all bubbles strictly in reading order: ${isWebtoon ? "Top to Bottom, Left to Right" : "Top to Bottom, RIGHT to LEFT"}.
+
+${buildGlossaryBlock(glossary)}${buildPrevBlock(prevContext)}
+=== STRICT JSON OUTPUT FORMAT ===
+Return ONLY a valid JSON object matching this schema without markdown fences:
+{
+  "bubbles": [
+    {
+      "id": 1,
+      "box_2d": [120, 540, 280, 890],
+      "type": "dialogue",
+      "text_original": "なんだと...",
+      "text_translated": "Cái gì cơ..."
+    }
+  ]
+}
+If no readable text exists on the page, return {"bubbles":[]}.`;
+}
+
+/**
+ * Parser an toàn, chống gãy vỡ cho Unified Spatial JSON
+ */
+function parseUnifiedSpatialOutput(raw) {
+  let text = String(raw || "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    const objMatch = text.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { data = JSON.parse(objMatch[0]); } catch (e2) {}
+    }
+    if (!data) {
+      const arrMatch = text.match(/\[[\s\S]*\]/);
+      if (arrMatch) {
+        try { data = { bubbles: JSON.parse(arrMatch[0]) }; } catch (e3) {}
+      }
+    }
+  }
+
+  // Resilient fallback regex if JSON was truncated by token limit
+  let rawBubbles = [];
+  if (data && Array.isArray(data.bubbles)) {
+    rawBubbles = data.bubbles;
+  } else if (Array.isArray(data)) {
+    rawBubbles = data;
+  } else {
+    // Regex extract complete bubble objects
+    const itemRegex = /\{[^{}]*"box_2d"\s*:\s*\[([0-9,\s]+)\][^{}]*\}/g;
+    let match;
+    while ((match = itemRegex.exec(text)) !== null) {
+      try {
+        const itemObj = JSON.parse(match[0]);
+        rawBubbles.push(itemObj);
+      } catch (_) {}
+    }
+  }
+
+  const validTypes = new Set(["dialogue", "shout", "whisper", "narration", "sfx"]);
+  const bubbles = [];
+  const missing = [];
+
+  for (let i = 0; i < rawBubbles.length; i++) {
+    const item = rawBubbles[i];
+    if (!item || typeof item !== "object") continue;
+
+    const rawBox = item.box_2d || item.box || item.bbox || [];
+    let box_2d = [100, 100, 300, 300];
+    if (Array.isArray(rawBox) && rawBox.length === 4) {
+      let nums = rawBox.map((v) => Math.round(Number(v)));
+      if (nums.every((n) => !isNaN(n))) {
+        let ymin = Math.max(0, Math.min(1000, Math.min(nums[0], nums[2])));
+        let ymax = Math.max(0, Math.min(1000, Math.max(nums[0], nums[2])));
+        let xmin = Math.max(0, Math.min(1000, Math.min(nums[1], nums[3])));
+        let xmax = Math.max(0, Math.min(1000, Math.max(nums[1], nums[3])));
+        box_2d = [ymin, xmin, ymax, xmax];
+      }
+    }
+
+    let type = String(item.type || "").toLowerCase().trim();
+    if (!validTypes.has(type)) type = "dialogue";
+
+    const text_original = cleanCell(item.text_original || item.src || item.jp || item.ocr || "");
+    if (isBlankCell(text_original)) continue;
+
+    let text_translated = cleanCell(item.text_translated || item.tgt || item.vi || item.translation || "");
+    if (isBlankCell(text_translated)) {
+      text_translated = text_original;
+      missing.push(bubbles.length + 1);
+    }
+
+    bubbles.push({
+      id: item.id || (bubbles.length + 1),
+      box_2d,
+      type,
+      text_original,
+      text_translated,
+      // Hỗ trợ tương thích ngược với format cũ
+      src: text_original,
+      tgt: text_translated,
+      box: box_2d
+    });
+  }
+
+  return { bubbles, missing };
+}
+
 // Trả về { lines: [{src, tgt, box}], missing: [1-based index dòng thiếu bản dịch] } hoặc null nếu không parse được.
 function parseCombinedOutput(raw) {
   let text = String(raw || "")
@@ -450,6 +602,8 @@ module.exports = {
   buildTranslatePrompt,
   buildCombinedPrompt,
   parseCombinedOutput,
+  buildUnifiedSpatialPrompt,
+  parseUnifiedSpatialOutput,
   extractText,
   sanitizePrevContext
 };

@@ -7,6 +7,8 @@ const {
   buildTranslatePrompt,
   buildCombinedPrompt,
   parseCombinedOutput,
+  buildUnifiedSpatialPrompt,
+  parseUnifiedSpatialOutput,
   extractText,
   sanitizePrevContext
 } = require("./batch-helper");
@@ -112,7 +114,52 @@ module.exports = async (req, res) => {
       );
     }
 
-    if (mode === "all") {
+    let bubblesOutput = [];
+
+    if (mode === "unified_spatial") {
+      // 1-Pass Unified Vision & Spatial Pipeline: Phát hiện Bounding Box 2D, Cảm xúc/Type, OCR & Dịch trong 1 lần gọi
+      try {
+        const raw = await callGemini(
+          buildUnifiedSpatialPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext, glossary }),
+          { temperature: 0.5, responseMimeType: "application/json" }
+        );
+        const parsedSpatial = parseUnifiedSpatialOutput(raw);
+        if (parsedSpatial && parsedSpatial.bubbles && parsedSpatial.bubbles.length > 0) {
+          bubblesOutput = parsedSpatial.bubbles;
+          ocrTextBlock = bubblesOutput.map((b) => b.text_original).join("\n");
+          viTextBlock = bubblesOutput.map((b) => b.text_translated).join("\n");
+          missing = parsedSpatial.missing || [];
+        } else {
+          throw new Error("Không trích xuất được bubbles từ output JSON.");
+        }
+      } catch (spatialErr) {
+        console.warn("[process-batch] Unified Spatial failed, falling back to combined mode:", spatialErr.message);
+        usedFallback = true;
+        // Fallback sang combined prompt
+        const raw = await callGemini(
+          buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext, glossary }),
+          { temperature: 0.6, responseMimeType: "application/json" }
+        );
+        parsed = parseCombinedOutput(raw);
+        if (parsed && parsed.lines && parsed.lines.length > 0) {
+          ocrTextBlock = parsed.lines.map((l) => l.src).join("\n");
+          viTextBlock = parsed.lines.map((l) => l.tgt).join("\n");
+          missing = parsed.missing || [];
+          bubblesOutput = parsed.lines.map((l, idx) => ({
+            id: idx + 1,
+            box_2d: l.box || [100, 100, 300, 300],
+            type: "dialogue",
+            text_original: l.src,
+            text_translated: l.tgt,
+            src: l.src,
+            tgt: l.tgt
+          }));
+        } else {
+          await runOcrStep();
+          if (ocrTextBlock) await runTranslateStep();
+        }
+      }
+    } else if (mode === "all") {
       // OCR + dịch trong MỘT lần gọi -> mỗi trang tốn 1 request thay vì 2
       const raw = await callGemini(
         buildCombinedPrompt({ sourceLang, targetLang, skipSfx: skipSFX, readingOrder, tone, prevContext, glossary }),
@@ -124,6 +171,7 @@ module.exports = async (req, res) => {
         ocrTextBlock = parsed.lines.map((l) => l.src).join("\n");
         viTextBlock = parsed.lines.map((l) => l.tgt).join("\n");
         missing = parsed.missing;
+        bubblesOutput = parsed.lines;
       } else {
         // Gemini trả JSON hỏng -> quay lại luồng 2 bước để vẫn có kết quả
         console.warn("[process-batch] Combined output không parse được, fallback 2 bước.");
@@ -147,7 +195,7 @@ module.exports = async (req, res) => {
       lineCount: ocrTextBlock ? ocrTextBlock.split("\n").length : 0,
       ocrTextBlock,
       viTextBlock,
-      bubbles: parsed && Array.isArray(parsed.lines) ? parsed.lines : []
+      bubbles: bubblesOutput
     });
   } catch (error) {
     console.error("Batch process error:", error);
