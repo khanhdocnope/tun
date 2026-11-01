@@ -196,7 +196,10 @@
         <button class="btn btn-sub btn-ocr-all" id="btnOcrAll" disabled>OCR tất cả</button>
         <button class="btn btn-sub btn-trans-all" id="btnTranslateAll" disabled>Dịch tất cả</button>
         <button class="btn btn-sub btn-clear-all" id="btnClearAll" disabled>Xóa tất cả</button>
-        <button class="btn btn-sub" id="btnDeduplicate" title="Lọc và xóa các ảnh bị trùng lặp tên trong danh sách" style="display: none; border-color: rgba(234, 179, 8, 0.4); color: #fde047;">🧹 Lọc ảnh trùng</button>
+        <button class="btn btn-sub" id="btnDeduplicate" title="Lọc và xóa các ảnh bị trùng lặp tên trong danh sách" style="display: none; border-color: rgba(234, 179, 8, 0.4); color: #fde047;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          <span>Lọc ảnh trùng</span>
+        </button>
         <button class="btn btn-sub btn-primary-highlight" id="btnProcessAll" disabled>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -382,7 +385,10 @@
           <div class="form-group" style="margin-top: 6px;">
             <details style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px 12px; cursor: pointer;">
               <summary style="font-weight: 600; font-size: 0.83rem; color: #a5b4fc; outline: none; display: flex; align-items: center; justify-content: space-between; user-select: none;">
-                <span>📖 Ghi chú xưng hô & Thuật ngữ (Tùy chọn)</span>
+                <span style="display: flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                  <span>Ghi chú xưng hô & Thuật ngữ (Tùy chọn)</span>
+                </span>
                 <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: normal;">Thu gọn ▾</span>
               </summary>
               <div style="margin-top: 8px; cursor: default;">
@@ -407,12 +413,15 @@
 
           <div class="form-group" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
             <label for="selectCleanEngine" style="font-weight: 700; color: #a5b4fc; display: flex; align-items: center; justify-content: space-between;">
-              <span>⚡ Engine Tẩy chữ (Inpainting)</span>
+              <span style="display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                <span>Engine Tẩy chữ (Inpainting)</span>
+              </span>
               <span id="cleanEngineBadge" class="badge-clean done" style="font-size: 0.68rem; padding: 2px 8px;">WEBGPU</span>
             </label>
             <select id="selectCleanEngine" class="form-control" style="margin-top: 6px;">
-              <option value="webgpu" selected>⚡ WebGPU / WASM LaMa (100% Offline trên máy - Khuyên dùng)</option>
-              <option value="cloud">☁️ Cloud Server (Hugging Face / Local Backend)</option>
+              <option value="webgpu" selected>WebGPU / WASM LaMa (100% Offline trên máy - Khuyên dùng)</option>
+              <option value="cloud">Cloud Server (Hugging Face / Local Backend)</option>
             </select>
             <small class="form-hint" style="color: #94a3b8; font-size: 0.75rem; margin-top: 4px; display: block;">
               WebGPU LaMa chạy hoàn toàn trong trình duyệt, không gửi ảnh lên server, xử lý siêu tốc và bảo mật tuyệt đối.
@@ -452,7 +461,7 @@
           <div class="quota-info-card" id="quotaInfoCard">
             <div style="font-weight: 700; color: #a5b4fc; margin-bottom: 6px; display: flex; justify-content: space-between;">
               <span id="quotaCardTitle" style="display:flex; align-items:center; gap:6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>Hạn mức hoạt động của bạn</span>
-              <a href="https://aistudio.google.com/app/plan_information" target="_blank" style="color: #38bdf8; text-decoration: none;">Xem Google AI Studio ↗</a>
+              <a href="https://aistudio.google.com/app/plan_information" target="_blank" style="color: #38bdf8; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">Xem Google AI Studio <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
             </div>
             <ul style="list-style: none; padding-left: 0; color: #cbd5e1; line-height: 1.6; font-size: 0.78rem;">
               <li id="quotaSpeedLine">• <b>Tốc độ xử lý:</b> <span id="quotaSpeedText">15 lượt / phút (1 luồng)</span></li>

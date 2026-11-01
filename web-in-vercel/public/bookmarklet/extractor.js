@@ -619,9 +619,9 @@
     if (state.pages.length === 0) {
       container.innerHTML = `
         <div class="hud-empty">
-          <div style="font-size: 2.2rem;">🔍</div>
+          <div style="display:flex; justify-content:center; margin-bottom:8px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.8"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg></div>
           <div class="hud-empty-title">Chưa phát hiện ảnh hoặc canvas nào</div>
-          <p style="font-size: 0.8rem; max-width: 380px;">Trang web có thể dùng lazy-load. Hãy bấm nút <b>"📜 Cuộn quét trang"</b> để hệ thống tự động cuộn và nạp ảnh truyện.</p>
+          <p style="font-size: 0.8rem; max-width: 380px;">Trang web có thể dùng lazy-load. Hãy bấm nút <b>"Cuộn quét trang"</b> để hệ thống tự động cuộn và nạp ảnh truyện.</p>
         </div>
       `;
       return;
@@ -681,12 +681,12 @@
         <!-- Header -->
         <div class="hud-header">
           <div class="hud-header-title">
-            <span class="hud-logo-badge">⚡ Extractor Pro</span>
+            <span class="hud-logo-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>Extractor Pro</span>
             <span class="hud-title-text" id="hudTitleText" title="${state.title}">${state.title}</span>
           </div>
           <div class="hud-header-actions">
-            <button class="btn-icon" id="btnRefreshScan" title="Quét lại">🔄</button>
-            <button class="btn-icon" id="btnCloseHud" title="Đóng">✕</button>
+            <button class="btn-icon" id="btnRefreshScan" title="Quét lại"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg></button>
+            <button class="btn-icon" id="btnCloseHud" title="Đóng"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
           </div>
         </div>
 
@@ -698,19 +698,19 @@
           </div>
           <div class="hud-actions">
             <button class="btn-action btn-secondary" id="btnAutoScroll" title="Tự động cuộn êm để kích hoạt toàn bộ lazy-load">
-              📜 Cuộn quét trang
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>Cuộn quét trang
             </button>
             <button class="btn-action btn-secondary" id="btnToggleSelectAll" title="Chọn / Bỏ chọn tất cả">
               Đảo chọn
             </button>
             <button class="btn-action btn-secondary" id="btnCopyUrls" title="Sao chép toàn bộ đường dẫn ảnh">
-              📋 Copy link
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>Copy link
             </button>
             <button class="btn-action btn-secondary" id="btnDownloadZip" title="Tải về file nén .ZIP hoặc .CBZ">
-              📦 Tải ZIP / CBZ
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Tải ZIP / CBZ
             </button>
             <button class="btn-action btn-primary" id="btnSendToStudio" title="Mở Manga Studio và truyền trực tiếp ảnh sang">
-              ⚡ Gửi sang Studio
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>Gửi sang Studio
             </button>
           </div>
         </div>
@@ -861,7 +861,7 @@
           if (channel) {
             try { channel.close(); } catch (_) {}
           }
-          showToast(`🎉 Manga Studio đã nhận thành công ${selected.length} trang!`);
+          showToast(`Manga Studio đã nhận thành công ${selected.length} trang!`);
         }
       }
     }
@@ -898,7 +898,7 @@
       }
     }, 700);
 
-    showToast(`⚡ Đang kết nối và truyền dữ liệu sang Manga Studio...`);
+    showToast(`Đang kết nối và truyền dữ liệu sang Manga Studio...`);
   }
 
   // -------------------------------------------------------------
@@ -1006,7 +1006,7 @@
       if (addedFiles === 0) {
         if (progressBar) progressBar.style.width = "0%";
         updateScanStatus("Lỗi tải ảnh");
-        showToast("⚠️ Không thể tải được ảnh nào do CDN chặn và proxy không khả dụng!");
+        showToast("Không thể tải được ảnh nào do CDN chặn và proxy không khả dụng!");
         return;
       }
 
@@ -1025,7 +1025,7 @@
       if (progressBar) progressBar.style.width = "0%";
       updateScanStatus("Sẵn sàng");
       const mbSize = (blob.size / (1024 * 1024)).toFixed(1);
-      showToast(`🎉 Đã tải về ${downloadName} (${mbSize} MB)!`, 4000);
+      showToast(`Đã tải về ${downloadName} (${mbSize} MB)!`, 4000);
     } catch (err) {
       console.error(err);
       showToast(`Lỗi tạo ZIP: ${err.message}`);
@@ -1046,7 +1046,7 @@
     const text = selected.join("\n");
     navigator.clipboard
       .writeText(text)
-      .then(() => showToast(`📋 Đã chép ${selected.length} link ảnh vào clipboard!`))
+      .then(() => showToast(`Đã chép ${selected.length} link ảnh vào clipboard!`))
       .catch(() => showToast("Không thể ghi vào bộ nhớ tạm."));
   }
 

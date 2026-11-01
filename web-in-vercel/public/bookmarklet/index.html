@@ -388,20 +388,20 @@
 
     <!-- Hộp giải thích thân thiện: Bookmarklet là gì? -->
     <div class="info-banner">
-      <div><b>📌 Bookmarklet là gì?</b> Nó là một nút bấm tiện ích được lưu trên thanh <b>Dấu trang (Bookmarks)</b> của trình duyệt. Khi bạn đang đọc truyện trên mạng (MangaDex, Comix, NetTruyen, CuuTruyen...), bấm nút này nó sẽ tự động quét và hút toàn bộ chapter truyện về Manga Studio.</div>
-      <div><b>⚠️ Lưu ý:</b> Không bấm trực tiếp vào nút bên dưới (vì Chrome chặn link JavaScript nội bộ để bảo mật). Bạn hãy <b>DÙNG CHUỘT KÉO NÚT</b> thả lên thanh Bookmark, hoặc làm theo 3 cách hướng dẫn phía dưới.</div>
+      <div><b>Bookmarklet là gì?</b> Nó là một nút bấm tiện ích được lưu trên thanh <b>Dấu trang (Bookmarks)</b> của trình duyệt. Khi bạn đang đọc truyện trên mạng (MangaDex, Comix, NetTruyen, CuuTruyen...), bấm nút này nó sẽ tự động quét và hút toàn bộ chapter truyện về Manga Studio.</div>
+      <div><b>Lưu ý:</b> Không bấm trực tiếp vào nút bên dưới (vì Chrome chặn link JavaScript nội bộ để bảo mật). Bạn hãy <b>DÙNG CHUỘT KÉO NÚT</b> thả lên thanh Bookmark, hoặc làm theo 3 cách hướng dẫn phía dưới.</div>
     </div>
 
     <!-- Main Drag & Drop Card -->
     <section class="drag-card">
       <div class="drag-instruction">
-        <span class="drag-arrow-anim">⬆️</span>
+        <span class="drag-arrow-anim"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></span>
         <span><b>Dùng chuột KÉO nút bên dưới thả lên thanh Dấu trang (Bookmarks Bar):</b></span>
       </div>
 
       <!-- The Draggable Bookmarklet Link -->
       <a href="#" id="bookmarkletLink" class="bookmarklet-btn" draggable="true" title="Kéo nút này thả lên thanh Dấu trang của trình duyệt">
-        <i class="fa-solid fa-bolt"></i>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
         <span>Trích Xuất Manga</span>
       </a>
 
@@ -411,8 +411,8 @@
 
       <div style="display: flex; gap: 12px; margin-top: 4px;">
         <button type="button" class="btn-test" id="btnTestHere">
-          <i class="fa-solid fa-play"></i>
-          <span>▶ Thử nghiệm ngay trên trang này (Mở HUD)</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span>Thử nghiệm ngay trên trang này (Mở HUD)</span>
         </button>
       </div>
 
@@ -443,7 +443,7 @@
         <div class="copy-box">
           <span class="copy-code" id="consoleCodeDisplay">/* Đang tải mã... */</span>
           <button class="btn-copy" id="btnCopyConsole">
-            <i class="fa-solid fa-copy"></i>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Sao chép mã F12</span>
           </button>
         </div>
@@ -459,7 +459,7 @@
         <div class="copy-box">
           <span class="copy-code" id="codeDisplay">javascript:...</span>
           <button class="btn-copy" id="btnCopyCode">
-            <i class="fa-solid fa-copy"></i>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
             <span>Sao chép mã</span>
           </button>
         </div>
@@ -470,8 +470,11 @@
     <section class="demo-section">
       <div class="demo-header">
         <div>
-          <h3 style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9;">📖 Khu vực truyện mẫu để chạy thử nghiệm</h3>
-          <p style="font-size: 0.8rem; color: #94a3b8;">Hệ thống đã vẽ sẵn 3 trang Manga Canvas mẫu bên dưới. Hãy bấm nút <b>"▶ Thử nghiệm ngay"</b> để thấy bảng điều khiển quét và chọn 3 trang này!</p>
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            <span>Khu vực truyện mẫu để chạy thử nghiệm</span>
+          </h3>
+          <p style="font-size: 0.8rem; color: #94a3b8;">Hệ thống đã vẽ sẵn 3 trang Manga Canvas mẫu bên dưới. Hãy bấm nút <b>"Thử nghiệm ngay"</b> để thấy bảng điều khiển quét và chọn 3 trang này!</p>
         </div>
       </div>
       <div class="demo-pages-grid">
@@ -631,7 +634,7 @@
         // Khi người dùng bấm trực tiếp vào nút thay vì kéo thả:
         linkEl.addEventListener('click', (e) => {
           e.preventDefault();
-          showToast('💡 Mẹo: Hãy KÉO nút này thả lên thanh Dấu trang. Đang mở bản chạy thử...');
+          showToast('Mẹo: Hãy KÉO nút này thả lên thanh Dấu trang. Đang mở bản chạy thử...');
           launchExtractor();
         });
       }

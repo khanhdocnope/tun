@@ -558,7 +558,7 @@ import {
     const names = (state.images || []).map(i => (i.name || '').trim().toLowerCase());
     const dupCount = names.length - new Set(names).size;
     if (dupCount > 0) {
-      showToast(`⚠️ Phát hiện ${dupCount} ảnh bị trùng lặp trong phiên cũ. Bấm nút "🧹 Lọc ảnh trùng" để dọn dẹp!`, 6000);
+      showToast(`Phát hiện ${dupCount} ảnh bị trùng lặp trong phiên cũ. Bấm nút "Lọc ảnh trùng" để dọn dẹp!`, 6000);
       if (el.btnDeduplicate) {
         el.btnDeduplicate.style.display = 'inline-flex';
       }

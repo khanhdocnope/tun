@@ -133,7 +133,7 @@ Quy tắc:
       const errBody = await resp.text();
       // Nếu gọi direct bị chặn CORS, thử qua server proxy /api/translate
       if (resp.status === 401 && !apiKey) {
-        throw new Error("Vui lòng nhập OpenRouter API Key trong Cài đặt (⚙️).");
+        throw new Error("Vui lòng nhập OpenRouter API Key trong mục Cài đặt.");
       }
       throw new Error(`OpenRouter Error (${resp.status}): ${errBody}`);
     }

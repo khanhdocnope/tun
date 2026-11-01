@@ -482,7 +482,7 @@ export class TypesetStudioApp {
             await this.editor.setBackground(page.cleanedImage);
             this.renderPagesList();
             this.hideFloatingMask();
-            this.showToast(`⚡ Đã xóa chữ bằng Web LaMa (${result.device.toUpperCase()}) trong ${result.durationMs}ms!`, "success");
+            this.showToast(`Đã xóa chữ bằng Web LaMa (${result.device.toUpperCase()}) trong ${result.durationMs}ms!`, "success");
             return;
           }
         } catch (webErr) {
@@ -526,7 +526,7 @@ export class TypesetStudioApp {
         await this.editor.setBackground(page.cleanedImage);
         this.renderPagesList();
         this.hideFloatingMask();
-        this.showToast("☁️ Đã tẩy chữ qua Cloud Backend thành công!", "success");
+        this.showToast("Đã tẩy chữ qua Cloud Backend thành công!", "success");
       }
     } catch (e) {
       console.error("Region inpaint error:", e);
@@ -587,7 +587,7 @@ export class TypesetStudioApp {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = insertTextbox ? `📝 Chèn Box Typeset` : `🔍 Tự OCR`;
+        btn.innerHTML = insertTextbox ? `Chèn Box Typeset` : `Tự OCR`;
       }
     }
   }
@@ -612,7 +612,7 @@ export class TypesetStudioApp {
           <p>Dùng chuột khoanh vùng bóng thoại trên tranh để bóc chữ và dịch, hoặc bấm nút dưới để AI tự động làm tất cả.</p>
           <button type="button" class="btn-empty-auto" id="btnEmptyAutoPipeline">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-            <span>⚡ Tự động quét cả trang</span>
+            <span>Tự động quét cả trang</span>
           </button>
           <div class="empty-hotkey-guide">
             <div class="hotkey-item"><kbd>V</kbd> <span>Chọn & Di chuyển bóng thoại</span></div>
@@ -662,8 +662,8 @@ export class TypesetStudioApp {
         <div class="dialog-row-header">
           <span class="dialog-order-badge">#${box.order}</span>
           <div class="dialog-row-actions">
-            <button class="btn-mini-action btn-fit" title="Tự động co chữ vừa khung">↔ Auto Fit</button>
-            <button class="btn-mini-action btn-invert" title="Đảo màu theo nền (Trắng/Đen)">🌓 Đảo màu</button>
+            <button class="btn-mini-action btn-fit" title="Tự động co chữ vừa khung">Auto Fit</button>
+            <button class="btn-mini-action btn-invert" title="Đảo màu theo nền (Trắng/Đen)">Đảo màu</button>
             <button class="btn-mini-action btn-del" title="Xóa bóng thoại này">&times;</button>
           </div>
         </div>
@@ -671,7 +671,7 @@ export class TypesetStudioApp {
           <div class="input-subgroup">
             <div class="input-label-row">
               <span class="input-label">JP (Gốc):</span>
-              <button type="button" class="btn-retrans" title="Dịch lại câu này">🔄 Dịch lại</button>
+              <button type="button" class="btn-retrans" title="Dịch lại câu này">Dịch lại</button>
             </div>
             <input type="text" class="input-jp" value="${box.textJa || ""}" placeholder="Chưa có text tiếng Nhật...">
           </div>
@@ -1338,22 +1338,22 @@ export class TypesetStudioApp {
     const resetButtonState = () => {
       if (btnMagic) {
         btnMagic.disabled = false;
-        btnMagic.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i> <span>⚡ 1-Click Magic Studio</span>`;
+        btnMagic.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-300"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> <span>1-Click Magic Studio</span>`;
       }
       if (btnAuto) {
         btnAuto.disabled = false;
-        btnAuto.innerHTML = `<i class="fa-solid fa-bolt text-amber-300"></i> <span>⚡ Tự động</span>`;
+        btnAuto.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-300"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> <span>Tự động</span>`;
       }
       if (btnEmptyAuto) {
         btnEmptyAuto.disabled = false;
-        btnEmptyAuto.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> <span>⚡ 1-Click AI Tự Động Cả Trang</span>`;
+        btnEmptyAuto.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg> <span>1-Click AI Tự Động Cả Trang</span>`;
       }
     };
 
     setButtonsLoading("Đang phân tích Vision 2D...");
 
     try {
-      this.showToast("🔮 [1-Pass Unified Vision] Đang định vị 2D, phân tích cảm xúc & dịch...", "info");
+      this.showToast("[1-Pass Unified Vision] Đang định vị 2D, phân tích cảm xúc & dịch...", "info");
 
       // 1. Lấy thiết lập & ngữ cảnh trang trước
       const sourceLang = await getSetting("source_lang", "ja");
@@ -1392,7 +1392,7 @@ export class TypesetStudioApp {
         return;
       }
 
-      this.showToast(`✨ Đã nhận diện ${rawBubbles.length} bóng thoại! Đang tẩy chữ nền...`, "info");
+      this.showToast(`Đã nhận diện ${rawBubbles.length} bóng thoại! Đang tẩy chữ nền...`, "info");
       setButtonsLoading("Đang tẩy chữ nền...");
 
       // 3. Quy đổi Bounding Box chuẩn hóa 0-1000 sang pixel thực cho WebGPU LaMa
@@ -1428,7 +1428,7 @@ export class TypesetStudioApp {
             page.cleanedImage = lamaRes.cleanedDataUrl;
             await this.editor.setBackground(page.cleanedImage);
             cleanedSuccessfully = true;
-            this.showToast(`⚡ Đã tẩy chữ bằng Web LaMa (${lamaRes.device.toUpperCase()}) trong ${lamaRes.durationMs}ms!`, "info");
+            this.showToast(`Đã tẩy chữ bằng Web LaMa (${lamaRes.device.toUpperCase()}) trong ${lamaRes.durationMs}ms!`, "info");
           }
         } catch (lamaErr) {
           console.warn("Web LaMa inpainting error in Unified Pipeline:", lamaErr);
@@ -1476,7 +1476,7 @@ export class TypesetStudioApp {
       this.renderParallelDialogs(boxesData);
 
       this.showToast(
-        `⚡ Hoàn tất Magic Studio! Đã typeset ${createdBoxes.length} bóng thoại với Emotion Fonts & Elip Diamond Fit.`,
+        `Hoàn tất Magic Studio! Đã typeset ${createdBoxes.length} bóng thoại với Emotion Fonts & Elip Diamond Fit.`,
         "success"
       );
     } catch (e) {
@@ -1513,7 +1513,7 @@ export class TypesetStudioApp {
     if (badge) {
       badge.className = "badge-status-pill";
       if (status.state === "ready") {
-        badge.textContent = `⚡ Sẵn sàng (${status.device.toUpperCase()})`;
+        badge.textContent = `Sẵn sàng (${status.device.toUpperCase()})`;
         badge.classList.add(status.device === "webgpu" ? "ready-webgpu" : "ready-wasm");
       } else if (status.state === "loading") {
         badge.textContent = `Đang nạp (${status.percent}%)`;
@@ -1563,15 +1563,15 @@ export class TypesetStudioApp {
     if (indicator) {
       indicator.className = "mask-engine-indicator";
       if (status.isReady) {
-        indicator.textContent = status.device === "webgpu" ? "⚡ WebGPU" : "⚙️ WASM";
+        indicator.textContent = status.device === "webgpu" ? "WebGPU" : "WASM";
         indicator.classList.add(status.device === "webgpu" ? "webgpu" : "wasm");
         indicator.title = `Xóa chữ trực tiếp trên trình duyệt bằng ${status.device.toUpperCase()} (100% Offline, siêu tốc)`;
       } else if (hasStoredModel) {
-        indicator.textContent = "⚡ Web LaMa";
+        indicator.textContent = "Web LaMa";
         indicator.classList.add("wasm");
         indicator.title = "Đã lưu model trong máy (tự động kích hoạt khi xóa chữ)";
       } else {
-        indicator.textContent = "☁️ Cloud";
+        indicator.textContent = "Cloud";
         indicator.classList.add("cloud");
         indicator.title = "Xóa chữ qua Backend Cloud / Local Server";
       }
@@ -1610,7 +1610,7 @@ export class TypesetStudioApp {
           if (progressBar) progressBar.style.width = `${percent}%`;
           if (progressPercent) progressPercent.textContent = `${percent}%`;
           if (progressLabel) {
-            const speedText = speed ? ` - ⚡ ${speed} MB/s (6 luồng song song)` : "";
+            const speedText = speed ? ` - ${speed} MB/s (6 luồng song song)` : "";
             progressLabel.textContent = `Đang tải: ${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB${speedText}`;
           }
         });
@@ -1618,7 +1618,7 @@ export class TypesetStudioApp {
         if (progressPercent) progressPercent.textContent = "100%";
         if (progressLabel) progressLabel.textContent = "Hoàn tất 100%! Đã lưu model vào máy tính.";
         await this.refreshWebLamaStorageStatus();
-        this.showToast("⚡ Đã tải thành công model Manga LaMa! Chạy ngầm bằng Web Worker không bao giờ lag giao diện.", "success");
+        this.showToast("Đã tải thành công model Manga LaMa! Chạy ngầm bằng Web Worker không bao giờ lag giao diện.", "success");
         await new Promise((r) => setTimeout(r, 1200));
       } catch (err) {
         this.showToast(`Lỗi tải model: ${err.message}`, "error");
@@ -1651,7 +1651,7 @@ export class TypesetStudioApp {
           this.showToast("Đang nạp file .onnx từ máy tính vào Web Worker...", "info");
           await this.webLama.loadFromFile(file);
           await this.refreshWebLamaStorageStatus();
-          this.showToast(`⚡ Đã nạp thành công model ${file.name}!`, "success");
+          this.showToast(`Đã nạp thành công model ${file.name}!`, "success");
         } catch (err) {
           this.showToast(`Lỗi nạp model: ${err.message}`, "error");
         }

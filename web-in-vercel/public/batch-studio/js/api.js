@@ -674,15 +674,15 @@ export function getBatchWebLama() {
     }
 
     if (fileList.length > 0) {
-      showToast(`⚡ Đang nạp ${fileList.length} trang truyện từ Bookmarklet...`, 2000);
+      showToast(`Đang nạp ${fileList.length} trang truyện từ Bookmarklet...`, 2000);
       await addInputFiles(fileList);
-      let msg = `🎉 Đã nhận thành công ${fileList.length} trang truyện từ Bookmarklet!`;
+      let msg = `Đã nhận thành công ${fileList.length} trang truyện từ Bookmarklet!`;
       if (duplicateSkipped > 0) {
         msg += ` (Đã bỏ qua ${duplicateSkipped} trang bị trùng lặp)`;
       }
       showToast(msg, 4000);
     } else if (duplicateSkipped > 0) {
-      showToast(`⚠️ Tất cả ${duplicateSkipped} trang truyện này đã có trong danh sách (đã chống trùng lặp)!`, 3500);
+      showToast(`Tất cả ${duplicateSkipped} trang truyện này đã có trong danh sách (đã chống trùng lặp)!`, 3500);
     } else {
       showToast(`Không nạp được ảnh nào từ Bookmarklet. Vui lòng thử lại.`);
     }
@@ -725,6 +725,6 @@ export function getBatchWebLama() {
 
     state.images = uniqueImages;
     renderBatchView();
-    showToast(`🧹 Đã dọn dẹp và xóa ${removedCount} ảnh bị trùng lặp!`, 3500);
+    showToast(`Đã dọn dẹp và xóa ${removedCount} ảnh bị trùng lặp!`, 3500);
     return removedCount;
   }

@@ -163,7 +163,7 @@ export class MangaReaderPreview {
             <span style="color: rgba(255,255,255,0.3);">|</span>
             <span class="manga-filename">${page.fileName || ""}</span>
             <span style="color: rgba(255,255,255,0.3);">|</span>
-            <span style="color: #cbd5e1; cursor: pointer; text-decoration: underline;" class="btn-flip-edit-text">✏️ Sửa</span>
+            <span style="color: #cbd5e1; cursor: pointer; text-decoration: underline;" class="btn-flip-edit-text">Sửa chữ</span>
           </div>
         </div>
 

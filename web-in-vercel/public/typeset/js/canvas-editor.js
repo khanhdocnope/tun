@@ -820,7 +820,7 @@ export class TypesetCanvasEditor {
       }
     });
 
-    // 3. ⚡ Nút Auto-Fit Elip Diamond Wrap
+    // 3. Nút Auto-Fit Elip Diamond Wrap
     document.getElementById("btnMicroAutoFit")?.addEventListener("click", () => {
       const active = this.fabricCanvas.getActiveObject();
       if (active instanceof fabric.Textbox) {

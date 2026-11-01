@@ -266,7 +266,10 @@ export function unloadCardImage(card) {
           <button class="btn-row-action btn-row-ocr">OCR</button>
           <button class="btn-row-action btn-row-trans">Dịch</button>
           <button class="btn-row-action btn-row-all" style="color:var(--accent-red); font-weight:700;">OCR + Dịch</button>
-          <a href="/typeset-studio/" class="btn-row-action btn-row-typeset" title="Mở trang này trong Typeset Studio" style="color:#818cf8; text-decoration:none; display:inline-flex; align-items:center;">🎨 Chèn chữ</a>
+          <a href="/typeset-studio/" class="btn-row-action btn-row-typeset" title="Mở trang này trong Typeset Studio" style="color:#818cf8; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path></svg>
+            <span>Chèn chữ</span>
+          </a>
           <button class="btn-row-action btn-row-proofread" title="Soát bản dịch trang này">Soát</button>
           <button class="btn-row-delete" title="Xóa trang này">&times;</button>
         </div>
@@ -274,7 +277,7 @@ export function unloadCardImage(card) {
 
       <!-- Dòng tóm tắt hiển thị khi thu gọn -->
       <div class="collapsed-preview-bar">
-        <span class="preview-line-icon">💬</span>
+        <span class="preview-line-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span>
         <span class="preview-line-text">${escapeHtml(getFirstLineVi(item.viText))}</span>
       </div>
 

@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="/fonts/fonts.css">
   <link rel="stylesheet" href="/batch-studio/style.css">
   <link rel="stylesheet" href="/typeset/css/typeset.css">
+  <link rel="stylesheet" href="/typeset/css/overview.css">
 
   <style>
     /* Global Tab Nav Header */
@@ -158,16 +159,23 @@
       <span class="brand-badge-pro">PRO</span>
     </a>
 
-    <!-- 3 MAIN TABS -->
+    <!-- 4 MAIN TABS -->
     <nav class="app-nav-tabs" role="tablist">
-      <button class="nav-tab-btn active" id="tabBtnTypeset" data-tab="tabTypeset">
-        <span>🚀 Dịch & Typeset Manga</span>
+      <button class="nav-tab-btn active" id="tabBtnOverview" data-tab="tabOverview">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>Tổng quan</span>
+      </button>
+      <button class="nav-tab-btn" id="tabBtnTypeset" data-tab="tabTypeset">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+        <span>Biên tập Canvas</span>
       </button>
       <button class="nav-tab-btn" id="tabBtnBatch" data-tab="tabBatch">
-        <span>📋 Batch Studio</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        <span>Phòng dịch Hàng loạt</span>
       </button>
       <button class="nav-tab-btn" id="tabBtnCleaner" data-tab="tabCleaner">
-        <span>🧹 Tẩy chữ đơn</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m6.366 1.634l-2.12 2.12M21 12h-3m-1.634 6.366l-2.12-2.12M12 21v-3m-6.366-1.634l2.12-2.12M3 12h3m1.634-6.366l2.12 2.12"></path><circle cx="12" cy="12" r="4"></circle></svg>
+        <span>Tẩy chữ đơn</span>
       </button>
     </nav>
 
@@ -207,8 +215,263 @@
     </div>
   </header>
 
-  <!-- ================= TAB 1: DỊCH & TYPESET MANGA (MẶC ĐỊNH CHÍNH) ================= -->
-  <main class="main-tab-pane active" id="tabTypeset">
+  <!-- ================= TAB 0: TỔNG QUAN & SHOWCASE KỸ THUẬT (OVERVIEW) ================= -->
+  <main class="main-tab-pane active" id="tabOverview">
+    <div class="overview-scroll-container">
+      <div class="overview-max-width">
+        
+        <!-- HERO SECTION -->
+        <section class="overview-hero">
+          <div class="status-pill-badge">
+            <span class="status-indicator-dot"></span>
+            <span>ON-DEVICE WEBGPU</span>
+            <span class="pill-separator">•</span>
+            <span>SPATIAL VISION 1-PASS</span>
+            <span class="pill-separator">•</span>
+            <span>ZERO SERVER BILLS</span>
+          </div>
+
+          <h1 class="overview-hero-title">Bộ Công Cụ Dịch Thuật & Tẩy Chữ Truyện Tranh AI Toàn Năng</h1>
+          <p class="overview-hero-subtitle">
+            Hệ thống biên tập truyện tranh thế hệ mới: Tẩy chữ trực tiếp trên trình duyệt bằng WebGPU LaMa, định vị không gian 2D với Gemini Vision và uốn chữ elip tự động theo khung thoại.
+          </p>
+
+          <div class="overview-cta-group">
+            <button type="button" class="hero-btn-primary" id="heroBtnOpenTypeset">
+              <span>Mở Typeset Studio</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+            </button>
+            <a href="/bookmarklet/" target="_blank" class="hero-btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+              <span>Cài Bookmarklet Cào Truyện</span>
+            </a>
+            <button type="button" class="hero-btn-secondary" id="heroBtnOpenBatch">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>Phòng dịch Hàng loạt</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- 3 BESPOKE TECHNICAL ILLUSTRATIONS -->
+        <section style="display: flex; flex-direction: column; gap: 28px;">
+          <div class="overview-section-header">
+            <span class="section-tag">Công nghệ lõi đột phá</span>
+            <h2 class="section-title">Kiến Trúc Kỹ Thuật Độc Quyền</h2>
+            <p class="section-desc">Kết hợp xử lý đồ họa WebGPU trực tiếp trên GPU máy tính người dùng cùng mô hình Gemini Vision đa phương thức.</p>
+          </div>
+
+          <div class="tech-illustrations-grid">
+            <!-- Card 1: Elliptical Bubble Fitting -->
+            <div class="tech-card">
+              <div class="tech-card-header">
+                <span class="tech-badge">Thuật toán Toán học</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+              </div>
+              <h3 class="tech-card-title">Uốn Chữ Elip & Diamond Wrap</h3>
+              <p class="tech-card-desc">
+                Tự động tính toán đường bao elip x²/a² + y²/b² ≤ 1 với vùng an toàn 12%, tự động ngắt dòng dạng kim cương ôm trọn bóng thoại không tràn viền.
+              </p>
+              <div class="tech-canvas-frame">
+                <svg class="bubble-svg" viewBox="0 0 300 180">
+                  <defs>
+                    <radialGradient id="ellipseGlow" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stop-color="rgba(99, 102, 241, 0.15)" />
+                      <stop offset="100%" stop-color="rgba(99, 102, 241, 0)" />
+                    </radialGradient>
+                  </defs>
+                  <line x1="20" y1="90" x2="280" y2="90" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="3,3" />
+                  <line x1="150" y1="20" x2="150" y2="160" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="3,3" />
+                  <ellipse cx="150" cy="90" rx="116" ry="68" fill="url(#ellipseGlow)" stroke="#6366f1" stroke-width="1.8" stroke-dasharray="5,4" />
+                  <ellipse cx="150" cy="90" rx="98" ry="54" fill="rgba(15, 23, 42, 0.6)" stroke="#38bdf8" stroke-width="1" stroke-opacity="0.6" stroke-dasharray="2,2" />
+                  <text x="150" y="72" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#f8fafc" letter-spacing="0.02em">TÔI SẼ KHÔNG</text>
+                  <text x="150" y="93" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="800" fill="#38bdf8" letter-spacing="0.02em">BAO GIỜ ĐỂ CẬU PHẢI</text>
+                  <text x="150" y="114" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="12" font-weight="700" fill="#f8fafc" letter-spacing="0.02em">CHỊU BẤT CÔNG NỮA!</text>
+                  <rect x="180" y="142" width="105" height="22" rx="4" fill="rgba(0,0,0,0.7)" stroke="rgba(255,255,255,0.12)" />
+                  <text x="232" y="157" text-anchor="middle" font-family="monospace" font-size="9" fill="#94a3b8">x²/a² + y²/b² ≤ 1</text>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Card 2: Interactive Split Slider -->
+            <div class="tech-card">
+              <div class="tech-card-header">
+                <span class="tech-badge">Tương tác Trực quan</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><path d="M21 12H3"></path><path d="m8 7-5 5 5 5"></path><path d="m16 7 5 5-5 5"></path></svg>
+              </div>
+              <h3 class="tech-card-title">Manga Gốc vs Typeset Hoàn Chỉnh</h3>
+              <p class="tech-card-desc">
+                Kéo thanh trượt để so sánh hiệu ứng tẩy chữ WebGPU LaMa nguyên bản và bản dịch tiếng Việt đã uốn chữ tỉ mỉ.
+              </p>
+              <div class="tech-canvas-frame" style="padding: 0;">
+                <div class="split-slider-container" id="overviewSplitSlider">
+                  <!-- Left Side: Raw Manga -->
+                  <div class="split-side split-side-left">
+                    <svg viewBox="0 0 320 220" style="width:100%; height:100%;" preserveAspectRatio="xMidYMid meet">
+                      <rect x="25" y="18" width="270" height="184" fill="#09090b" stroke="#27272a" stroke-width="1.5"/>
+                      <ellipse cx="160" cy="110" rx="90" ry="62" fill="#ffffff" stroke="#18181b" stroke-width="2.5"/>
+                      <text x="180" y="82" font-family="'Noto Sans JP', sans-serif" font-size="13" font-weight="900" fill="#09090b">お前を絶対に</text>
+                      <text x="156" y="90" font-family="'Noto Sans JP', sans-serif" font-size="13" font-weight="900" fill="#09090b">許さない！</text>
+                      <text x="132" y="98" font-family="'Noto Sans JP', sans-serif" font-size="10" font-weight="700" fill="#52525b">覚悟しろ…</text>
+                    </svg>
+                    <span class="split-tag split-tag-left">Bản Gốc (Raw JP)</span>
+                  </div>
+
+                  <!-- Right Side: Cleaned + Typeset -->
+                  <div class="split-side split-side-right" id="splitSideRight">
+                    <svg viewBox="0 0 320 220" style="width:100%; height:100%;" preserveAspectRatio="xMidYMid meet">
+                      <rect x="25" y="18" width="270" height="184" fill="#0a0f1d" stroke="#6366f1" stroke-width="1.5"/>
+                      <ellipse cx="160" cy="110" rx="90" ry="62" fill="#ffffff" stroke="#18181b" stroke-width="2.5"/>
+                      <text x="160" y="95" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="900" fill="#09090b">TA TUYỆT ĐỐI</text>
+                      <text x="160" y="116" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="14" font-weight="900" fill="#09090b">KHÔNG THA CHO CẬU!</text>
+                      <text x="160" y="136" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-size="11" font-style="italic" fill="#475569">Hãy chuẩn bị đi…</text>
+                    </svg>
+                    <span class="split-tag split-tag-right">LaMa + Typeset VI</span>
+                  </div>
+
+                  <!-- Divider Line & Handle -->
+                  <div class="split-divider-line" id="splitDividerLine"></div>
+                  <div class="split-handle-disc" id="splitHandleDisc">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 7l-5 5 5 5M16 7l5 5-5 5"></path>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: 1-Pass Pipeline Flow -->
+            <div class="tech-card">
+              <div class="tech-card-header">
+                <span class="tech-badge">Hiệu Suất Vượt Trội</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+              </div>
+              <h3 class="tech-card-title">Quy Trình 1-Pass Liền Mạch</h3>
+              <p class="tech-card-desc">
+                Thay thế quy trình 4 bước cồng kềnh bằng luồng xử lý hợp nhất: WebGPU tẩy ngầm, Gemini định vị toạ độ 2D và dựng layer Canvas tức thì.
+              </p>
+              <div class="tech-canvas-frame">
+                <div class="pipeline-flow-wrap">
+                  <div class="pipeline-node">
+                    <div class="pipeline-icon-disc">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    </div>
+                    <span class="pipeline-label">Trang Manga</span>
+                    <span class="pipeline-sublabel">Raw Image</span>
+                  </div>
+
+                  <div class="pipeline-connector-line"></div>
+
+                  <div class="pipeline-node active">
+                    <div class="pipeline-icon-disc">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"></path><circle cx="12" cy="12" r="7"></circle></svg>
+                    </div>
+                    <span class="pipeline-label">WebGPU LaMa</span>
+                    <span class="pipeline-sublabel">Tẩy Offline</span>
+                  </div>
+
+                  <div class="pipeline-connector-line"></div>
+
+                  <div class="pipeline-node active">
+                    <div class="pipeline-icon-disc">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </div>
+                    <span class="pipeline-label">1-Pass Spatial</span>
+                    <span class="pipeline-sublabel">Gemini 2D Bbox</span>
+                  </div>
+
+                  <div class="pipeline-connector-line"></div>
+
+                  <div class="pipeline-node">
+                    <div class="pipeline-icon-disc">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                    </div>
+                    <span class="pipeline-label">Thành Phẩm</span>
+                    <span class="pipeline-sublabel">Typeset Hoàn Hảo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ARCHITECTURE COMPARISON TABLE -->
+        <section style="display: flex; flex-direction: column; gap: 24px;">
+          <div class="overview-section-header">
+            <span class="section-tag">So sánh giải pháp</span>
+            <h2 class="section-title">Tại Sao Nên Chọn Manga Studio Pro?</h2>
+          </div>
+
+          <div class="comparison-card">
+            <table class="comparison-table">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">Tiêu chí Đánh giá</th>
+                  <th style="width: 36%;">Quy trình Truyền thống / Công cụ cũ</th>
+                  <th style="width: 36%;" class="col-pro">Manga Studio Pro (Thế hệ mới)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="col-criteria">Tốc độ Tẩy chữ (Inpainting)</td>
+                  <td>2 - 5 phút / trang (Photoshop Content-Aware thủ công)</td>
+                  <td class="col-pro">
+                    <span class="cell-inline">
+                      <svg class="icon-check-cyan" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span>1 - 2 giây / trang (WebGPU LaMa Client-Side)</span>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-criteria">Chi phí Vận hành Server</td>
+                  <td>Tốn kém chi phí thuê Cloud GPU (HuggingFace / RunPod)</td>
+                  <td class="col-pro">
+                    <span class="cell-inline">
+                      <svg class="icon-check-cyan" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span>0đ - Tận dụng 100% GPU / WebAssembly trên máy người dùng</span>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-criteria">Định vị Bóng thoại & Bbox</td>
+                  <td>Vẽ tay từng khung chữ hoặc gọi API nhận diện rời rạc 4 bước</td>
+                  <td class="col-pro">
+                    <span class="cell-inline">
+                      <svg class="icon-check-cyan" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span>Gemini Spatial Vision 1-Pass trả tọa độ 2D chuẩn xác tuyệt đối</span>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-criteria">Thuật toán Bố cục Chữ</td>
+                  <td>Khung hình chữ nhật vuông vức, chữ dễ bị tràn mép bóng thoại</td>
+                  <td class="col-pro">
+                    <span class="cell-inline">
+                      <svg class="icon-check-cyan" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span>Elliptical Diamond Wrap ôm khít hình dáng elip tự nhiên</span>
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="col-criteria">Trích xuất Truyện tranh</td>
+                  <td>Lưu thủ công từng ảnh hoặc phần mềm bên thứ 3 phức tạp</td>
+                  <td class="col-pro">
+                    <span class="cell-inline">
+                      <svg class="icon-check-cyan" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <span>Bookmarklet 1-Click vượt DRM Canvas, truyền trực tiếp vào Studio</span>
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ================= TAB 1: DỊCH & TYPESET MANGA ================= -->
+  <main class="main-tab-pane" id="tabTypeset">
     <div class="typeset-studio-wrapper">
       
       <!-- THANH ĐIỀU HÀNH STUDIO TỔNG HỢP (TOP COMMAND STRIP) -->
@@ -238,10 +501,10 @@
         </div>
 
         <div class="typeset-subbar-right">
-          <!-- ⚡ 1-Click Magic Studio: 1-Pass Unified Vision Pipeline -->
+          <!-- 1-Click Magic Studio: 1-Pass Unified Vision Pipeline -->
           <button type="button" class="btn-magic-1click" id="btnMagic1ClickStudio" title="1-Pass Unified Vision Pipeline: Tự động Định vị 2D, Tẩy chữ WebGPU & Typeset Elip chuẩn Manga">
-            <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
-            <span>⚡ 1-Click Magic Studio</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            <span>1-Click Magic Studio</span>
           </button>
 
           <div class="studio-divider"></div>
@@ -371,14 +634,14 @@
                 <i class="fa-solid fa-wand-magic-sparkles text-xs"></i>
                 <span id="btnMaskInpaintText">Xóa chữ (LaMa)</span>
               </button>
-              <span id="maskEngineIndicator" class="mask-engine-indicator" title="Engine xóa chữ hiện tại: Đang kiểm tra...">☁️ Cloud</span>
+              <span id="maskEngineIndicator" class="mask-engine-indicator" title="Engine xóa chữ hiện tại: Đang kiểm tra..."><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline; vertical-align:middle; margin-right:4px;"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>Cloud</span>
               <button type="button" class="btn-mask-action" id="btnMaskOcr" title="Bóc chữ tiếng Nhật của bóng thoại">
                 <i class="fa-solid fa-magnifying-glass text-xs"></i>
-                <span>🔍 Tự OCR</span>
+                <span>Tự OCR</span>
               </button>
               <button type="button" class="btn-mask-action btn-mask-insert" id="btnMaskInsertBox" title="Dịch và tạo Textbox Typeset ngay lập tức">
                 <i class="fa-solid fa-comment-dots text-xs"></i>
-                <span>💬 Chèn Box</span>
+                <span>Chèn Box</span>
               </button>
 
               <button type="button" class="btn-close-mask" id="btnCloseMaskToolbar" title="Đóng">&times;</button>
@@ -396,8 +659,8 @@
                 <button type="button" class="btn-micro-step" id="btnMicroSizeInc" title="Tăng cỡ chữ 1px">+</button>
               </div>
 
-              <!-- ⚡ Auto-fit Elip Diamond Wrap -->
-              <button type="button" class="btn-micro-pill btn-micro-autofit" id="btnMicroAutoFit" title="⚡ Uốn chữ theo dáng bóng thoại (Elliptical Diamond Wrap)">
+              <!-- Auto-fit Elip Diamond Wrap -->
+              <button type="button" class="btn-micro-pill btn-micro-autofit" id="btnMicroAutoFit" title="Uốn chữ theo dáng bóng thoại (Elliptical Diamond Wrap)">
                 <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
                 <span>Auto-Fit</span>
               </button>
@@ -415,7 +678,7 @@
                 <span style="font-size: 11px; font-weight: 800; font-family: sans-serif;">AA</span>
               </button>
               <button type="button" class="btn-micro-icon" id="btnMicroInvert" title="Đảo màu chữ / viền tương phản (Trắng/Đen)">
-                <span style="font-size: 12px;">🌓</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"></path></svg>
               </button>
 
               <div class="micro-vsep"></div>
@@ -471,8 +734,8 @@
 
             <!-- Pipeline Tự động 1-Click nổi bật dạng viên thuốc mỏng -->
             <button class="btn-dock-fast-pipeline" id="btnAutoPipelinePage" title="Tự động nhận diện khung, dịch thuật, xóa chữ và chèn bóng thoại toàn trang">
-              <i class="fa-solid fa-bolt text-amber-300"></i>
-              <span>⚡ Tự động</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-300"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              <span>Tự động</span>
             </button>
           </div>
 
@@ -608,11 +871,11 @@
               <div class="font-action-buttons">
                 <button type="button" class="btn-font-action" id="btnAutoFitCurrent">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-                  <span>↔ Tự động co chữ vừa khung</span>
+                  <span>Tự động co chữ vừa khung</span>
                 </button>
                 <button type="button" class="btn-font-action" id="btnAutoInvertCurrent">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z"></path></svg>
-                  <span>🌓 Tự đảo màu theo nền tranh</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 0 0 20z" fill="currentColor"></path></svg>
+                  <span>Tự đảo màu theo nền tranh</span>
                 </button>
               </div>
             </div>
@@ -700,7 +963,7 @@
                 <button class="dropdown-item" id="btnExportDoc">Tải file .doc</button>
                 <button class="dropdown-item" id="btnExportZipClean">Tải ZIP ảnh sạch</button>
                 <button class="dropdown-item" id="btnExportZipBoth">Tải ZIP ảnh sạch + script</button>
-                <button class="dropdown-item" id="btnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">📦 Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
+                <button class="dropdown-item" id="btnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
                 <button class="dropdown-item" id="btnCopyChapter">Copy toàn bộ kịch bản</button>
                 <button class="dropdown-item" id="btnOpenExportModal">Xem trước & Tải file...</button>
               </div>
@@ -805,7 +1068,10 @@
       <div style="background: var(--ts-bg-card); border: 1px solid var(--ts-border); border-radius: 14px; padding: 24px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
-            <h2 style="font-size: 1.2rem; font-weight: 700; margin: 0 0 4px 0;">🧹 AI Manga Cleaner Đơn Lẻ</h2>
+            <h2 style="font-size: 1.2rem; font-weight: 700; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #38bdf8;"><path d="M12 3v3m6.366 1.634l-2.12 2.12M21 12h-3m-1.634 6.366l-2.12-2.12M12 21v-3m-6.366-1.634l2.12-2.12M3 12h3m1.634-6.366l2.12 2.12"></path><circle cx="12" cy="12" r="4"></circle></svg>
+              <span>AI Manga Cleaner Đơn Lẻ</span>
+            </h2>
             <p style="color: #94a3b8; font-size: 0.85rem; margin: 0;">Xóa chữ giữ nguyên screentone và nét vẽ bằng mô hình AI AOT Inpainting.</p>
           </div>
           <button class="btn btn-secondary" id="btnCleanerClear">Làm mới</button>
@@ -864,8 +1130,9 @@
           </div>
         </div>
 
-        <button class="btn btn-primary" id="btnCleanerRun" disabled style="width: 100%; margin-top: 20px; padding: 12px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1, #3b82f6);">
-          ✨ Bắt đầu xóa chữ
+        <button class="btn btn-primary" id="btnCleanerRun" disabled style="width: 100%; margin-top: 20px; padding: 12px; font-size: 0.95rem; font-weight: 700; background: linear-gradient(135deg, #6366f1, #3b82f6); display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          <span>Bắt đầu xóa chữ</span>
         </button>
       </div>
     </div>
@@ -877,7 +1144,10 @@
   <div class="modal-backdrop" id="globalSettingsModal" style="display:none; z-index: 10000;">
     <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
-        <h3>⚙️ Cài Đặt Hệ Thống & Engine AI</h3>
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Cài Đặt Hệ Thống & Engine AI</span>
+        </h3>
         <button class="btn-close" id="btnCloseGlobalSettings">&times;</button>
       </div>
       <div class="modal-body">
@@ -886,7 +1156,8 @@
         <div class="form-group settings-section-highlight" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
             <label style="font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.92rem;">
-              <span>⚡ Xóa chữ Offline (Manga LaMa WebGPU / WASM)</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+              <span>Xóa chữ Offline (Manga LaMa WebGPU / WASM)</span>
             </label>
             <span class="badge-status-pill" id="webLamaStatusBadge" style="font-size: 11px; padding: 2px 10px; border-radius: 12px; background: rgba(148, 163, 184, 0.2); color: #94a3b8; font-weight: 600;">Chưa tải model</span>
           </div>
@@ -996,7 +1267,10 @@
   <div class="modal-backdrop" id="glossaryModal" style="display:none; z-index: 10000;">
     <div class="modal-card" style="max-width: 650px;">
       <div class="modal-header">
-        <h3>📖 Bảng Từ Điển Thuật Ngữ & Nhân Vật (Glossary)</h3>
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          <span>Bảng Từ Điển Thuật Ngữ & Nhân Vật (Glossary)</span>
+        </h3>
         <button class="btn-close" id="btnCloseGlossaryModal">&times;</button>
       </div>
       <div class="modal-body">
@@ -1039,7 +1313,10 @@
   <div class="modal-backdrop" id="exportZipModal" style="display:none; z-index: 10000;">
     <div class="modal-card" style="max-width: 500px;">
       <div class="modal-header">
-        <h3>💾 Xuất Bản Chapter (Tải ZIP)</h3>
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Xuất Bản Chapter (Tải ZIP)</span>
+        </h3>
         <button class="btn-close" id="btnCloseExportZipModal">&times;</button>
       </div>
       <div class="modal-body">
@@ -1182,7 +1459,7 @@
         <button type="button" class="sheet-action-item" id="sheetBtnDownloadTxt">Tải .txt</button>
         <button type="button" class="sheet-action-item" id="sheetBtnExportZipClean">Tải ZIP ảnh sạch</button>
         <button type="button" class="sheet-action-item" id="sheetBtnExportZipBoth">Tải ZIP ảnh sạch + script</button>
-        <button type="button" class="sheet-action-item" id="sheetBtnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">📦 Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
+        <button type="button" class="sheet-action-item" id="sheetBtnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
         <button type="button" class="sheet-action-item" id="sheetBtnOpenExportModal">Xuất file...</button>
         <button type="button" class="sheet-btn-danger" id="sheetBtnClearAll">Xóa tất cả</button>
       </div>
@@ -1251,26 +1528,84 @@
 
     // 3. Tab Navigation Switcher
     const navTabs = [
+      { btnId: "tabBtnOverview", paneId: "tabOverview" },
       { btnId: "tabBtnTypeset", paneId: "tabTypeset" },
       { btnId: "tabBtnBatch", paneId: "tabBatch" },
       { btnId: "tabBtnCleaner", paneId: "tabCleaner" },
     ];
 
+    window.switchToTab = function(paneId) {
+      navTabs.forEach((t) => {
+        document.getElementById(t.btnId)?.classList.remove("active");
+        document.getElementById(t.paneId)?.classList.remove("active");
+      });
+      const target = navTabs.find(t => t.paneId === paneId);
+      if (target) {
+        document.getElementById(target.btnId)?.classList.add("active");
+        document.getElementById(target.paneId)?.classList.add("active");
+      }
+      if (paneId === "tabTypeset") {
+        typesetApp?.editor?.fabricCanvas?.calcOffset?.();
+        typesetApp?.editor?.fitToScreen?.();
+      }
+    };
+
     navTabs.forEach(({ btnId, paneId }) => {
       document.getElementById(btnId)?.addEventListener("click", () => {
-        navTabs.forEach((t) => {
-          document.getElementById(t.btnId)?.classList.remove("active");
-          document.getElementById(t.paneId)?.classList.remove("active");
-        });
-        document.getElementById(btnId)?.classList.add("active");
-        document.getElementById(paneId)?.classList.add("active");
-
-        if (paneId === "tabTypeset") {
-          typesetApp.editor.fabricCanvas.calcOffset();
-          typesetApp.editor.fitToScreen();
-        }
+        window.switchToTab(paneId);
       });
     });
+
+    document.getElementById("heroBtnOpenTypeset")?.addEventListener("click", () => {
+      window.switchToTab("tabTypeset");
+    });
+    document.getElementById("heroBtnOpenBatch")?.addEventListener("click", () => {
+      window.switchToTab("tabBatch");
+    });
+
+    // 3.1. Interactive Split Slider for Tab Overview
+    function initSplitSlider() {
+      const container = document.getElementById("overviewSplitSlider");
+      const rightSide = document.getElementById("splitSideRight");
+      const divider = document.getElementById("splitDividerLine");
+      const handle = document.getElementById("splitHandleDisc");
+      if (!container || !rightSide || !divider || !handle) return;
+
+      let isDragging = false;
+      const updateSlider = (clientX) => {
+        const rect = container.getBoundingClientRect();
+        let x = clientX - rect.left;
+        if (x < 15) x = 15;
+        if (x > rect.width - 15) x = rect.width - 15;
+        const pct = (x / rect.width) * 100;
+        rightSide.style.clipPath = `polygon(${pct}% 0, 100% 0, 100% 100%, ${pct}% 100%)`;
+        divider.style.left = `${pct}%`;
+        handle.style.left = `${pct}%`;
+      };
+
+      container.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        updateSlider(e.clientX);
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        updateSlider(e.clientX);
+      });
+      window.addEventListener("mouseup", () => { isDragging = false; });
+
+      container.addEventListener("touchstart", (e) => {
+        if (e.touches.length > 0) {
+          isDragging = true;
+          updateSlider(e.touches[0].clientX);
+        }
+      }, { passive: true });
+      window.addEventListener("touchmove", (e) => {
+        if (!isDragging || e.touches.length === 0) return;
+        updateSlider(e.touches[0].clientX);
+      }, { passive: true });
+      window.addEventListener("touchend", () => { isDragging = false; });
+    }
+    initSplitSlider();
 
     // 4. Global Settings Modal Binding
     const settingsModal = document.getElementById("globalSettingsModal");
