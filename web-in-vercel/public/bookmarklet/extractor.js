@@ -823,8 +823,10 @@
 
     if (progressBar) progressBar.style.width = "0%";
 
+    const importId = "imp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
     const payload = {
       type: "MANGA_STUDIO_IMPORT",
+      importId: importId,
       timestamp: Date.now(),
       title: state.title,
       sourceUrl: window.location.href,
@@ -840,33 +842,60 @@
     const targetUrl = state.studioUrl;
     const studioWin = window.open(targetUrl, "_blank");
 
-    // 3. Truyền qua BroadcastChannel
-    const channel = new BroadcastChannel("manga_studio_importer");
-    channel.postMessage(payload);
+    // 3. Khởi tạo BroadcastChannel (hỗ trợ cùng domain)
+    let channel = null;
+    try {
+      channel = new BroadcastChannel("manga_studio_importer");
+    } catch (_) {}
 
-    // 4. Ping liên tục qua postMessage trong 12 giây để bắt nhịp khi tab mới nạp xong
+    let isAcknowledged = false;
+    let pingTimer = null;
+
+    function handleAck(e) {
+      if (e.data && e.data.type === "MANGA_STUDIO_IMPORT_ACK") {
+        if (!e.data.importId || e.data.importId === importId) {
+          isAcknowledged = true;
+          if (pingTimer) clearInterval(pingTimer);
+          window.removeEventListener("message", handleAck);
+          if (channel) {
+            try { channel.close(); } catch (_) {}
+          }
+          showToast(`🎉 Manga Studio đã nhận thành công ${selected.length} trang!`);
+        }
+      }
+    }
+
+    // Lắng nghe tín hiệu ACK từ cả postMessage (xuyên domain) và BroadcastChannel
+    window.addEventListener("message", handleAck);
+    if (channel) channel.onmessage = handleAck;
+
+    // 4. Gửi lần đầu ngay lập tức
+    if (channel) {
+      try { channel.postMessage(payload); } catch (_) {}
+    }
+    if (studioWin && !studioWin.closed) {
+      try { studioWin.postMessage(payload, "*"); } catch (_) {}
+    }
+
+    // 5. Ping nhịp nhàng mỗi 700ms (tối đa 12 lần) để tab mới kịp nạp script, DỪNG NGAY khi nhận ACK
     let pings = 0;
-    const maxPings = 24;
-    const pingTimer = setInterval(() => {
+    const maxPings = 12;
+    pingTimer = setInterval(() => {
+      if (isAcknowledged) {
+        clearInterval(pingTimer);
+        return;
+      }
       pings++;
-      channel.postMessage(payload);
       if (studioWin && !studioWin.closed) {
-        try {
-          studioWin.postMessage(payload, "*");
-        } catch (_) {}
+        try { studioWin.postMessage(payload, "*"); } catch (_) {}
+      }
+      if (channel) {
+        try { channel.postMessage(payload); } catch (_) {}
       }
       if (pings >= maxPings) {
         clearInterval(pingTimer);
       }
-    }, 500);
-
-    // Lắng nghe tín hiệu ACK phản hồi từ Studio
-    channel.onmessage = (e) => {
-      if (e.data && e.data.type === "MANGA_STUDIO_IMPORT_ACK") {
-        clearInterval(pingTimer);
-        showToast(`🎉 Manga Studio đã nhận thành công ${selected.length} trang!`);
-      }
-    };
+    }, 700);
 
     showToast(`⚡ Đang kết nối và truyền dữ liệu sang Manga Studio...`);
   }

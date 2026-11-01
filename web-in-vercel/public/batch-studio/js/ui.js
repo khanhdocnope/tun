@@ -203,6 +203,12 @@ export function unloadCardImage(card) {
     el.btnOcrAll.disabled = !hasImages || state.isQueueRunning;
     el.btnTranslateAll.disabled = !hasImages || state.isQueueRunning;
     el.btnClearAll.disabled = !hasImages || state.isQueueRunning;
+    if (el.btnDeduplicate) {
+      const names = (state.images || []).map(i => (i.name || '').trim().toLowerCase());
+      const hasDups = hasImages && (names.length > new Set(names).size);
+      el.btnDeduplicate.style.display = hasDups ? 'inline-flex' : 'none';
+      el.btnDeduplicate.disabled = !hasDups || state.isQueueRunning;
+    }
     el.btnExportChapter.disabled = !hasImages;
     if (el.btnQuickDownloadTxt) el.btnQuickDownloadTxt.disabled = !hasImages;
 

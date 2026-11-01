@@ -88,6 +88,7 @@
     btnTranslateAll: document.getElementById('btnTranslateAll'),
     btnProcessAll: document.getElementById('btnProcessAll'),
     btnClearAll: document.getElementById('btnClearAll'),
+    btnDeduplicate: document.getElementById('btnDeduplicate'),
     btnCleanAll: document.getElementById('btnCleanAll'),
     toggleStepClean: document.getElementById('toggleStepClean'),
     toggleStepTranslate: document.getElementById('toggleStepTranslate'),

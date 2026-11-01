@@ -628,12 +628,23 @@ export function getBatchWebLama() {
   // Import danh sách ảnh truyền từ Bookmarklet (BroadcastChannel / postMessage)
   export async function importBookmarkletImages(items, chapterTitle = '') {
     if (!Array.isArray(items) || items.length === 0) return;
-    showToast(`⚡ Đang nạp ${items.length} trang truyện từ Bookmarklet...`, 2000);
+
+    // Lọc trùng theo tên ảnh đã có trong danh sách hiện tại
+    const existingNames = new Set((state.images || []).map(img => (img.name || '').trim().toLowerCase()));
 
     const fileList = [];
+    let duplicateSkipped = 0;
+
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       const name = it.name || `page_${String(i + 1).padStart(3, '0')}.jpg`;
+      const nameLower = name.trim().toLowerCase();
+
+      if (existingNames.has(nameLower)) {
+        duplicateSkipped++;
+        continue;
+      }
+      existingNames.add(nameLower);
 
       if (it.dataUrl) {
         const f = dataUrlToFile(it.dataUrl, name);
@@ -652,9 +663,57 @@ export function getBatchWebLama() {
     }
 
     if (fileList.length > 0) {
+      showToast(`⚡ Đang nạp ${fileList.length} trang truyện từ Bookmarklet...`, 2000);
       await addInputFiles(fileList);
-      showToast(`🎉 Đã nhận thành công ${fileList.length} trang truyện từ Bookmarklet!`, 4000);
+      let msg = `🎉 Đã nhận thành công ${fileList.length} trang truyện từ Bookmarklet!`;
+      if (duplicateSkipped > 0) {
+        msg += ` (Đã bỏ qua ${duplicateSkipped} trang bị trùng lặp)`;
+      }
+      showToast(msg, 4000);
+    } else if (duplicateSkipped > 0) {
+      showToast(`⚠️ Tất cả ${duplicateSkipped} trang truyện này đã có trong danh sách (đã chống trùng lặp)!`, 3500);
     } else {
       showToast(`Không nạp được ảnh nào từ Bookmarklet. Vui lòng thử lại.`);
     }
+  }
+
+  // Lọc và xóa các ảnh bị trùng lặp trong Batch Studio (giữ lại 1 bản duy nhất cho mỗi trang)
+  export async function removeDuplicateImages() {
+    if (!state.images || state.images.length === 0) {
+      showToast('Danh sách đang trống.');
+      return 0;
+    }
+
+    const seenNames = new Set();
+    const uniqueImages = [];
+    const duplicatesToRemove = [];
+
+    for (const img of state.images) {
+      const key = (img.name || '').trim().toLowerCase();
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        uniqueImages.push(img);
+      } else {
+        duplicatesToRemove.push(img);
+      }
+    }
+
+    if (duplicatesToRemove.length === 0) {
+      showToast('Không có ảnh nào bị trùng lặp!');
+      return 0;
+    }
+
+    const removedCount = duplicatesToRemove.length;
+    for (const dup of duplicatesToRemove) {
+      try {
+        await store.deletePage(dup.id);
+        await store.deleteOriginal(dup.id);
+        await store.deleteCleaned(dup.id);
+      } catch (_) {}
+    }
+
+    state.images = uniqueImages;
+    renderBatchView();
+    showToast(`🧹 Đã dọn dẹp và xóa ${removedCount} ảnh bị trùng lặp!`, 3500);
+    return removedCount;
   }

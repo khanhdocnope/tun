@@ -4,7 +4,7 @@
 
 import { state, el, showToast, applyThumbZoom, currentZoomVal, copyToClipboard } from './js/state.js';
 import { store, pendingSaves, restoreSession, scheduleSave } from './js/storage.js';
-import { checkConfig, addInputFiles, addFilesToBatch, isZipFile, importBookmarkletImages } from './js/api.js';
+import { checkConfig, addInputFiles, addFilesToBatch, isZipFile, importBookmarkletImages, removeDuplicateImages } from './js/api.js';
 import { runCleanQueue, runBatchQueue, runSelectedSteps, updateProcessAllLabel } from './js/queue.js';
 import {
   applySettingsToUI,
@@ -168,6 +168,7 @@ import {
     el.rangeCleanDilation.addEventListener('input', () => { el.cleanDilationVal.textContent = el.rangeCleanDilation.value; });
     el.rangeCleanThreshold.addEventListener('input', () => { el.cleanThresholdVal.textContent = parseFloat(el.rangeCleanThreshold.value).toFixed(2); });
     el.btnClearAll.addEventListener('click', clearAllBatch);
+    if (el.btnDeduplicate) el.btnDeduplicate.addEventListener('click', removeDuplicateImages);
     el.btnOcrAll.addEventListener('click', () => runBatchQueue('ocr_only'));
     el.btnTranslateAll.addEventListener('click', () => runBatchQueue('translate_only'));
     // Export Dropdown Trigger
@@ -486,39 +487,61 @@ import {
     }
   }
 
-  // Bridge Protocol: Lắng nghe và nạp ảnh truyền từ Bookmarklet
+  // Bridge Protocol: Lắng nghe và nạp ảnh truyền từ Bookmarklet (Chống trùng lặp tuyệt đối)
   function initBookmarkletBridge() {
+    const processedImportIds = new Set();
+    let isImporting = false;
+
+    async function handleImportMessage(data, sender) {
+      if (!data || data.type !== 'MANGA_STUDIO_IMPORT' || !Array.isArray(data.images) || data.images.length === 0) return;
+
+      const importId = data.importId || `ts_${data.timestamp || ''}_${data.images.length}`;
+
+      // Luôn gửi ACK ngay lập tức để tab Bookmarklet dừng vòng lặp ping!
+      const ackMsg = { type: 'MANGA_STUDIO_IMPORT_ACK', importId: importId, count: data.images.length };
+      if (sender && typeof sender.postMessage === 'function') {
+        try { sender.postMessage(ackMsg, '*'); } catch (_) {}
+      }
+      try {
+        const replyChannel = new BroadcastChannel('manga_studio_importer');
+        replyChannel.postMessage(ackMsg);
+        setTimeout(() => replyChannel.close(), 1000);
+      } catch (_) {}
+
+      // CHỐNG LẶP: Nếu importId này đã được nhận xử lý, bỏ qua ngay!
+      if (processedImportIds.has(importId)) {
+        return;
+      }
+      processedImportIds.add(importId);
+
+      if (isImporting) return;
+      isImporting = true;
+      try {
+        await importBookmarkletImages(data.images, data.title);
+      } finally {
+        isImporting = false;
+      }
+    }
+
     try {
       const channel = new BroadcastChannel('manga_studio_importer');
-      channel.onmessage = async (e) => {
-        if (e.data && e.data.type === 'MANGA_STUDIO_IMPORT' && Array.isArray(e.data.images)) {
-          await importBookmarkletImages(e.data.images, e.data.title);
-          channel.postMessage({ type: 'MANGA_STUDIO_IMPORT_ACK', count: e.data.images.length });
-        }
-      };
+      channel.onmessage = (e) => handleImportMessage(e.data, null);
     } catch (_) {}
 
-    window.addEventListener('message', async (e) => {
-      if (e.data && e.data.type === 'MANGA_STUDIO_IMPORT' && Array.isArray(e.data.images)) {
-        await importBookmarkletImages(e.data.images, e.data.title);
-        if (e.source && typeof e.source.postMessage === 'function') {
-          try {
-            e.source.postMessage({ type: 'MANGA_STUDIO_IMPORT_ACK', count: e.data.images.length }, '*');
-          } catch (_) {}
-        }
-      }
+    window.addEventListener('message', (e) => {
+      handleImportMessage(e.data, e.source);
     });
 
     // Kiểm tra dữ liệu bắt tay từ localStorage nếu tab mới vừa mở
     try {
       const raw = localStorage.getItem('manga_bookmarklet_import');
       if (raw) {
-        const data = JSON.parse(raw);
         localStorage.removeItem('manga_bookmarklet_import');
+        const data = JSON.parse(raw);
         if (data && Date.now() - (data.timestamp || 0) < 60000 && Array.isArray(data.images)) {
           setTimeout(() => {
-            importBookmarkletImages(data.images, data.title);
-          }, 400);
+            handleImportMessage(data, null);
+          }, 350);
         }
       }
     } catch (_) {}
@@ -530,6 +553,17 @@ import {
     await checkConfig();
     applySettingsToUI();
     await restoreSession();
+
+    // Tự động phát hiện nếu phiên làm việc có ảnh bị lặp (từ lần import lỗi trước)
+    const names = (state.images || []).map(i => (i.name || '').trim().toLowerCase());
+    const dupCount = names.length - new Set(names).size;
+    if (dupCount > 0) {
+      showToast(`⚠️ Phát hiện ${dupCount} ảnh bị trùng lặp trong phiên cũ. Bấm nút "🧹 Lọc ảnh trùng" để dọn dẹp!`, 6000);
+      if (el.btnDeduplicate) {
+        el.btnDeduplicate.style.display = 'inline-flex';
+      }
+    }
+
     renderBatchView();
   }
 
