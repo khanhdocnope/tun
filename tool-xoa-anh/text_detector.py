@@ -160,7 +160,8 @@ class MangaTextDetector:
             import onnxruntime as ort
 
             so = ort.SessionOptions()
-            so.intra_op_num_threads = cpu_threads
+            so.add_session_config_entry("session.set_denormal_as_zero", "1")
+            so.intra_op_num_threads = min(8, os.cpu_count() or 8)
             so.inter_op_num_threads = 1
             so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
             so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL

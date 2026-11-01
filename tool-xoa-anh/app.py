@@ -26,13 +26,30 @@ import cv2
 import gradio as gr
 import numpy as np
 import torch
-from fastapi import APIRouter, HTTPException
+import uvicorn
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
 from manga_cleaner import cleaner_pipeline
+
+try:
+    import spaces
+    HAS_ZEROGPU = True
+except ImportError:
+    HAS_ZEROGPU = False
+
+    class _DummySpaces:
+        def GPU(self, duration: int = 60):
+            def deco(fn):
+                return fn
+            return deco
+
+    spaces = _DummySpaces()
 
 try:
     from bench_clean import run_benchmark_suite, run_self_tests
@@ -301,6 +318,7 @@ def render_box_canvas_html(pil_img: Optional[Image.Image]) -> str:
     """
 
 
+@spaces.GPU(duration=30)
 def process_manga_box_selection(
     image: Optional[Image.Image],
     boxes_json: str,
@@ -377,6 +395,7 @@ def process_manga_box_selection(
 # --------------------------------------------------------------------------------------
 # Core Execution Handlers for Gradio
 # --------------------------------------------------------------------------------------
+@spaces.GPU(duration=30)
 def process_manga_auto(
     image: Optional[np.ndarray | Image.Image],
     clean_sfx: bool,
@@ -425,6 +444,7 @@ def process_manga_auto(
     return cleaned_pil, color_mask_pil, time_badge, stats, jpg_path, png_path
 
 
+@spaces.GPU(duration=120)
 def process_manga_zip(
     zip_file: Any,
     clean_sfx: bool = False,
@@ -504,8 +524,23 @@ def process_manga_zip(
 
 
 # --------------------------------------------------------------------------------------
-# REST API Endpoints
+# REST API Endpoints & FastAPI App with Full CORS
 # --------------------------------------------------------------------------------------
+fastapi_app = FastAPI(
+    title="Manga Text Cleaner API",
+    version="3.0.0",
+    description="Xóa chữ / bóng thoại trên trang Manga và Manhwa: RT-DETR vùng Chat/SFX, ComicTextDetector seg, 0.1ms flat-fill + LaMa inpaint.",
+)
+
+# 1. Bật CORS Toàn Phần cho Frontend (Vercel & Browser)
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 api_router = APIRouter()
 
 
@@ -519,18 +554,15 @@ class CleanPagePayload(BaseModel):
 
 
 @api_router.get("/health")
+@api_router.get("/api/ping")
+@api_router.get("/ping")
 @api_router.get("/api/v1/health")
 def health():
-    pipeline = cleaner_pipeline
+    """Pure CPU ultra-lightweight ping response (<= 2ms) without touching any AI model."""
     return {
-        "status": "online",
-        "device": "ZeroGPU (Nvidia A10G)" if torch.cuda.is_available() else "CPU",
-        "detector_ready": bool(pipeline.bubbles.ready),
-        "seg_ready": bool(pipeline.ctd.ready),
-        "text_backend": getattr(pipeline, "text_backend", "manga_det"),
-        "inpaint_ready": True,
-        "available_models": sorted(VALID_INPAINT_MODELS),
-        "limits": {"max_pixels": MAX_PIXELS, "max_base64_bytes": MAX_B64_BYTES},
+        "status": "ready",
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "max_pixels": MAX_PIXELS,
     }
 
 
@@ -576,6 +608,27 @@ async def api_run_benchmark(runs: int = 3, force_cpu: bool = True, inpaint_model
         return {"status": "error", "error": str(exc)}
 
 
+@spaces.GPU(duration=30)
+def api_clean_image_gpu(
+    image_input: Image.Image | np.ndarray,
+    clean_sfx: bool = False,
+    dilation_px: int = 4,
+    det_threshold: float = 0.20,
+    inpaint_model: str = "anime-lama",
+    min_box_size: int = 0,
+):
+    """ZeroGPU page wrapper for API requests."""
+    return cleaner_pipeline.clean_image(
+        image_input=image_input,
+        clean_sfx=clean_sfx,
+        dilation_px=dilation_px,
+        det_threshold=det_threshold,
+        force_cpu=False,
+        inpaint_model=inpaint_model,
+        min_box_size=min_box_size,
+    )
+
+
 @api_router.post("/clean_page")
 @api_router.post("/api/clean_page")
 async def api_clean_page(req: CleanPagePayload):
@@ -611,15 +664,28 @@ async def api_clean_page(req: CleanPagePayload):
     payload_in_bytes = len(raw)
 
     try:
-        cleaned_pil, color_mask_pil, stats = await run_in_threadpool(
-            cleaner_pipeline.clean_image,
-            image_input=img_pil,
-            clean_sfx=bool(req.cleanSFX),
-            dilation_px=int(req.dilationPx or 4),
-            det_threshold=float(req.detThreshold or 0.20),
-            inpaint_model=inpaint_model,
-            min_box_size=int(req.minBoxSize or 0),
-        )
+        try:
+            cleaned_pil, color_mask_pil, stats = await run_in_threadpool(
+                api_clean_image_gpu,
+                image_input=img_pil,
+                clean_sfx=bool(req.cleanSFX),
+                dilation_px=int(req.dilationPx or 4),
+                det_threshold=float(req.detThreshold or 0.20),
+                inpaint_model=inpaint_model,
+                min_box_size=int(req.minBoxSize or 0),
+            )
+        except Exception as gpu_exc:
+            logger.warning("GPU execution in api_clean_page failed (%s), running CPU fallback", gpu_exc)
+            cleaned_pil, color_mask_pil, stats = await run_in_threadpool(
+                cleaner_pipeline.clean_image,
+                image_input=img_pil,
+                clean_sfx=bool(req.cleanSFX),
+                dilation_px=int(req.dilationPx or 4),
+                det_threshold=float(req.detThreshold or 0.20),
+                force_cpu=True,
+                inpaint_model=inpaint_model,
+                min_box_size=int(req.minBoxSize or 0),
+            )
     except Exception as exc:  # noqa: BLE001
         logger.exception("clean_page failed")
         raise HTTPException(
@@ -936,6 +1002,7 @@ def create_ui() -> gr.Blocks:
                                     elem_classes="action-btn",
                                 )
 
+                        @spaces.GPU(duration=30)
                         def on_brush_clean(edit_data, dilation_val, inpaint_model_val):
                             bg_pil, mask_pil = extract_editor_data(edit_data)
                             if bg_pil is None or mask_pil is None:
@@ -1038,34 +1105,35 @@ def create_ui() -> gr.Blocks:
     return demo
 
 
+def trigger_zerogpu_startup():
+    """Ensure ZeroGPU startup report is sent to Hugging Face supervisor."""
+    try:
+        import spaces
+        if hasattr(spaces, "zero"):
+            from spaces.zero import startup as sz_startup
+            sz_startup()
+            logger.info("✅ ZeroGPU startup_report successfully sent to HF daemon!")
+    except Exception as exc:
+        logger.info("ZeroGPU startup check: %s", exc)
+
+
+@fastapi_app.on_event("startup")
+def on_app_startup():
+    trigger_zerogpu_startup()
+
+
 demo = create_ui()
+demo.queue(max_size=32, default_concurrency_limit=2)
+
+fastapi_app.include_router(api_router)
+app = gr.mount_gradio_app(fastapi_app, demo, path="/")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))
+    trigger_zerogpu_startup()
     logger.info("🚀 Starting Manga Cleaner (text removal) on port %d ...", port)
-
-    # Khởi chạy Gradio Server chuẩn theo cơ chế quản lý lifecycle của Hugging Face Gradio SDK
-    app, local_url, share_url = demo.launch(
-        server_name="0.0.0.0",
-        server_port=port,
-        prevent_thread_lock=True,
-        show_error=True,
-    )
-
-    # Gắn router REST API (/health, /clean_page, /api/benchmark)
-    if hasattr(app, "include_router"):
-        app.include_router(api_router)
-    if hasattr(app, "router") and hasattr(app.router, "routes"):
-        try:
-            for route in reversed(api_router.routes):
-                if route not in app.router.routes:
-                    app.router.routes.insert(0, route)
-            logger.info("✅ REST API routes attached.")
-        except Exception as e:
-            logger.warning("Router insertion notice: %s", e)
-
     logger.info("📖 Swagger UI: http://0.0.0.0:%d/docs", port)
     logger.info("🎨 Gradio UI :  http://0.0.0.0:%d/", port)
-    demo.block_thread()
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 

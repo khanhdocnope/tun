@@ -19,6 +19,7 @@ from mask_logic import (
     build_masks_from_polygons,
     flat_paper_hint,
     flat_fill_uniform_paper,
+    preserve_white_balloons,
 )
 
 
@@ -214,6 +215,49 @@ def test_get_mini_boxes_oriented_box():
     box, sside = get_mini_boxes(rect)
     assert 19.0 <= sside <= 21.0, f"Expected short side ~20, got {sside}"
     assert box.shape == (4, 2)
+
+
+def test_preserve_white_balloons_fast():
+    # Synthetic white balloon: pure white background (255) with black text (20)
+    img = np.full((150, 150, 3), 255, dtype=np.uint8)
+    img[60:80, 50:100] = (20, 20, 20)
+    # Mask of the text
+    mask = np.zeros((150, 150), dtype=np.uint8)
+    mask[60:80, 50:100] = 255
+
+    cleaned, rem_mask, count = preserve_white_balloons(img, mask)
+    assert count >= 1, "Should detect white balloon component"
+    assert not rem_mask.any(), "Should completely remove component from inpaint mask"
+    assert (cleaned[60:80, 50:100] >= 240).all(), "Should be filled with white background color"
+
+    # Non-white background (e.g. gray/texture luminance ~180): should NOT be flat-filled
+    img_gray = np.full((150, 150, 3), 180, dtype=np.uint8)
+    img_gray[60:80, 50:100] = (20, 20, 20)
+    cleaned_g, rem_mask_g, count_g = preserve_white_balloons(img_gray, mask)
+    assert count_g == 0, "Non-white background must NOT be flat-filled"
+    assert rem_mask_g.any(), "Non-white background must remain in inpaint mask for LaMa"
+
+
+def test_bubble_border_preservation():
+    """Verify that speech bubble borders (including wavy/scalloped cloud bubbles) are 100% preserved."""
+    h, w = 300, 300
+    img_border = np.ones((h, w), dtype=np.uint8) * 255
+    centers = [(150, 100), (190, 130), (190, 180), (150, 210), (110, 180), (110, 130)]
+    for c in centers:
+        cv2.circle(img_border, c, 35, 0, 2)
+    cv2.circle(img_border, (150, 150), 55, 255, -1)
+    bubble_border_only = (img_border < 80).astype(np.uint8) * 255
+
+    img = cv2.cvtColor(img_border, cv2.COLOR_GRAY2BGR)
+    cv2.putText(img, "MANGA", (115, 155), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+
+    poly = np.array([[112, 136], [188, 136], [188, 160], [112, 160]])
+    dets = [Det(box=(70, 60, 230, 240), cls=CLS_TEXT_BUBBLE, score=0.95)]
+
+    ms = build_masks_from_polygons(img, [poly], dets, dilation_px=4)
+    cracked = cv2.bitwise_and(ms.chat_erase, bubble_border_only)
+    assert np.count_nonzero(cracked) == 0, "Bubble border must have 0 cracked pixels!"
+    assert ms.chat_erase[:, 120:180].any(), "Text must be marked for erasing"
 
 
 if __name__ == "__main__":
