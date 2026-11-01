@@ -21,17 +21,17 @@
   // 1. Lưu lại hàm window.open gốc an toàn & thiết lập cơ chế kiểm soát
   const originalWindowOpen = window.open;
   const safeWindowOpen = typeof window.open === "function" ? window.open.bind(window) : null;
-  let isSafeWindowOpenPermitted = false;
 
   try {
     window.open = function (url, target, features) {
       const urlStr = String(url || "");
-      // Chỉ cho phép nếu hành động bắt nguồn từ Bookmarklet (mở Manga Studio)
-      if (
-        isSafeWindowOpenPermitted ||
+      // Chặn đứng popunder quảng cáo: CHỈ duy nhất cho phép đích đến là Manga Studio
+      const isStudioTarget =
         (state && state.studioUrl && urlStr.startsWith(state.studioUrl)) ||
-        urlStr.includes("/batch-studio")
-      ) {
+        urlStr.includes("/batch-studio") ||
+        urlStr.includes("/typeset");
+
+      if (isStudioTarget) {
         return safeWindowOpen ? safeWindowOpen(url, target, features) : originalWindowOpen.call(window, url, target, features);
       }
       console.warn("[Ad-Shield] Đã chặn popup / popunder quảng cáo trái phép:", urlStr);
@@ -1092,16 +1092,11 @@
 
     // 2. Mở tab Manga Studio Batch an toàn qua Ad-Shield
     const targetUrl = state.studioUrl;
-    isSafeWindowOpenPermitted = true;
     let studioWin = null;
     try {
       studioWin = safeWindowOpen ? safeWindowOpen(targetUrl, "_blank") : originalWindowOpen.call(window, targetUrl, "_blank");
     } catch (err) {
       console.error("[Ad-Shield] Lỗi mở Manga Studio:", err);
-    } finally {
-      setTimeout(() => {
-        isSafeWindowOpenPermitted = false;
-      }, 500);
     }
 
     // 3. Khởi tạo BroadcastChannel (hỗ trợ cùng domain)
@@ -1277,20 +1272,58 @@
       const ext = format === "cbz" ? "cbz" : "zip";
       const downloadName = `${state.title}.${ext}`;
 
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = downloadName;
-      link.style.display = "none";
-      link.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      });
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(link.href);
-        link.remove();
-      }, 5000);
+      // =========================================================================
+      // AIR-GAPPED ISOLATED IFRAME DOWNLOAD (CHỐNG BẮT SỰ KIỆN CLICK TOÀN PHẦN)
+      // Cách ly tuyệt đối: event chỉ chạy trong iframe doc, web mẹ không bắt được
+      // =========================================================================
+      let downloadTriggered = false;
+      const blobUrl = URL.createObjectURL(blob);
+
+      try {
+        const sandboxFrame = document.createElement("iframe");
+        sandboxFrame.style.position = "fixed";
+        sandboxFrame.style.width = "0";
+        sandboxFrame.style.height = "0";
+        sandboxFrame.style.border = "none";
+        sandboxFrame.style.opacity = "0";
+        sandboxFrame.style.pointerEvents = "none";
+        document.documentElement.appendChild(sandboxFrame);
+
+        const frameDoc = sandboxFrame.contentDocument || sandboxFrame.contentWindow?.document;
+        if (frameDoc && frameDoc.body) {
+          const safeLink = frameDoc.createElement("a");
+          safeLink.href = blobUrl;
+          safeLink.download = downloadName;
+          frameDoc.body.appendChild(safeLink);
+          safeLink.click();
+          downloadTriggered = true;
+        }
+
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          sandboxFrame.remove();
+        }, 2000);
+      } catch (frameErr) {
+        console.warn("[Ad-Shield] Sandbox Iframe Download fallback:", frameErr);
+      }
+
+      if (!downloadTriggered) {
+        // Fallback an toàn có chặn lan truyền
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = downloadName;
+        link.style.display = "none";
+        link.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        });
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+          link.remove();
+        }, 5000);
+      }
 
       if (progressBar) progressBar.style.width = "0%";
       updateScanStatus("Sẵn sàng");

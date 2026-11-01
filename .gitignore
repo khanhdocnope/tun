@@ -10,3 +10,5 @@ discord-voice-selfbot/
 
 models/
 *.onnx
+.chrome-test-profile*
+**/.chrome-test-profile*
