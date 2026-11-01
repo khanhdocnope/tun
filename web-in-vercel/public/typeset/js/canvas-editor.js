@@ -4,6 +4,69 @@
  * Interactive Split-Curtain Diff, Memory Lifecycle Cleanup, and Pro-Typesetter Hotkeys.
  */
 
+export const EMOTION_FONT_PRESETS = {
+  shout: {
+    fontFamily: "Yuki CrashLanding",
+    bold: true,
+    italic: false,
+    capsAll: true,
+    sizeScale: 1.2,
+    align: "center",
+    fill: "#000000",
+    stroke: "#ffffff",
+    strokeWidth: 4,
+  },
+  whisper: {
+    fontFamily: "Yuki Marian",
+    bold: false,
+    italic: true,
+    capsAll: false,
+    sizeScale: 0.9,
+    align: "center",
+    fill: "#1e293b",
+    stroke: "#ffffff",
+    strokeWidth: 2,
+  },
+  narration: {
+    fontFamily: "Yuki Downhill",
+    bold: false,
+    italic: false,
+    capsAll: false,
+    sizeScale: 1.0,
+    align: "center",
+    fill: "#000000",
+    stroke: "#ffffff",
+    strokeWidth: 3,
+  },
+  sfx: {
+    fontFamily: "Yuki CrashLanding",
+    bold: true,
+    italic: true,
+    capsAll: true,
+    sizeScale: 1.25,
+    align: "center",
+    fill: "#ffffff",
+    stroke: "#000000",
+    strokeWidth: 5,
+  },
+  dialogue: {
+    fontFamily: "Yuki Burobu",
+    bold: false,
+    italic: false,
+    capsAll: false,
+    sizeScale: 1.0,
+    align: "center",
+    fill: "#000000",
+    stroke: "#ffffff",
+    strokeWidth: 3,
+  },
+};
+
+export function getEmotionFontPreset(type) {
+  const key = (type || "").toLowerCase().trim();
+  return EMOTION_FONT_PRESETS[key] || EMOTION_FONT_PRESETS.dialogue;
+}
+
 export class TypesetCanvasEditor {
   constructor(canvasElementId, options = {}) {
     this.canvasId = canvasElementId;
@@ -68,7 +131,7 @@ export class TypesetCanvasEditor {
       return function (propertiesToInclude) {
         return toObject.call(
           this,
-          ["id", "order", "textJa", "textVi", "isLocked", "originalStyle"].concat(propertiesToInclude || [])
+          ["id", "order", "textJa", "textVi", "isLocked", "originalStyle", "bubbleType", "box_2d"].concat(propertiesToInclude || [])
         );
       };
     })(fabric.Textbox.prototype.toObject);
@@ -1009,6 +1072,124 @@ export class TypesetCanvasEditor {
     return box;
   }
 
+  /**
+   * Thêm một bóng thoại từ cấu trúc Unified Spatial 2D [ymin, xmin, ymax, xmax] (thang 0-1000)
+   * Tự động áp dụng Emotion-to-Font Engine và uốn chữ theo dáng elip (Elliptical Diamond Wrap).
+   *
+   * @param {Object} bubble - { id, box_2d, type, text_original, text_translated }
+   * @param {Object} [options]
+   * @returns {fabric.Textbox}
+   */
+  addSpatialBubble(bubble, options = {}) {
+    if (!bubble) return null;
+    const box2d = bubble.box_2d || bubble.box || [100, 100, 300, 300];
+    const ymin = Number(box2d[0]) || 0;
+    const xmin = Number(box2d[1]) || 0;
+    const ymax = Number(box2d[2]) || 1000;
+    const xmax = Number(box2d[3]) || 1000;
+
+    const pw = this.pageWidth || 1000;
+    const ph = this.pageHeight || 1400;
+
+    const pixelX = Math.round((xmin / 1000) * pw);
+    const pixelY = Math.round((ymin / 1000) * ph);
+    const pixelW = Math.max(50, Math.round(((xmax - xmin) / 1000) * pw));
+    const pixelH = Math.max(35, Math.round(((ymax - ymin) / 1000) * ph));
+
+    const emotionType = (bubble.type || "dialogue").toLowerCase().trim();
+    const preset = getEmotionFontPreset(emotionType);
+
+    let textContent = (bubble.text_translated || bubble.textVi || bubble.text || "").trim();
+    if (!textContent) textContent = bubble.text_original || "Lời thoại";
+
+    if (preset.capsAll) {
+      textContent = textContent.toUpperCase();
+    }
+
+    // Tính toán cỡ chữ cơ sở tương ứng với chiều cao khung bóng thoại và tỷ lệ emotion
+    const baseFontSize = Math.max(14, Math.min(54, Math.round(pixelH * 0.32 * preset.sizeScale)));
+    const wrapResult = this.ellipticalDiamondWrap(
+      textContent,
+      pixelW,
+      pixelH,
+      preset.fontFamily,
+      baseFontSize
+    );
+
+    // Kiểm tra màu nền bóng thoại để tự động đảo màu nếu cần
+    const isLightBg = this.detectBackgroundLuminance(pixelX, pixelY, pixelW, pixelH);
+    let fill = preset.fill;
+    let stroke = preset.stroke;
+    if (!isLightBg && emotionType !== "sfx") {
+      fill = "#ffffff";
+      stroke = "#000000";
+    }
+
+    const boxData = {
+      id: bubble.id ? `bubble_${bubble.id}` : `box_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      order: bubble.id || this.getNextOrder(),
+      textJa: bubble.text_original || bubble.textJa || "",
+      textVi: wrapResult.text || textContent,
+      text: wrapResult.text || textContent,
+      x: pixelX,
+      y: pixelY,
+      width: pixelW,
+      style: {
+        fontSize: wrapResult.fontSize || baseFontSize,
+        fontFamily: preset.fontFamily,
+        fill: fill,
+        stroke: stroke,
+        strokeWidth: preset.strokeWidth,
+        align: preset.align,
+        bold: preset.bold,
+        italic: preset.italic,
+        lineHeight: 1.15,
+      },
+      bubbleType: emotionType,
+      box_2d: [ymin, xmin, ymax, xmax],
+    };
+
+    const textbox = this.addTextBoxFromData(boxData);
+    textbox.bubbleType = emotionType;
+    textbox.box_2d = [ymin, xmin, ymax, xmax];
+    return textbox;
+  }
+
+  /**
+   * Nạp danh sách bubbles từ Unified Spatial Pipeline hàng loạt mà không gây giật lag
+   *
+   * @param {Array} bubbles - Mảng bubble objects
+   * @param {boolean} [replaceExisting=true] - Xóa các Textbox cũ trước khi nạp
+   * @returns {Array<fabric.Textbox>}
+   */
+  loadSpatialBubbles(bubbles, replaceExisting = true) {
+    if (!Array.isArray(bubbles) || bubbles.length === 0) return [];
+
+    if (replaceExisting) {
+      const oldBoxes = this.fabricCanvas.getObjects().filter((o) => o instanceof fabric.Textbox);
+      oldBoxes.forEach((b) => this.fabricCanvas.remove(b));
+    }
+
+    this.isHistoryLocked = true;
+    this.fabricCanvas.renderOnAddRemove = false;
+
+    const createdBoxes = [];
+    for (let i = 0; i < bubbles.length; i++) {
+      const bubble = bubbles[i];
+      const tb = this.addSpatialBubble(bubble);
+      if (tb) createdBoxes.push(tb);
+    }
+
+    this.fabricCanvas.renderOnAddRemove = true;
+    this.isHistoryLocked = false;
+
+    this.updateObjectsCoords();
+    this.fabricCanvas.requestRenderAll();
+    this.pushHistoryState();
+    this.onBoxesListChanged(this.getAllBoxesData());
+    return createdBoxes;
+  }
+
   createNewTextBox(x, y, text = "Lời thoại mới") {
     const nextOrder = this.getNextOrder();
     const isLight = this.detectBackgroundLuminance(x, y, 160, 80);
@@ -1069,6 +1250,8 @@ export class TypesetCanvasEditor {
         lineHeight: textbox.lineHeight || 1.15,
       },
       isLocked: Boolean(textbox.isLocked),
+      bubbleType: textbox.bubbleType || "dialogue",
+      box_2d: textbox.box_2d || null,
     };
   }
 
