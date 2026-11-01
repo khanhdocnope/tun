@@ -7,7 +7,7 @@
  */
 (function () {
   // If already active on the page, toggle visibility or re-focus
-  if (window.__mangaExtractorHost) {
+  if (window.__mangaExtractorHost || window.__mangaExtractorActive) {
     if (typeof window.__mangaExtractorToggle === "function") {
       window.__mangaExtractorToggle();
     }
@@ -264,15 +264,17 @@
   host.style.left = "0";
   host.style.width = "100%";
   host.style.height = "100%";
-  host.style.pointerEvents = "none";
+  host.style.pointerEvents = "auto";
   document.documentElement.appendChild(host);
 
   const shadow = host.attachShadow({ mode: "open" });
   window.__mangaExtractorHost = host;
+  window.__mangaExtractorActive = true;
   window.__mangaExtractorToggle = () => {
     state.hudVisible = !state.hudVisible;
     const modal = shadow.getElementById("hudContainer");
     if (modal) modal.style.display = state.hudVisible ? "flex" : "none";
+    host.style.display = state.hudVisible ? "block" : "none";
   };
 
   const hudStyles = `
@@ -730,15 +732,17 @@
     shadow.appendChild(hudWrapper);
 
     // Bind HUD events
-    shadow.getElementById("btnCloseHud").addEventListener("click", () => {
+    const closeHud = () => {
       host.remove();
       window.__mangaExtractorHost = null;
-    });
+      window.__mangaExtractorActive = false;
+    };
+
+    shadow.getElementById("btnCloseHud").addEventListener("click", closeHud);
 
     hudWrapper.addEventListener("click", (e) => {
       if (e.target === hudWrapper) {
-        host.remove();
-        window.__mangaExtractorHost = null;
+        closeHud();
       }
     });
 

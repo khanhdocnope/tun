@@ -28,14 +28,14 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px;
+      padding: 30px 20px 60px;
     }
     .container {
-      max-width: 820px;
+      max-width: 860px;
       width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 32px;
+      gap: 28px;
     }
     /* Header */
     .header {
@@ -60,7 +60,7 @@
       gap: 6px;
     }
     h1 {
-      font-size: 2.4rem;
+      font-size: 2.3rem;
       font-weight: 800;
       line-height: 1.2;
       background: linear-gradient(180deg, #ffffff 30%, #cbd5e1 100%);
@@ -68,35 +68,75 @@
       -webkit-text-fill-color: transparent;
     }
     .subtitle {
-      font-size: 1.05rem;
+      font-size: 1.02rem;
       color: var(--text-muted);
-      max-width: 600px;
+      max-width: 620px;
       line-height: 1.6;
     }
+
+    /* Explanation Banner (Giải đáp thắc mắc người dùng) */
+    .info-banner {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-left: 4px solid #6366f1;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    .info-banner b {
+      color: #f8fafc;
+    }
+
     /* Primary Drag Button Card */
     .drag-card {
       background: var(--bg-card);
       backdrop-filter: blur(24px) saturate(180%);
       border: 1px solid var(--border-card);
       border-radius: 24px;
-      padding: 36px 30px;
+      padding: 34px 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
       text-align: center;
       gap: 20px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.2);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.15);
+      position: relative;
+      overflow: hidden;
     }
+    .drag-instruction {
+      font-size: 1rem;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .drag-arrow-anim {
+      display: inline-block;
+      animation: floatUp 1.2s ease-in-out infinite alternate;
+      color: #ec4899;
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+    @keyframes floatUp {
+      from { transform: translateY(0); }
+      to { transform: translateY(-7px); }
+    }
+
     .bookmarklet-btn {
       display: inline-flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       background: var(--accent-gradient);
       color: #ffffff !important;
       text-decoration: none;
       font-size: 1.25rem;
       font-weight: 800;
-      padding: 16px 36px;
+      padding: 15px 36px;
       border-radius: 50px;
       box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
       cursor: grab;
@@ -105,56 +145,48 @@
       border: 2px dashed rgba(255, 255, 255, 0.4);
     }
     .bookmarklet-btn:hover {
-      transform: translateY(-2px) scale(1.03);
+      transform: translateY(-2px) scale(1.02);
       box-shadow: 0 15px 40px rgba(139, 92, 246, 0.7);
     }
     .bookmarklet-btn:active {
       cursor: grabbing;
       transform: scale(0.98);
     }
-    .drag-instruction {
-      font-size: 0.95rem;
-      color: #cbd5e1;
-      display: flex;
+
+    .btn-test {
+      background: rgba(99, 102, 241, 0.18);
+      border: 1px solid #6366f1;
+      color: #c7d2fe;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 10px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
       align-items: center;
       gap: 8px;
+      transition: all 0.15s;
     }
-    .drag-arrow-anim {
-      display: inline-block;
-      animation: floatUp 1.4s ease-in-out infinite alternate;
-      color: #f43f5e;
-      font-weight: 800;
-    }
-    @keyframes floatUp {
-      from { transform: translateY(0); }
-      to { transform: translateY(-6px); }
-    }
-    /* Mobile / Copy Code Section */
-    .copy-box {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .copy-code {
-      font-family: monospace;
-      font-size: 0.75rem;
-      color: #94a3b8;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      flex: 1;
-    }
-    .btn-copy {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+    .btn-test:hover {
+      background: rgba(99, 102, 241, 0.35);
       color: #fff;
-      font-size: 0.8rem;
+      transform: translateY(-1px);
+    }
+
+    /* Tabs hướng dẫn sử dụng */
+    .tabs-nav {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      width: 100%;
+      padding-bottom: 8px;
+      margin-top: 10px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.85rem;
       font-weight: 700;
       padding: 6px 14px;
       border-radius: 8px;
@@ -164,53 +196,141 @@
       gap: 6px;
       transition: all 0.15s;
     }
-    .btn-copy:hover {
-      background: rgba(255, 255, 255, 0.18);
-    }
-    /* Steps Grid */
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 18px;
-    }
-    .step-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-card);
-      border-radius: 18px;
-      padding: 22px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .step-number {
-      width: 32px;
-      height: 32px;
-      background: rgba(99, 102, 241, 0.2);
-      border: 1px solid #6366f1;
+    .tab-btn.active {
+      background: rgba(99, 102, 241, 0.25);
       color: #a5b4fc;
-      border-radius: 8px;
+    }
+    .tab-content {
+      display: none;
+      width: 100%;
+      text-align: left;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #cbd5e1;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Copy Code Box */
+    .copy-box {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 10px 14px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 0.9rem;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
     }
-    .step-title {
-      font-size: 1.05rem;
+    .copy-code {
+      font-family: monospace;
+      font-size: 0.74rem;
+      color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+    .btn-copy {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      font-size: 0.78rem;
       font-weight: 700;
-      color: #f1f5f9;
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.15s;
     }
-    .step-desc {
+    .btn-copy:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Alert Toast */
+    .toast-popup {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      background: #1e1b4b;
+      border: 1px solid #6366f1;
+      color: #f8fafc;
+      padding: 12px 24px;
+      border-radius: 12px;
       font-size: 0.85rem;
-      color: var(--text-muted);
-      line-height: 1.5;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease-out;
+      z-index: 999999;
+      text-align: center;
+      max-width: 90%;
     }
-    /* Features */
+    .toast-popup.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Demo Manga Section */
+    .demo-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .demo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .demo-pages-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .demo-panel-card {
+      background: #000;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .demo-panel-card canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .demo-panel-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #94a3b8;
+      padding: 8px;
+      width: 100%;
+      text-align: center;
+      background: #0f172a;
+    }
+
+    /* Features Grid */
     .features-card {
       background: var(--bg-card);
       border: 1px solid var(--border-card);
       border-radius: 20px;
-      padding: 26px;
+      padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -232,6 +352,7 @@
       font-size: 1rem;
       margin-top: 2px;
     }
+
     /* Footer */
     .footer {
       display: flex;
@@ -261,66 +382,117 @@
       </div>
       <h1>Manga Extractor Pro</h1>
       <p class="subtitle">
-        Bookmarklet trích xuất truyện tranh toàn năng. Bóc tách Canvas DRM, tự động cuộn trang quét lazy-load và truyền thẳng sang Manga Studio trong 1 giây.
+        Bookmarklet trích xuất truyện tranh toàn năng. Hút trọn ảnh & Canvas DRM từ bất kỳ website nào rồi truyền thẳng sang Manga Studio trong 1 giây.
       </p>
     </header>
 
-    <!-- Main Drag & Drop Installation Card -->
+    <!-- Hộp giải thích thân thiện: Bookmarklet là gì? -->
+    <div class="info-banner">
+      <div><b>📌 Bookmarklet là gì?</b> Nó là một nút bấm tiện ích được lưu trên thanh <b>Dấu trang (Bookmarks)</b> của trình duyệt. Khi bạn đang đọc truyện trên mạng (MangaDex, Comix, NetTruyen, CuuTruyen...), bấm nút này nó sẽ tự động quét và hút toàn bộ chapter truyện về Manga Studio.</div>
+      <div><b>⚠️ Lưu ý:</b> Không bấm trực tiếp vào nút bên dưới (vì Chrome chặn link JavaScript nội bộ để bảo mật). Bạn hãy <b>DÙNG CHUỘT KÉO NÚT</b> thả lên thanh Bookmark, hoặc làm theo 3 cách hướng dẫn phía dưới.</div>
+    </div>
+
+    <!-- Main Drag & Drop Card -->
     <section class="drag-card">
       <div class="drag-instruction">
         <span class="drag-arrow-anim">⬆️</span>
-        <span><b>Kéo nút bên dưới thả lên thanh Dấu trang (Bookmarks Bar)</b> của trình duyệt:</span>
+        <span><b>Dùng chuột KÉO nút bên dưới thả lên thanh Dấu trang (Bookmarks Bar):</b></span>
       </div>
 
       <!-- The Draggable Bookmarklet Link -->
-      <a href="#" id="bookmarkletLink" class="bookmarklet-btn" draggable="true" title="Kéo nút này thả lên thanh Dấu trang">
+      <a href="#" id="bookmarkletLink" class="bookmarklet-btn" draggable="true" title="Kéo nút này thả lên thanh Dấu trang của trình duyệt">
         <i class="fa-solid fa-bolt"></i>
-        <span>⚡ Trích Xuất Manga</span>
+        <span>Trích Xuất Manga</span>
       </a>
 
       <p style="font-size: 0.8rem; color: #94a3b8;">
-        (Nếu không thấy thanh Dấu trang, nhấn phím tắt <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">Ctrl + Shift + B</kbd> hoặc <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">Cmd + Shift + B</kbd>)
+        (Nếu trình duyệt chưa hiện thanh Dấu trang, hãy nhấn phím tắt <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">Ctrl + Shift + B</kbd> hoặc <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">Cmd + Shift + B</kbd>)
       </p>
 
-      <div style="display: flex; gap: 12px; margin-top: 6px;">
-        <button type="button" class="btn-copy" id="btnTestHere" style="background: rgba(99, 102, 241, 0.2); border-color: #6366f1;">
+      <div style="display: flex; gap: 12px; margin-top: 4px;">
+        <button type="button" class="btn-test" id="btnTestHere">
           <i class="fa-solid fa-play"></i>
-          <span>Thử nghiệm ngay trên trang này</span>
+          <span>▶ Thử nghiệm ngay trên trang này (Mở HUD)</span>
         </button>
       </div>
 
-      <!-- Mobile / Copy Section -->
-      <div class="copy-box" style="margin-top: 10px;">
-        <span class="copy-code" id="codeDisplay">javascript:...</span>
-        <button class="btn-copy" id="btnCopyCode">
-          <i class="fa-solid fa-copy"></i>
-          <span>Sao chép mã</span>
-        </button>
+      <!-- Tabs các cách sử dụng -->
+      <div class="tabs-nav">
+        <button class="tab-btn active" data-tab="tab1"><i class="fa-solid fa-mouse"></i> Cách 1: Kéo thả (PC)</button>
+        <button class="tab-btn" data-tab="tab2"><i class="fa-solid fa-terminal"></i> Cách 2: Dán Console F12</button>
+        <button class="tab-btn" data-tab="tab3"><i class="fa-solid fa-mobile-screen"></i> Cách 3: Điện thoại</button>
+      </div>
+
+      <!-- Tab 1: Kéo thả chuột -->
+      <div class="tab-content active" id="tab1">
+        <ol style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
+          <li>Nhấn <kbd>Ctrl + Shift + B</kbd> để mở thanh Dấu trang dưới thanh địa chỉ web.</li>
+          <li>Dùng chuột nhấn giữ nút màu tím <b>"Trích Xuất Manga"</b> rồi kéo thả lên thanh Dấu trang đó.</li>
+          <li>Khi lướt web đọc truyện ở tab khác, bấm nút trên thanh Dấu trang là bảng điều khiển sẽ hiện ra ngay!</li>
+        </ol>
+      </div>
+
+      <!-- Tab 2: Dán Console F12 -->
+      <div class="tab-content" id="tab2">
+        <p>Nếu website truyện chặn bookmarklet hoặc bạn đang chạy trên <code>localhost</code>:</p>
+        <ol style="padding-left: 20px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+          <li>Trên trang truyện đang xem, nhấn <kbd>F12</kbd> (hoặc chuột phải chọn <i>Kiểm tra / Inspect</i>).</li>
+          <li>Chuyển sang tab <b>Console</b>.</li>
+          <li>Sao chép đoạn mã bên dưới, dán vào và nhấn <b>Enter</b>:</li>
+        </ol>
+        <div class="copy-box">
+          <span class="copy-code" id="consoleCodeDisplay">/* Đang tải mã... */</span>
+          <button class="btn-copy" id="btnCopyConsole">
+            <i class="fa-solid fa-copy"></i>
+            <span>Sao chép mã F12</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab 3: Điện thoại -->
+      <div class="tab-content" id="tab3">
+        <p>Trên trình duyệt Safari (iOS) hoặc Chrome (Android):</p>
+        <ol style="padding-left: 20px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">
+          <li>Bookmark trang này lại với tên <b>"Trích Xuất Manga"</b>.</li>
+          <li>Sửa URL của Bookmark đó bằng đoạn mã JavaScript bên dưới:</li>
+        </ol>
+        <div class="copy-box">
+          <span class="copy-code" id="codeDisplay">javascript:...</span>
+          <button class="btn-copy" id="btnCopyCode">
+            <i class="fa-solid fa-copy"></i>
+            <span>Sao chép mã</span>
+          </button>
+        </div>
       </div>
     </section>
 
-    <!-- Steps Grid -->
-    <section class="steps-grid">
-      <div class="step-card">
-        <div class="step-number">1</div>
-        <div class="step-title">Mở trang truyện</div>
-        <div class="step-desc">Truy cập bất kỳ website đọc truyện nào (Comix.to, MangaDex, Webtoons, NetTruyen, CuuTruyen...).</div>
+    <!-- Khu vực Demo Canvas Manga để thử nghiệm quét ảnh -->
+    <section class="demo-section">
+      <div class="demo-header">
+        <div>
+          <h3 style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9;">📖 Khu vực truyện mẫu để chạy thử nghiệm</h3>
+          <p style="font-size: 0.8rem; color: #94a3b8;">Hệ thống đã vẽ sẵn 3 trang Manga Canvas mẫu bên dưới. Hãy bấm nút <b>"▶ Thử nghiệm ngay"</b> để thấy bảng điều khiển quét và chọn 3 trang này!</p>
+        </div>
       </div>
-      <div class="step-card">
-        <div class="step-number">2</div>
-        <div class="step-title">Bấm Bookmarklet</div>
-        <div class="step-desc">Bấm nút <b>"⚡ Trích Xuất Manga"</b> trên thanh Dấu trang. Bảng điều khiển kính mờ VisionOS sẽ lập tức xuất hiện.</div>
-      </div>
-      <div class="step-card">
-        <div class="step-number">3</div>
-        <div class="step-title">Tải hoặc Dịch</div>
-        <div class="step-desc">Bấm <b>"⚡ Gửi sang Studio"</b> để tự động dịch và xóa chữ, hoặc bấm <b>"📦 Tải ZIP/CBZ"</b> để lưu về máy.</div>
+      <div class="demo-pages-grid">
+        <div class="demo-panel-card">
+          <canvas id="demoCanvas1" width="400" height="600"></canvas>
+          <div class="demo-panel-title">Trang 01 (Manga Canvas)</div>
+        </div>
+        <div class="demo-panel-card">
+          <canvas id="demoCanvas2" width="400" height="600"></canvas>
+          <div class="demo-panel-title">Trang 02 (Manga Canvas)</div>
+        </div>
+        <div class="demo-panel-card">
+          <canvas id="demoCanvas3" width="400" height="600"></canvas>
+          <div class="demo-panel-title">Trang 03 (Manga Canvas)</div>
+        </div>
       </div>
     </section>
 
     <!-- Features -->
     <section class="features-card">
-      <h3 style="font-size: 1.1rem; font-weight: 700; color: #f1f5f9;">Đặc quyền công nghệ</h3>
+      <h3 style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9;">Đặc quyền công nghệ</h3>
       <div class="features-grid">
         <div class="feat-item">
           <i class="fa-solid fa-shield-halved feat-icon"></i>
@@ -352,25 +524,131 @@
 
   </div>
 
+  <div class="toast-popup" id="toastPopup">Thông báo</div>
+
   <script>
     (function() {
-      // Dynamic bookmarklet generator using current host
+      // 1. Vẽ 3 trang Manga mẫu lên Canvas để kiểm thử chức năng quét Canvas DRM
+      function drawDemoCanvas(canvasId, pageNum, textBubble) {
+        const cvs = document.getElementById(canvasId);
+        if (!cvs) return;
+        const ctx = cvs.getContext('2d');
+        const w = cvs.width;
+        const h = cvs.height;
+
+        // Nền trắng phong cách truyện tranh
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+
+        // Khung viền manga đen
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#000000';
+        ctx.strokeRect(16, 16, w - 32, h - 32);
+
+        // Chia ô Panel
+        ctx.beginPath();
+        ctx.moveTo(16, h * 0.45);
+        ctx.lineTo(w - 16, h * 0.45);
+        ctx.stroke();
+
+        // Panel trên: Đường speedline truyện tranh
+        ctx.save();
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 20; i++) {
+          ctx.beginPath();
+          ctx.moveTo(w / 2, h * 0.22);
+          ctx.lineTo(Math.random() * w, Math.random() * h * 0.45);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Bong bóng thoại Elip
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(w * 0.5, h * 0.22, 120, 60, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Chữ trong bóng thoại
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(textBubble, w * 0.5, h * 0.22);
+
+        // Panel dưới: Hình minh họa nhân vật / khung cảnh
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.fillText(`MANGA DEMO - CHAPTER 01`, w * 0.5, h * 0.7);
+
+        ctx.fillStyle = '#64748b';
+        ctx.font = '13px monospace';
+        ctx.fillText(`[Trang số ${pageNum}] Canvas DRM Scraper Test`, w * 0.5, h * 0.76);
+      }
+
+      drawDemoCanvas('demoCanvas1', '01', 'CÔNG CỤ NÀY ĐÃ QUÉT');
+      drawDemoCanvas('demoCanvas2', '02', 'ĐƯỢC TOÀN BỘ TRANG!');
+      drawDemoCanvas('demoCanvas3', '03', 'SẴN SÀNG ĐỂ TẨY & DỊCH');
+
+      // 2. Thiết lập đường dẫn script động
       const origin = window.location.origin;
       const scriptUrl = origin + '/bookmarklet/extractor.js';
       
       const bookmarkletCode = `javascript:(function(){if(window.__mangaExtractorActive){if(window.__mangaExtractorToggle)window.__mangaExtractorToggle();return;}var s=document.createElement('script');s.src='${scriptUrl}?t='+Date.now();s.crossOrigin='anonymous';document.body.appendChild(s);})();`;
 
+      const consoleSnippet = `(function(){var s=document.createElement('script');s.src='${scriptUrl}?t='+Date.now();document.body.appendChild(s);})();`;
+
       const linkEl = document.getElementById('bookmarkletLink');
       const codeDisplay = document.getElementById('codeDisplay');
+      const consoleCodeDisplay = document.getElementById('consoleCodeDisplay');
       const btnCopy = document.getElementById('btnCopyCode');
+      const btnCopyConsole = document.getElementById('btnCopyConsole');
       const btnTest = document.getElementById('btnTestHere');
+      const toastPopup = document.getElementById('toastPopup');
+
+      function showToast(msg) {
+        if (!toastPopup) return;
+        toastPopup.textContent = msg;
+        toastPopup.classList.add('visible');
+        setTimeout(() => toastPopup.classList.remove('visible'), 3200);
+      }
+
+      function launchExtractor() {
+        if (window.__mangaExtractorActive && typeof window.__mangaExtractorToggle === 'function') {
+          window.__mangaExtractorToggle();
+          return;
+        }
+        const s = document.createElement('script');
+        s.src = scriptUrl + '?t=' + Date.now();
+        document.body.appendChild(s);
+      }
 
       if (linkEl) {
         linkEl.setAttribute('href', bookmarkletCode);
+        // Khi người dùng bấm trực tiếp vào nút thay vì kéo thả:
+        linkEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          showToast('💡 Mẹo: Hãy KÉO nút này thả lên thanh Dấu trang. Đang mở bản chạy thử...');
+          launchExtractor();
+        });
       }
-      if (codeDisplay) {
-        codeDisplay.textContent = bookmarkletCode;
-      }
+
+      if (codeDisplay) codeDisplay.textContent = bookmarkletCode;
+      if (consoleCodeDisplay) consoleCodeDisplay.textContent = consoleSnippet;
+
+      // Xử lý chuyển tab hướng dẫn
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          btn.classList.add('active');
+          const targetTab = document.getElementById(btn.dataset.tab);
+          if (targetTab) targetTab.classList.add('active');
+        });
+      });
 
       if (btnCopy) {
         btnCopy.addEventListener('click', () => {
@@ -383,11 +661,20 @@
         });
       }
 
+      if (btnCopyConsole) {
+        btnCopyConsole.addEventListener('click', () => {
+          navigator.clipboard.writeText(consoleSnippet).then(() => {
+            btnCopyConsole.innerHTML = '<i class="fa-solid fa-check"></i> <span>Đã sao chép!</span>';
+            setTimeout(() => {
+              btnCopyConsole.innerHTML = '<i class="fa-solid fa-copy"></i> <span>Sao chép mã F12</span>';
+            }, 2500);
+          });
+        });
+      }
+
       if (btnTest) {
         btnTest.addEventListener('click', () => {
-          const s = document.createElement('script');
-          s.src = scriptUrl + '?t=' + Date.now();
-          document.body.appendChild(s);
+          launchExtractor();
         });
       }
     })();
