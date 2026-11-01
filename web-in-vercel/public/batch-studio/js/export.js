@@ -79,6 +79,60 @@ import { store } from './storage.js';
     }
   }
 
+  export async function exportBundleZip() {
+    if (zipExporting) return;
+    if (typeof JSZip === 'undefined') {
+      showToast('Lỗi: chưa tải được thư viện nén ZIP. Kiểm tra mạng rồi thử lại.');
+      return;
+    }
+    if (state.images.length === 0) {
+      showToast('Vui lòng thêm ảnh trước khi xuất ZIP.');
+      return;
+    }
+
+    zipExporting = true;
+    try {
+      showToast('Đang đóng gói ZIP Bundle (Cleaned, Typeset & Script)...');
+      const zip = new JSZip();
+      const folderCleaned = zip.folder('cleaned');
+      const folderTypeset = zip.folder('typeset');
+      const usedCleaned = new Set();
+      const usedTypeset = new Set();
+      let cleanedCount = 0;
+      let typesetCount = 0;
+
+      for (const item of state.images) {
+        if (item.hasCleaned) {
+          const rec = await store.getCleaned(item.id);
+          if (rec && rec.data) {
+            folderCleaned.file(cleanedFileName(item, usedCleaned), rec.data, { binary: true });
+            cleanedCount++;
+          }
+        }
+        const tRec = await store.getTypeset(item.id);
+        if (tRec && tRec.data) {
+          folderTypeset.file(cleanedFileName(item, usedTypeset), tRec.data, { binary: true });
+          typesetCount++;
+        }
+      }
+
+      const scriptContent = generateChapterContent();
+      if (scriptContent.trim()) {
+        zip.file('script.txt', '\uFEFF' + scriptContent);
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE', streamFiles: true });
+      saveBlob(`Manga_Chapter_Bundle_${Date.now()}.zip`, blob);
+
+      showToast(`Đã xuất ZIP Bundle thành công (${cleanedCount} ảnh cleaned, ${typesetCount} ảnh typeset, kèm script.txt)!`);
+    } catch (err) {
+      console.error('Lỗi export bundle zip:', err);
+      showToast('Lỗi: không tạo được tệp ZIP Bundle (' + (err.message || 'không rõ nguyên nhân') + ').');
+    } finally {
+      zipExporting = false;
+    }
+  }
+
   export function openExportModal(text) {
     if (!el.exportModal) return;
     if (el.exportPreviewTextarea) el.exportPreviewTextarea.value = text;

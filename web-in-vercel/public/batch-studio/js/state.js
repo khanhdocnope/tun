@@ -94,6 +94,7 @@
     btnProcessAllLabel: document.getElementById('btnProcessAllLabel'),
     btnExportZipClean: document.getElementById('btnExportZipClean'),
     btnExportZipBoth: document.getElementById('btnExportZipBoth'),
+    btnExportZipBundle: document.getElementById('btnExportZipBundle'),
     selectCleanEngine: document.getElementById('selectCleanEngine'),
     selectCleanModel: document.getElementById('selectCleanModel'),
     checkCleanSFX: document.getElementById('checkCleanSFX'),
@@ -136,6 +137,7 @@
     sheetBtnDownloadTxt: document.getElementById('sheetBtnDownloadTxt'),
     sheetBtnExportZipClean: document.getElementById('sheetBtnExportZipClean'),
     sheetBtnExportZipBoth: document.getElementById('sheetBtnExportZipBoth'),
+    sheetBtnExportZipBundle: document.getElementById('sheetBtnExportZipBundle'),
     sheetBtnOpenExportModal: document.getElementById('sheetBtnOpenExportModal'),
     sheetBtnClearAll: document.getElementById('sheetBtnClearAll'),
 

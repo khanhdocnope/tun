@@ -27,6 +27,7 @@ import {
 import {
   exportFullChapter,
   exportCleanZip,
+  exportBundleZip,
   copyChapterToClipboard,
   openExportModal,
   closeExportModal,
@@ -157,6 +158,13 @@ import {
       el.exportMenu.style.display = 'none';
       exportCleanZip(true);
     });
+    if (el.btnExportZipBundle) {
+      el.btnExportZipBundle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.exportMenu.style.display = 'none';
+        exportBundleZip();
+      });
+    }
     el.rangeCleanDilation.addEventListener('input', () => { el.cleanDilationVal.textContent = el.rangeCleanDilation.value; });
     el.rangeCleanThreshold.addEventListener('input', () => { el.cleanThresholdVal.textContent = parseFloat(el.rangeCleanThreshold.value).toFixed(2); });
     el.btnClearAll.addEventListener('click', clearAllBatch);
@@ -356,6 +364,12 @@ import {
       el.sheetBtnExportZipBoth.addEventListener('click', () => {
         closeBottomSheet();
         if (el.btnExportZipBoth) el.btnExportZipBoth.click();
+      });
+    }
+    if (el.sheetBtnExportZipBundle) {
+      el.sheetBtnExportZipBundle.addEventListener('click', () => {
+        closeBottomSheet();
+        if (el.btnExportZipBundle) el.btnExportZipBundle.click();
       });
     }
     if (el.sheetBtnOpenExportModal) {
