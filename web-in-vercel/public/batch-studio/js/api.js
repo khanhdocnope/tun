@@ -177,6 +177,13 @@ export function getBatchWebLama() {
 
   // Thêm từng ảnh đơn lẻ vào state và IndexedDB (hỗ trợ giải phóng bộ nhớ ngay sau khi nén)
   export async function addSingleFileItem(file) {
+    const fileName = (file.name || '').trim();
+    const existingNames = new Set((state.images || []).map((img) => (img.name || '').trim().toLowerCase()));
+    if (fileName && existingNames.has(fileName.toLowerCase())) {
+      console.warn([BatchStudio] Bỏ qua ảnh trùng lặp: );
+      return null;
+    }
+
     const { base64, sizeStr, compressed } = await compressAndLoadFile(file);
 
     const item = {

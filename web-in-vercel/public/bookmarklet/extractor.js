@@ -14,6 +14,144 @@
     return;
   }
 
+  // =============================================================
+  // AD-SHIELD STEEL DEFENSE MODULE (CHỐNG POPUNDER & CLICKJACKING)
+  // =============================================================
+
+  // 1. Lưu lại hàm window.open gốc an toàn & thiết lập cơ chế kiểm soát
+  const originalWindowOpen = window.open;
+  const safeWindowOpen = typeof window.open === "function" ? window.open.bind(window) : null;
+  let isSafeWindowOpenPermitted = false;
+
+  try {
+    window.open = function (url, target, features) {
+      const urlStr = String(url || "");
+      // Chỉ cho phép nếu hành động bắt nguồn từ Bookmarklet (mở Manga Studio)
+      if (
+        isSafeWindowOpenPermitted ||
+        (state && state.studioUrl && urlStr.startsWith(state.studioUrl)) ||
+        urlStr.includes("/batch-studio")
+      ) {
+        return safeWindowOpen ? safeWindowOpen(url, target, features) : originalWindowOpen.call(window, url, target, features);
+      }
+      console.warn("[Ad-Shield] Đã chặn popup / popunder quảng cáo trái phép:", urlStr);
+      return null;
+    };
+  } catch (err) {
+    console.warn("[Ad-Shield] Không thể bọc window.open:", err);
+  }
+
+  // 2. Chống chuyển hướng trang web mẹ & bẫy onbeforeunload gây phiền toái
+  try {
+    window.onbeforeunload = null;
+  } catch (_) {}
+
+  // Khai báo sớm biến host & shadow để module cách ly sự kiện tham chiếu
+  let host = null;
+  let shadow = null;
+
+  // 3. Capture-Phase Event Quarantine (Cách ly sự kiện ở pha Capture trên window & document)
+  const captureEvents = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"];
+
+  function isEventInsideHud(e) {
+    if (!host) return false;
+    // Kiểm tra e.composedPath() xuyên qua Shadow DOM
+    if (typeof e.composedPath === "function") {
+      const path = e.composedPath();
+      if (path && Array.isArray(path)) {
+        for (let i = 0; i < path.length; i++) {
+          const node = path[i];
+          if (node === host || (node && node.id === "manga-extractor-host") || (node && node.id === "hudContainer")) {
+            return true;
+          }
+        }
+      }
+    }
+    // Kiểm tra target thông thường
+    if (e.target && (e.target === host || host.contains(e.target))) {
+      return true;
+    }
+    return false;
+  }
+
+  function quarantineCaptureHandler(e) {
+    if (isEventInsideHud(e)) {
+      // Dập tắt sự kiện ngay lập tức ở pha Capture trước khi script quảng cáo của trang mẹ kịp bắt
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  }
+
+  captureEvents.forEach((evtType) => {
+    window.addEventListener(evtType, quarantineCaptureHandler, true);
+    document.addEventListener(evtType, quarantineCaptureHandler, true);
+  });
+
+  function cleanupAdShield() {
+    captureEvents.forEach((evtType) => {
+      window.removeEventListener(evtType, quarantineCaptureHandler, true);
+      document.removeEventListener(evtType, quarantineCaptureHandler, true);
+    });
+    if (originalWindowOpen) {
+      try { window.open = originalWindowOpen; } catch (_) {}
+    }
+  }
+
+  // 4. Tiêu diệt lớp phủ tàng hình (Neutralize Invisible Click-Jacking Overlays)
+  function neutralizeHostPageAdTraps() {
+    try {
+      const candidates = document.querySelectorAll("div, iframe, a, section, span, ins");
+      const vw = window.innerWidth || document.documentElement.clientWidth || 1000;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+
+      let neutralizedCount = 0;
+      candidates.forEach((el) => {
+        // Tuyệt đối không can thiệp vào host của Bookmarklet
+        if (host && (el === host || host.contains(el))) return;
+        if (el.id === "manga-extractor-host") return;
+        if (el === document.body || el === document.documentElement) return;
+
+        const style = window.getComputedStyle(el);
+        const pos = style.position;
+        if (pos !== "fixed" && pos !== "absolute") return;
+
+        const rect = el.getBoundingClientRect();
+        // Kiểm tra kích thước bao phủ lớn (> 60% viewport)
+        const isLargeCoverage = rect.width > vw * 0.6 && rect.height > vh * 0.6;
+
+        // Bỏ qua nếu phần tử chứa các tranh manga thật (chiều rộng > 250px và chiều cao > 300px)
+        const hasMangaImages = Array.from(el.querySelectorAll("img, canvas")).some((img) => {
+          const w = img.naturalWidth || img.width || 0;
+          const h = img.naturalHeight || img.height || 0;
+          return w > 250 && h > 300;
+        });
+        if (hasMangaImages) return;
+
+        const opacity = parseFloat(style.opacity);
+        const isTransparent = (opacity < 0.15 || style.visibility === "hidden" || style.backgroundColor === "transparent" || style.backgroundColor === "rgba(0, 0, 0, 0)");
+        const idClassStr = `${el.id || ""} ${el.className || ""}`.toLowerCase();
+        const hasAdKeywords = /ad|pop|overlay|click|banner|interstitial|under|sponsor|gate|fake|trap|float|hidden/i.test(idClassStr);
+        const zIndex = parseInt(style.zIndex, 10) || 0;
+
+        if ((isTransparent && isLargeCoverage) || (hasAdKeywords && (zIndex > 80 || isLargeCoverage))) {
+          el.style.setProperty("pointer-events", "none", "important");
+          el.style.setProperty("display", "none", "important");
+          el.style.setProperty("visibility", "hidden", "important");
+          neutralizedCount++;
+        }
+      });
+
+      if (neutralizedCount > 0) {
+        console.log(`[Ad-Shield] Đã vô hiệu hóa ${neutralizedCount} bẫy click / lớp phủ quảng cáo.`);
+      }
+    } catch (err) {
+      console.warn("[Ad-Shield] Lỗi quét bẫy quảng cáo:", err);
+    }
+  }
+
+  // Chạy diệt bẫy quảng cáo ngay lập tức
+  neutralizeHostPageAdTraps();
+
   // 1. Determine script origin (for connecting back to Manga Studio)
   let scriptOrigin = "http://localhost:3000";
   try {
@@ -65,6 +203,17 @@
     }
   }
 
+  // Chuẩn hóa URL ảnh để so sánh chống trùng (loại bỏ params rác, cache buster)
+  function normalizeUrlKey(u) {
+    if (!u || typeof u !== "string" || u.startsWith("data:")) return u || "";
+    try {
+      const parsed = new URL(u, window.location.href);
+      return (parsed.origin + parsed.pathname).toLowerCase();
+    } catch (_) {
+      return u.split("?")[0].split("#")[0].toLowerCase();
+    }
+  }
+
   // Engine 1: Canvas DRM Scraper
   function scanCanvases() {
     const results = [];
@@ -72,11 +221,25 @@
 
     for (let i = 0; i < canvases.length; i++) {
       const c = canvases[i];
+      // Bỏ qua canvas trong Shadow DOM của chính HUD
+      if (host && host.contains(c)) continue;
+
       const w = c.width || c.clientWidth || 0;
       const h = c.height || c.clientHeight || 0;
 
       // Filter out small canvases / icons / trackers
       if (w < 200 || h < 250) continue;
+
+      // Bỏ qua canvas bị ẩn trong layout
+      try {
+        const style = window.getComputedStyle(c);
+        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+          continue;
+        }
+        if (c.offsetParent === null && style.position !== "fixed" && style.position !== "absolute") {
+          continue;
+        }
+      } catch (_) {}
 
       try {
         let dataUrl = "";
@@ -121,6 +284,20 @@
 
     for (let i = 0; i < images.length; i++) {
       const img = images[i];
+      // Bỏ qua ảnh thuộc về chính HUD
+      if (host && host.contains(img)) continue;
+
+      // Bỏ qua ảnh bị ẩn hoàn toàn trong CSS layout
+      try {
+        const style = window.getComputedStyle(img);
+        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+          continue;
+        }
+        if (img.offsetParent === null && style.position !== "fixed" && style.position !== "absolute") {
+          continue;
+        }
+      } catch (_) {}
+
       let candidateUrl = "";
 
       // Tìm URL thật qua các thuộc tính lazy-load phổ biến
@@ -166,7 +343,9 @@
         }
       } catch (_) {}
 
-      if (seenUrls.has(absoluteUrl)) continue;
+      // CHỐNG TRÙNG LẶP: So sánh theo URL gốc đã bóc tách tham số truy vấn
+      const normKey = normalizeUrlKey(absoluteUrl);
+      if (seenUrls.has(normKey)) continue;
 
       // Bộ lọc kích thước: Nếu ảnh đã nạp, kiểm tra natural dimensions
       const nw = img.naturalWidth || img.clientWidth || 0;
@@ -174,10 +353,10 @@
 
       // Loại bỏ ảnh quá nhỏ (icon, avatar, banner)
       if (img.complete && nw > 0 && nh > 0) {
-        if (nw < 280 && nh < 280) continue;
+        if (nw < 240 || nh < 240) continue;
       }
 
-      seenUrls.add(absoluteUrl);
+      seenUrls.add(normKey);
       const pos = getElementPosition(img);
 
       results.push({
@@ -195,7 +374,7 @@
     return results;
   }
 
-  // Quét toàn diện kết hợp cả Canvas & Images và sắp xếp theo vị trí trang
+  // Quét toàn diện kết hợp cả Canvas & Images và sắp xếp theo vị trí trang (Khử trùng lặp đa tầng)
   function scanAllPages() {
     state.isScanning = true;
     updateScanStatus("Đang quét nội dung...");
@@ -203,22 +382,62 @@
     const canvases = scanCanvases();
     const images = scanImages();
 
-    // Hợp nhất và lọc trùng
+    // Hợp nhất thông minh chống trùng giữa Canvas DRM và <img> thẻ ẩn
     let merged = [];
     if (canvases.length > 0 && images.length === 0) {
       merged = canvases;
     } else if (images.length > 0 && canvases.length === 0) {
       merged = images;
+    } else if (images.length >= 4 && canvases.length < 3) {
+      // Trường hợp web ảnh thông thường: Canvas ít là widget/ad rác
+      merged = images;
+    } else if (canvases.length >= 4 && images.length < 3) {
+      // Trường hợp web Canvas DRM thuần túy
+      merged = canvases;
     } else {
-      // Nếu có cả 2: Ưu tiên canvas nếu canvas chiếm trọn viewer DRM
-      merged = [...canvases, ...images];
+      // Có cả hai: Loại bỏ bất kỳ ảnh img nào có tọa độ trùng lặp với canvas DRM
+      const nonOverlappingImages = images.filter((img) => {
+        return !canvases.some(
+          (c) => Math.abs(c.pos.top - img.pos.top) < 35 && Math.abs(c.pos.left - img.pos.left) < 35
+        );
+      });
+      merged = [...canvases, ...nonOverlappingImages];
     }
 
     // Sắp xếp tự nhiên theo vị trí từ trên xuống dưới (đọc xuôi)
     merged.sort((a, b) => a.pos.top - b.pos.top || a.pos.left - b.pos.left);
 
-    state.pages = merged;
-    state.selectedIndices = new Set(merged.map((_, idx) => idx));
+    // BỘ LỌC CHỐNG LẶP CUỐI CÙNG: Triệt tiêu các phần tử có cùng vị trí trang hoặc cùng URL
+    const uniquePages = [];
+    for (let i = 0; i < merged.length; i++) {
+      const cur = merged[i];
+
+      // 1. Kiểm tra xem có trùng tọa độ đứng (< 25px) với trang đã thêm hay không
+      const isDuplicatePos = uniquePages.some(
+        (prev) => Math.abs(prev.pos.top - cur.pos.top) < 25 && Math.abs(prev.pos.left - cur.pos.left) < 25
+      );
+      if (isDuplicatePos) continue;
+
+      // 2. Kiểm tra xem có trùng URL ảnh (đã chuẩn hóa) không
+      if (cur.src && !cur.src.startsWith("data:")) {
+        const curNorm = normalizeUrlKey(cur.src);
+        const isDuplicateSrc = uniquePages.some(
+          (prev) => prev.src && !prev.src.startsWith("data:") && normalizeUrlKey(prev.src) === curNorm
+        );
+        if (isDuplicateSrc) continue;
+      }
+
+      // 3. Kiểm tra trùng dữ liệu base64
+      if (cur.dataUrl) {
+        const isDuplicateData = uniquePages.some((prev) => prev.dataUrl && prev.dataUrl === cur.dataUrl);
+        if (isDuplicateData) continue;
+      }
+
+      uniquePages.push(cur);
+    }
+
+    state.pages = uniquePages;
+    state.selectedIndices = new Set(uniquePages.map((_, idx) => idx));
     state.isScanning = false;
 
     renderHud();
@@ -249,6 +468,7 @@
     await new Promise((r) => setTimeout(r, 300));
 
     state.isScrolling = false;
+    neutralizeHostPageAdTraps();
     scanAllPages();
   }
 
@@ -256,7 +476,7 @@
   // SHADOW DOM VISIONOS HUD (Cách ly hoàn toàn với CSS trang gốc)
   // -------------------------------------------------------------
 
-  const host = document.createElement("div");
+  host = document.createElement("div");
   host.id = "manga-extractor-host";
   host.style.position = "fixed";
   host.style.zIndex = "2147483647";
@@ -267,7 +487,7 @@
   host.style.pointerEvents = "auto";
   document.documentElement.appendChild(host);
 
-  const shadow = host.attachShadow({ mode: "open" });
+  shadow = host.attachShadow({ mode: "open" });
   window.__mangaExtractorHost = host;
   window.__mangaExtractorActive = true;
   window.__mangaExtractorToggle = () => {
@@ -347,6 +567,25 @@
       letter-spacing: 0.5px;
       text-transform: uppercase;
       box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+    }
+    .hud-adshield-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 9999px;
+      padding: 3px 8px;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .hud-adshield-badge svg {
+      color: #10b981;
     }
     .hud-title-text {
       font-size: 1rem;
@@ -642,9 +881,11 @@
       `;
 
       card.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         if (e.target.tagName !== "INPUT") {
           const chk = card.querySelector("input");
-          chk.checked = !chk.checked;
+          if (chk) chk.checked = !chk.checked;
         }
         if (state.selectedIndices.has(idx)) {
           state.selectedIndices.delete(idx);
@@ -659,6 +900,14 @@
           statsPill.textContent = `${state.selectedIndices.size} / ${state.pages.length} trang`;
         }
       });
+
+      const chk = card.querySelector("input");
+      if (chk) {
+        chk.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        });
+      }
 
       container.appendChild(card);
     });
@@ -682,6 +931,13 @@
         <div class="hud-header">
           <div class="hud-header-title">
             <span class="hud-logo-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>Extractor Pro</span>
+            <span class="hud-adshield-badge" title="Đã kích hoạt Lá chắn Ad-Shield: Chặn 100% Popunder & Click-jacking">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <path d="m9 12 2 2 4-4"></path>
+              </svg>
+              <span>AD-SHIELD PROTECTED</span>
+            </span>
             <span class="hud-title-text" id="hudTitleText" title="${state.title}">${state.title}</span>
           </div>
           <div class="hud-header-actions">
@@ -731,31 +987,62 @@
 
     shadow.appendChild(hudWrapper);
 
+    // Cách ly sự kiện toàn bộ bên trong HUD - ngăn chặn triệt để click rò rỉ ra trang mẹ
+    captureEvents.forEach((evtType) => {
+      hudWrapper.addEventListener(evtType, (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }, true);
+      hudWrapper.addEventListener(evtType, (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }, false);
+    });
+
     // Bind HUD events
     const closeHud = () => {
+      cleanupAdShield();
       host.remove();
       window.__mangaExtractorHost = null;
       window.__mangaExtractorActive = false;
     };
 
-    shadow.getElementById("btnCloseHud").addEventListener("click", closeHud);
+    shadow.getElementById("btnCloseHud").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      closeHud();
+    });
 
     hudWrapper.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (e.target === hudWrapper) {
         closeHud();
       }
     });
 
-    shadow.getElementById("btnRefreshScan").addEventListener("click", () => {
+    shadow.getElementById("btnRefreshScan").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      neutralizeHostPageAdTraps();
       scanAllPages();
       showToast("Đã quét lại toàn bộ trang!");
     });
 
-    shadow.getElementById("btnAutoScroll").addEventListener("click", () => {
+    shadow.getElementById("btnAutoScroll").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      neutralizeHostPageAdTraps();
       triggerAutoScroll();
     });
 
-    shadow.getElementById("btnToggleSelectAll").addEventListener("click", () => {
+    shadow.getElementById("btnToggleSelectAll").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       if (state.selectedIndices.size === state.pages.length) {
         state.selectedIndices.clear();
       } else {
@@ -764,15 +1051,24 @@
       renderHud();
     });
 
-    shadow.getElementById("btnCopyUrls").addEventListener("click", () => {
+    shadow.getElementById("btnCopyUrls").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       copyImageUrls();
     });
 
-    shadow.getElementById("btnDownloadZip").addEventListener("click", () => {
+    shadow.getElementById("btnDownloadZip").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       downloadZipArchive("zip");
     });
 
-    shadow.getElementById("btnSendToStudio").addEventListener("click", () => {
+    shadow.getElementById("btnSendToStudio").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
       sendToMangaStudio();
     });
   }
@@ -781,6 +1077,20 @@
   // BRIDGE PROTOCOL: GỬI SANG MANGA STUDIO
   // -------------------------------------------------------------
   async function sendToMangaStudio() {
+    const btnSend = shadow ? shadow.getElementById("btnSendToStudio") : null;
+    if (btnSend && btnSend.disabled) return;
+    if (btnSend) {
+      btnSend.disabled = true;
+      btnSend.style.opacity = "0.6";
+    }
+
+    const unlockBtn = () => {
+      if (btnSend) {
+        btnSend.disabled = false;
+        btnSend.style.opacity = "";
+      }
+    };
+
     const selected = Array.from(state.selectedIndices)
       .sort((a, b) => a - b)
       .map((idx) => state.pages[idx])
@@ -788,6 +1098,7 @@
 
     if (selected.length === 0) {
       showToast("Vui lòng chọn ít nhất 1 trang truyện để gửi!");
+      unlockBtn();
       return;
     }
 
@@ -822,6 +1133,8 @@
       });
     }
 
+    setTimeout(unlockBtn, 3000);
+
     if (progressBar) progressBar.style.width = "0%";
 
     const importId = "imp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
@@ -839,9 +1152,19 @@
       localStorage.setItem("manga_bookmarklet_import", JSON.stringify(payload));
     } catch (_) {}
 
-    // 2. Mở tab Manga Studio Batch
+    // 2. Mở tab Manga Studio Batch an toàn qua Ad-Shield
     const targetUrl = state.studioUrl;
-    const studioWin = window.open(targetUrl, "_blank");
+    isSafeWindowOpenPermitted = true;
+    let studioWin = null;
+    try {
+      studioWin = safeWindowOpen ? safeWindowOpen(targetUrl, "_blank") : originalWindowOpen.call(window, targetUrl, "_blank");
+    } catch (err) {
+      console.error("[Ad-Shield] Lỗi mở Manga Studio:", err);
+    } finally {
+      setTimeout(() => {
+        isSafeWindowOpenPermitted = false;
+      }, 500);
+    }
 
     // 3. Khởi tạo BroadcastChannel (hỗ trợ cùng domain)
     let channel = null;
@@ -1019,8 +1342,17 @@
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = downloadName;
+      link.style.display = "none";
+      link.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      });
+      document.body.appendChild(link);
       link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+      setTimeout(() => {
+        URL.revokeObjectURL(link.href);
+        link.remove();
+      }, 5000);
 
       if (progressBar) progressBar.style.width = "0%";
       updateScanStatus("Sẵn sàng");

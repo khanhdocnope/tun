@@ -235,7 +235,33 @@ import { state, el, showToast, bufferToDataUrl } from './state.js';
     const rows = await store.loadAll();
     if (!rows.length) return;
 
-    state.images = rows.map((r) => {
+    // Tự động phát hiện và dọn dẹp các bản ghi trùng lặp trong IndexedDB (từ phiên cũ)
+    const seenNames = new Set();
+    const uniqueRows = [];
+    const duplicateIds = [];
+
+    for (const r of rows) {
+      const key = (r.name || '').trim().toLowerCase();
+      if (!key || !seenNames.has(key)) {
+        if (key) seenNames.add(key);
+        uniqueRows.push(r);
+      } else {
+        duplicateIds.push(r.id);
+      }
+    }
+
+    if (duplicateIds.length > 0) {
+      console.warn('[Storage] Tự động dọn dẹp ' + duplicateIds.length + ' trang bị trùng lặp trong IndexedDB');
+      for (const id of duplicateIds) {
+        try {
+          store.deletePage(id).catch(() => {});
+          store.deleteOriginal(id).catch(() => {});
+          store.deleteCleaned(id).catch(() => {});
+        } catch (_) {}
+      }
+    }
+
+    state.images = uniqueRows.map((r) => {
       const status = r.status === 'done' ? 'done' : (r.status === 'error' ? 'error' : 'idle');
       return {
         id: r.id,

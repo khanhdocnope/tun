@@ -487,12 +487,19 @@ import {
     }
   }
 
+  let sessionReadyResolve;
+  const sessionReadyPromise = new Promise((resolve) => { sessionReadyResolve = resolve; });
+
   // Bridge Protocol: Lắng nghe và nạp ảnh truyền từ Bookmarklet (Chống trùng lặp tuyệt đối)
   function initBookmarkletBridge() {
     const processedImportIds = new Set();
     let isImporting = false;
 
     async function handleImportMessage(data, sender) {
+      if (!data || data.type !== 'MANGA_STUDIO_IMPORT' || !Array.isArray(data.images) || data.images.length === 0) return;
+
+      // Đợi nạp xong toàn bộ phiên làm việc cũ từ IndexedDB để lọc trùng chính xác
+      await sessionReadyPromise;
       if (!data || data.type !== 'MANGA_STUDIO_IMPORT' || !Array.isArray(data.images) || data.images.length === 0) return;
 
       const importId = data.importId || `ts_${data.timestamp || ''}_${data.images.length}`;
@@ -553,6 +560,7 @@ import {
     await checkConfig();
     applySettingsToUI();
     await restoreSession();
+    if (typeof sessionReadyResolve === 'function') sessionReadyResolve();
 
     // Tự động phát hiện nếu phiên làm việc có ảnh bị lặp (từ lần import lỗi trước)
     const names = (state.images || []).map(i => (i.name || '').trim().toLowerCase());
