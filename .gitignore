@@ -8,3 +8,5 @@ scratch/
 new/
 discord-voice-selfbot/
 
+models/
+*.onnx
