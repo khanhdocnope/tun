@@ -4,7 +4,7 @@
 
 import { state, el, showToast, applyThumbZoom, currentZoomVal, copyToClipboard } from './js/state.js';
 import { store, pendingSaves, restoreSession, scheduleSave } from './js/storage.js';
-import { checkConfig, addInputFiles, addFilesToBatch, isZipFile } from './js/api.js';
+import { checkConfig, addInputFiles, addFilesToBatch, isZipFile, importBookmarkletImages } from './js/api.js';
 import { runCleanQueue, runBatchQueue, runSelectedSteps, updateProcessAllLabel } from './js/queue.js';
 import {
   applySettingsToUI,
@@ -486,8 +486,47 @@ import {
     }
   }
 
+  // Bridge Protocol: Lắng nghe và nạp ảnh truyền từ Bookmarklet
+  function initBookmarkletBridge() {
+    try {
+      const channel = new BroadcastChannel('manga_studio_importer');
+      channel.onmessage = async (e) => {
+        if (e.data && e.data.type === 'MANGA_STUDIO_IMPORT' && Array.isArray(e.data.images)) {
+          await importBookmarkletImages(e.data.images, e.data.title);
+          channel.postMessage({ type: 'MANGA_STUDIO_IMPORT_ACK', count: e.data.images.length });
+        }
+      };
+    } catch (_) {}
+
+    window.addEventListener('message', async (e) => {
+      if (e.data && e.data.type === 'MANGA_STUDIO_IMPORT' && Array.isArray(e.data.images)) {
+        await importBookmarkletImages(e.data.images, e.data.title);
+        if (e.source && typeof e.source.postMessage === 'function') {
+          try {
+            e.source.postMessage({ type: 'MANGA_STUDIO_IMPORT_ACK', count: e.data.images.length }, '*');
+          } catch (_) {}
+        }
+      }
+    });
+
+    // Kiểm tra dữ liệu bắt tay từ localStorage nếu tab mới vừa mở
+    try {
+      const raw = localStorage.getItem('manga_bookmarklet_import');
+      if (raw) {
+        const data = JSON.parse(raw);
+        localStorage.removeItem('manga_bookmarklet_import');
+        if (data && Date.now() - (data.timestamp || 0) < 60000 && Array.isArray(data.images)) {
+          setTimeout(() => {
+            importBookmarkletImages(data.images, data.title);
+          }, 400);
+        }
+      }
+    } catch (_) {}
+  }
+
   async function init() {
     bindEvents();
+    initBookmarkletBridge();
     await checkConfig();
     applySettingsToUI();
     await restoreSession();

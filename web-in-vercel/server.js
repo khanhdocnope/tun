@@ -35,6 +35,11 @@ app.get(["/batch-studio", "/batch-studio/", "/batch-studio.html"], (req, res) =>
   res.sendFile(path.join(__dirname, "public", "batch-studio", "index.html"));
 });
 
+// Bookmarklet Extractor Direct Link
+app.get(["/bookmarklet", "/bookmarklet/", "/bookmarklet/index.html"], (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "bookmarklet", "index.html"));
+});
+
 // Phục vụ tĩnh độc quyền từ public/ (chuẩn Vercel)
 app.use(express.static(path.join(__dirname, "public")));
 

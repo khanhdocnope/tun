@@ -69,6 +69,24 @@ export function getBatchWebLama() {
     }
   }
 
+  // Data URL to File Object
+  export function dataUrlToFile(dataUrl, filename) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+    try {
+      const parts = dataUrl.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) u8arr[n] = bstr.charCodeAt(n);
+      return new File([u8arr], filename || 'page.jpg', { type: mime });
+    } catch (e) {
+      console.warn('Lỗi chuyển dataUrl sang File:', e);
+      return null;
+    }
+  }
+
   export function compressAndLoadFile(file) {
     return new Promise((resolve) => {
       const THRESHOLD = 1024 * 1024; // Ngưỡng 1MB theo yêu cầu của bạn
@@ -604,5 +622,39 @@ export function getBatchWebLama() {
       } else {
         showToast(`Đã thêm ${totalAdded} ảnh vào danh sách!`);
       }
+    }
+  }
+
+  // Import danh sách ảnh truyền từ Bookmarklet (BroadcastChannel / postMessage)
+  export async function importBookmarkletImages(items, chapterTitle = '') {
+    if (!Array.isArray(items) || items.length === 0) return;
+    showToast(`⚡ Đang nạp ${items.length} trang truyện từ Bookmarklet...`, 2000);
+
+    const fileList = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      const name = it.name || `page_${String(i + 1).padStart(3, '0')}.jpg`;
+
+      if (it.dataUrl) {
+        const f = dataUrlToFile(it.dataUrl, name);
+        if (f) fileList.push(f);
+      } else if (it.src) {
+        try {
+          const resp = await fetch(it.src);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            fileList.push(new File([blob], name, { type: blob.type || 'image/jpeg' }));
+          }
+        } catch (fe) {
+          console.warn('Không thể fetch ảnh trực tiếp từ src:', it.src);
+        }
+      }
+    }
+
+    if (fileList.length > 0) {
+      await addInputFiles(fileList);
+      showToast(`🎉 Đã nhận thành công ${fileList.length} trang truyện từ Bookmarklet!`, 4000);
+    } else {
+      showToast(`Không nạp được ảnh nào từ Bookmarklet. Vui lòng thử lại.`);
     }
   }

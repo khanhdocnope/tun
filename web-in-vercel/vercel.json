@@ -17,6 +17,14 @@
       "destination": "/batch-studio/index.html"
     },
     {
+      "source": "/bookmarklet",
+      "destination": "/bookmarklet/index.html"
+    },
+    {
+      "source": "/bookmarklet/",
+      "destination": "/bookmarklet/index.html"
+    },
+    {
       "source": "/api/process-batch",
       "destination": "/api/ai-vision.js"
     }
