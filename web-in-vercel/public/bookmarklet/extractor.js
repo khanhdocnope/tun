@@ -50,48 +50,24 @@
   let host = null;
   let shadow = null;
 
-  // 3. Capture-Phase Event Quarantine (Cách ly sự kiện ở pha Capture trên window & document)
-  const captureEvents = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"];
+  // 3. Ad-Shield Boundary Quarantine: Cách ly click bên trong HUD không rò rỉ ra trang web mẹ
+  const boundaryEvents = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend"];
 
-  function isEventInsideHud(e) {
-    if (!host) return false;
-    // Kiểm tra e.composedPath() xuyên qua Shadow DOM
-    if (typeof e.composedPath === "function") {
-      const path = e.composedPath();
-      if (path && Array.isArray(path)) {
-        for (let i = 0; i < path.length; i++) {
-          const node = path[i];
-          if (node === host || (node && node.id === "manga-extractor-host") || (node && node.id === "hudContainer")) {
-            return true;
-          }
-        }
-      }
-    }
-    // Kiểm tra target thông thường
-    if (e.target && (e.target === host || host.contains(e.target))) {
-      return true;
-    }
-    return false;
+  function setupHostBoundaryQuarantine(hostEl) {
+    if (!hostEl) return;
+    boundaryEvents.forEach((evtType) => {
+      hostEl.addEventListener(
+        evtType,
+        (e) => {
+          // Chỉ chặn sự kiện ở pha Bubbling khi nó chuẩn bị thoát ra khỏi host sang trang web mẹ
+          e.stopPropagation();
+        },
+        false // False = Bubbling phase: Cho phép các nút bấm bên trong Shadow DOM nhận và xử lý sự kiện bình thường!
+      );
+    });
   }
-
-  function quarantineCaptureHandler(e) {
-    if (isEventInsideHud(e)) {
-      // Dập tắt sự kiện ngay lập tức ở pha Capture trước khi script quảng cáo của trang mẹ kịp bắt
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    }
-  }
-
-  captureEvents.forEach((evtType) => {
-    window.addEventListener(evtType, quarantineCaptureHandler, true);
-    document.addEventListener(evtType, quarantineCaptureHandler, true);
-  });
 
   function cleanupAdShield() {
-    captureEvents.forEach((evtType) => {
-      window.removeEventListener(evtType, quarantineCaptureHandler, true);
-      document.removeEventListener(evtType, quarantineCaptureHandler, true);
-    });
     if (originalWindowOpen) {
       try { window.open = originalWindowOpen; } catch (_) {}
     }
@@ -486,6 +462,7 @@
   host.style.height = "100%";
   host.style.pointerEvents = "auto";
   document.documentElement.appendChild(host);
+  setupHostBoundaryQuarantine(host);
 
   shadow = host.attachShadow({ mode: "open" });
   window.__mangaExtractorHost = host;
@@ -880,34 +857,23 @@
         <input type="checkbox" class="thumb-checkbox" ${isSelected ? "checked" : ""} />
       `;
 
-      card.addEventListener("click", (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (e.target.tagName !== "INPUT") {
-          const chk = card.querySelector("input");
-          if (chk) chk.checked = !chk.checked;
-        }
-        if (state.selectedIndices.has(idx)) {
-          state.selectedIndices.delete(idx);
-          card.classList.remove("selected");
-          card.classList.add("deselected");
-        } else {
+      card.addEventListener("click", () => {
+        const willBeSelected = !state.selectedIndices.has(idx);
+        if (willBeSelected) {
           state.selectedIndices.add(idx);
           card.classList.add("selected");
           card.classList.remove("deselected");
+        } else {
+          state.selectedIndices.delete(idx);
+          card.classList.remove("selected");
+          card.classList.add("deselected");
         }
+        const chk = card.querySelector("input");
+        if (chk) chk.checked = willBeSelected;
         if (statsPill) {
           statsPill.textContent = `${state.selectedIndices.size} / ${state.pages.length} trang`;
         }
       });
-
-      const chk = card.querySelector("input");
-      if (chk) {
-        chk.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        });
-      }
 
       container.appendChild(card);
     });
@@ -987,18 +953,6 @@
 
     shadow.appendChild(hudWrapper);
 
-    // Cách ly sự kiện toàn bộ bên trong HUD - ngăn chặn triệt để click rò rỉ ra trang mẹ
-    captureEvents.forEach((evtType) => {
-      hudWrapper.addEventListener(evtType, (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }, true);
-      hudWrapper.addEventListener(evtType, (e) => {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }, false);
-    });
-
     // Bind HUD events
     const closeHud = () => {
       cleanupAdShield();
@@ -1009,14 +963,10 @@
 
     shadow.getElementById("btnCloseHud").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       closeHud();
     });
 
     hudWrapper.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       if (e.target === hudWrapper) {
         closeHud();
       }
@@ -1024,8 +974,6 @@
 
     shadow.getElementById("btnRefreshScan").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       neutralizeHostPageAdTraps();
       scanAllPages();
       showToast("Đã quét lại toàn bộ trang!");
@@ -1033,16 +981,12 @@
 
     shadow.getElementById("btnAutoScroll").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       neutralizeHostPageAdTraps();
       triggerAutoScroll();
     });
 
     shadow.getElementById("btnToggleSelectAll").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       if (state.selectedIndices.size === state.pages.length) {
         state.selectedIndices.clear();
       } else {
@@ -1053,22 +997,16 @@
 
     shadow.getElementById("btnCopyUrls").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       copyImageUrls();
     });
 
     shadow.getElementById("btnDownloadZip").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       downloadZipArchive("zip");
     });
 
     shadow.getElementById("btnSendToStudio").addEventListener("click", (e) => {
       e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
       sendToMangaStudio();
     });
   }
