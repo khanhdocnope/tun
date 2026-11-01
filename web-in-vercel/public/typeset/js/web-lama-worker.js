@@ -109,6 +109,7 @@ async function createInferenceSession(arrayBuffer) {
 async function runInference(imgPixels, maskPixels) {
   if (!session) throw new Error("Session Web LaMa chưa được khởi tạo");
 
+  const tStart = performance.now();
   const numPixels = 512 * 512;
   const imgTensorData = new Float32Array(3 * numPixels);
   const maskTensorData = new Float32Array(numPixels);
@@ -158,7 +159,14 @@ async function runInference(imgPixels, maskPixels) {
     resultPixels[pIdx + 3] = 255;
   }
 
-  return resultPixels;
+  // Dọn dẹp tensor
+  try {
+    if (imgTensor && typeof imgTensor.dispose === "function") imgTensor.dispose();
+    if (maskTensor && typeof maskTensor.dispose === "function") maskTensor.dispose();
+  } catch (_) {}
+
+  const durationMs = Math.round(performance.now() - tStart);
+  return { resultPixels, durationMs };
 }
 
 self.onmessage = async (e) => {
@@ -217,9 +225,9 @@ self.onmessage = async (e) => {
       self.postMessage({ id, success: true, data: meta });
     } else if (type === "INPAINT") {
       const { imgPixels, maskPixels } = payload;
-      const resultPixels = await runInference(imgPixels, maskPixels);
+      const { resultPixels, durationMs } = await runInference(imgPixels, maskPixels);
       self.postMessage(
-        { id, success: true, data: { resultPixels } },
+        { id, success: true, data: { resultPixels, durationMs, deviceMode } },
         [resultPixels.buffer]
       );
     } else if (type === "CLEAR_CACHE") {

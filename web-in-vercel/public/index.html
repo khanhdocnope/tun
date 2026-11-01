@@ -231,6 +231,14 @@
         </div>
 
         <div class="typeset-subbar-right">
+          <!-- Hardware Badge Tẩy Chữ Offline (WebGPU / WASM) -->
+          <div class="hardware-status-capsule" id="topHardwareStatusCapsule" title="Tình trạng Mô hình Tẩy chữ LaMa (Bấm để mở Cài đặt)">
+            <span class="status-dot-pulse" id="topHardwareDot" style="background: #94a3b8; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>
+            <span class="hardware-label" id="topHardwareLabel" style="font-size: 0.73rem; font-weight: 700; color: #cbd5e1;">LaMa: Chưa tải</span>
+          </div>
+
+          <div class="studio-divider"></div>
+
           <!-- Engine Dịch Thuật Dropdown -->
           <div class="engine-select-pill">
             <i class="fa-solid fa-language text-indigo-400 text-xs"></i>
@@ -1118,6 +1126,7 @@
           <textarea id="inputGlossary" class="form-control" rows="2" placeholder="Ghi chú xưng hô..."></textarea>
         </div>
         <div class="form-group">
+          <select id="selectCleanEngine" class="form-control" style="display:none;"><option value="webgpu">WebGPU</option><option value="cloud">Cloud</option></select>
           <select id="selectReadingOrder" class="form-control" style="display:none;"><option value="manga">Manga</option></select>
           <select id="selectCleanModel" class="form-control" style="display:none;"><option value="aot">AOT</option></select>
           <input type="checkbox" id="checkCleanSFX" style="display:none;">
@@ -1248,7 +1257,7 @@
 
     // 4. Global Settings Modal Binding
     const settingsModal = document.getElementById("globalSettingsModal");
-    document.getElementById("btnOpenGlobalSettings")?.addEventListener("click", async () => {
+    const openSettings = async () => {
       settingsModal.style.display = "flex";
       typesetApp?.refreshWebLamaStorageStatus?.();
       document.getElementById("settingPreferWebLama").checked = await getSetting("prefer_web_lama", true);
@@ -1258,7 +1267,9 @@
       document.getElementById("settingOpenRouterKey").value = await getSetting("openrouter_api_key", "");
       document.getElementById("settingOpenRouterModel").value = await getSetting("openrouter_model", "cognitivecomputations/dolphin-mistral-24b-venice-edition:free");
       document.getElementById("settingGeminiKey").value = await getSetting("gemini_api_key", "");
-    });
+    };
+    document.getElementById("btnOpenGlobalSettings")?.addEventListener("click", openSettings);
+    document.getElementById("topHardwareStatusCapsule")?.addEventListener("click", openSettings);
 
     document.getElementById("btnSetCloudBackend")?.addEventListener("click", () => {
       document.getElementById("settingBackendUrl").value = "https://dobietdc-manga-text-cleaner.hf.space";

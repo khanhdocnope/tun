@@ -6,6 +6,31 @@ import { state, el, showToast, sleep, dataUrlToBuffer, bufferToDataUrl, readFile
 import { store, scheduleSave, reportSaveFailure, nextSeq, persistNewPage } from './storage.js';
 import { updateCardDOM, renderBatchView } from './ui.js';
 import { getPrevContext } from './queue.js';
+import { WebLamaEngine } from '../../typeset/js/web-lama.js';
+
+let batchWebLamaInstance = null;
+export function getBatchWebLama() {
+  if (!batchWebLamaInstance) {
+    batchWebLamaInstance = new WebLamaEngine({
+      onStatusChange: (st) => {
+        if (el.cleanEngineBadge) {
+          if (st.isReady) {
+            el.cleanEngineBadge.textContent = `${st.device.toUpperCase()} (${st.avgDurationMs ? st.avgDurationMs + 'ms' : 'Sẵn sàng'})`;
+            el.cleanEngineBadge.className = `badge-clean ${st.device === 'webgpu' ? 'done' : 'processing'}`;
+          } else if (st.state === 'loading') {
+            el.cleanEngineBadge.textContent = `Tải LaMa ${st.percent}%`;
+            el.cleanEngineBadge.className = 'badge-clean processing';
+          } else {
+            el.cleanEngineBadge.textContent = 'Chưa nạp model';
+            el.cleanEngineBadge.className = 'badge-clean idle';
+          }
+        }
+      }
+    });
+    batchWebLamaInstance.init().catch((e) => console.warn('[BatchWebLama] init warning:', e));
+  }
+  return batchWebLamaInstance;
+}
 
   export async function checkConfig() {
     try {
@@ -367,6 +392,47 @@ import { getPrevContext } from './queue.js';
     try {
       const src = await getCleanSourceDataUrl(item);
       const _cleanStart = performance.now();
+
+      // 1. Ưu tiên WebGPU / WASM LaMa Offline (100% Client-Side)
+      const useWebGPU = state.settings.cleanEngine !== 'cloud';
+      if (useWebGPU) {
+        const lama = getBatchWebLama();
+        if (!lama.isReady) {
+          if (lama.isCached) {
+            await lama._warmupSessionInBackground();
+          }
+          if (!lama.isReady) {
+            throw new Error('Chưa nạp mô hình WebGPU LaMa (~198MB). Hãy vào Cài đặt để tải hoặc nạp file .onnx.');
+          }
+        }
+
+        const boxes = Array.isArray(item.bubbles) && item.bubbles.length > 0 ? item.bubbles : [];
+        const res = await lama.inpaintBoxes(src, boxes, {
+          contextMargin: 0.35,
+          featherRadius: 5
+        });
+
+        if (!res || !res.cleanedDataUrl) throw new Error('WebGPU LaMa không trả về kết quả.');
+
+        const { mime, buffer } = dataUrlToBuffer(res.cleanedDataUrl);
+        const saved = await store.putCleaned({ id: item.id, mime, data: buffer });
+        if (!saved) {
+          reportSaveFailure();
+          throw new Error('Không lưu được ảnh sạch vào trình duyệt (bộ nhớ đầy?).');
+        }
+        if (!state.images.includes(item)) { store.deleteCleaned(item.id); return false; }
+
+        item.hasCleaned = true;
+        item.cleanedMime = mime;
+        item.cleanStatus = 'done';
+        item.cleanDurationMs = res.durationMs;
+        item.cleanDevice = res.device;
+        updateCardDOM(item);
+        scheduleSave(item, 0);
+        return true;
+      }
+
+      // 2. Chế độ Cloud Server (Fallback)
       const _bodySize = src.length;
       const data = await requestClean(src);
       const _roundTrip = performance.now() - _cleanStart;
@@ -386,6 +452,8 @@ import { getPrevContext } from './queue.js';
       item.hasCleaned = true;
       item.cleanedMime = mime;
       item.cleanStatus = 'done';
+      item.cleanDurationMs = Math.round(_roundTrip);
+      item.cleanDevice = 'cloud';
       updateCardDOM(item);
       scheduleSave(item, 0);
       return true;

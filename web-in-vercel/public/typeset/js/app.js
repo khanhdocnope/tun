@@ -1332,24 +1332,49 @@ export class TypesetStudioApp {
       const detectData = await detectResp.json();
       const rawBoxes = detectData.boxes || [];
 
-      // 2. Tẩy chữ nền AOT
-      const cleanResp = await fetch("/api/clean", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: page.rawImage,
-          detector: "default",
-          inpainter: "aot",
-          dilation_offset: 2,
-          backendUrl: backendUrl,
-        }),
-      });
+      // 2. Tẩy chữ nền: Ưu tiên 100% Client-Side WebGPU / WASM LaMa
+      let cleanedSuccessfully = false;
+      const preferWebLama = await getSetting("prefer_web_lama", true);
+      if (preferWebLama && this.webLama && (this.webLama.isReady || this.webLama.isCached)) {
+        try {
+          if (!this.webLama.isReady) await this.webLama._warmupSessionInBackground();
+          this.showToast(`⚡ Đang tẩy chữ bằng Web LaMa (${this.webLama.deviceMode.toUpperCase()})...`, "info");
+          const lamaRes = await this.webLama.inpaintBoxes(page.rawImage, rawBoxes, {
+            onProgress: (cur, tot, pct) => {
+              if (btn) btn.innerHTML = `<span class="spinner-mini"></span> Tẩy chữ ${cur}/${tot} (${pct}%)...`;
+            },
+          });
+          if (lamaRes && lamaRes.cleanedDataUrl) {
+            page.cleanedImage = lamaRes.cleanedDataUrl;
+            await this.editor.setBackground(page.cleanedImage);
+            cleanedSuccessfully = true;
+            this.showToast(`⚡ Đã tẩy chữ bằng Web LaMa (${lamaRes.device.toUpperCase()}) trong ${lamaRes.durationMs}ms!`, "success");
+          }
+        } catch (lamaErr) {
+          console.warn("Web LaMa auto pipeline lỗi, fallback sang Cloud:", lamaErr);
+        }
+      }
 
-      if (cleanResp.ok) {
-        const cleanData = await cleanResp.json();
-        if (cleanData.cleanedImageBase64) {
-          page.cleanedImage = cleanData.cleanedImageBase64;
-          await this.editor.setBackground(page.cleanedImage);
+      // Fallback sang Cloud Backend nếu client inpaint chưa bật
+      if (!cleanedSuccessfully) {
+        const cleanResp = await fetch("/api/clean", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: page.rawImage,
+            detector: "default",
+            inpainter: "aot",
+            dilation_offset: 2,
+            backendUrl: backendUrl,
+          }),
+        });
+
+        if (cleanResp.ok) {
+          const cleanData = await cleanResp.json();
+          if (cleanData.cleanedImageBase64) {
+            page.cleanedImage = cleanData.cleanedImageBase64;
+            await this.editor.setBackground(page.cleanedImage);
+          }
         }
       }
 
@@ -1437,6 +1462,31 @@ export class TypesetStudioApp {
         badge.classList.add("ready-wasm");
       } else {
         badge.textContent = "Chưa tải model";
+      }
+    }
+
+    // Cập nhật Hardware Capsule trên Top Bar
+    const topCapsule = document.getElementById("topHardwareStatusCapsule");
+    const topLabel = document.getElementById("topHardwareLabel");
+    if (topCapsule && topLabel) {
+      if (status.isReady) {
+        const isGpu = status.device === "webgpu";
+        topCapsule.className = `hardware-status-capsule ${isGpu ? "ready-webgpu" : "ready-wasm"}`;
+        const timingStr = status.avgDurationMs ? ` (${status.avgDurationMs}ms)` : "";
+        topLabel.textContent = isGpu ? `WebGPU LaMa${timingStr}` : `WASM LaMa${timingStr}`;
+        topCapsule.title = `Mô hình tẩy chữ Offline đang chạy qua ${status.device.toUpperCase()} (Bấm để mở Cài đặt)`;
+      } else if (status.state === "loading") {
+        topCapsule.className = "hardware-status-capsule";
+        topLabel.textContent = `Tải LaMa: ${status.percent || 0}%`;
+        topCapsule.title = status.message || "Đang tải mô hình LaMa...";
+      } else if (hasStoredModel) {
+        topCapsule.className = "hardware-status-capsule ready-wasm";
+        topLabel.textContent = `LaMa Sẵn Sàng (~198MB)`;
+        topCapsule.title = "Đã lưu model trong máy (Bấm để xem chi tiết)";
+      } else {
+        topCapsule.className = "hardware-status-capsule";
+        topLabel.textContent = "Chưa tải Model";
+        topCapsule.title = "Chưa nạp mô hình xóa chữ Offline (Bấm để tải nhanh)";
       }
     }
 

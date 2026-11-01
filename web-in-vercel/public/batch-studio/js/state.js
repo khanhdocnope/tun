@@ -18,6 +18,7 @@
       readingOrder: localStorage.getItem('manga_reading_order') || 'manga',
       skipSFX: localStorage.getItem('manga_skip_sfx') !== 'false',
       // Bước tẩy chữ (khóa mới; manga_backend_url dùng chung với trang chính)
+      cleanEngine: localStorage.getItem('manga_clean_engine') || 'webgpu',
       stepClean: localStorage.getItem('manga_step_clean') === 'true',
       stepTranslate: localStorage.getItem('manga_step_translate') !== 'false',
       cleanModel: localStorage.getItem('manga_clean_model') || 'anime-lama',
@@ -93,6 +94,7 @@
     btnProcessAllLabel: document.getElementById('btnProcessAllLabel'),
     btnExportZipClean: document.getElementById('btnExportZipClean'),
     btnExportZipBoth: document.getElementById('btnExportZipBoth'),
+    selectCleanEngine: document.getElementById('selectCleanEngine'),
     selectCleanModel: document.getElementById('selectCleanModel'),
     checkCleanSFX: document.getElementById('checkCleanSFX'),
     rangeCleanDilation: document.getElementById('rangeCleanDilation'),
@@ -240,6 +242,10 @@
   }
 
   export function cleanBadgeText(item) {
+    if (item.cleanStatus === 'done' && item.cleanDurationMs) {
+      const dev = (item.cleanDevice || 'WebGPU').toUpperCase();
+      return `Tẩy: XONG (${dev}: ${item.cleanDurationMs}ms)`;
+    }
     const labels = { idle: 'CHỜ', processing: 'ĐANG XỬ LÝ', done: 'XONG', error: 'LỖI' };
     return 'Tẩy: ' + (labels[item.cleanStatus || 'idle'] || 'CHỜ');
   }

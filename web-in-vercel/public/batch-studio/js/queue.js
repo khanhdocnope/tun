@@ -170,22 +170,31 @@ import { updateCardDOM, updateFilterCounts, renderBatchView } from './ui.js';
     let completed = 0;
     let failed = 0;
 
+    const isWebGPU = state.settings.cleanEngine !== 'cloud';
+    const effectiveConcurrency = isWebGPU ? 1 : Math.min(CLEAN_CONCURRENCY, total);
+
     async function worker(workerId) {
       while (nextIndex < total && !state.stopQueueRequested) {
         const current = queueItems[nextIndex++];
-        el.queueProgressText.textContent = `Tẩy chữ [Luồng ${workerId + 1}]: ${current.name} (${completed + 1}/${total})...`;
+        const engName = isWebGPU ? 'WebGPU LaMa' : `Luồng ${workerId + 1}`;
+        el.queueProgressText.textContent = `Tẩy chữ [${engName}]: ${current.name} (${completed + 1}/${total})...`;
         const ok = await cleanSingleImage(current);
         completed++;
         if (!ok) failed++;
+        const timingInfo = current.cleanDurationMs ? ` (${current.cleanDurationMs}ms)` : '';
+        el.queueProgressText.textContent = `Đã tẩy [${engName}]: ${current.name} (${completed}/${total})${timingInfo}`;
         el.queueProgressFill.style.width = `${Math.round((completed / total) * 100)}%`;
         if (el.btnProcessAllLabel) el.btnProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
         if (el.btnBottomProcessAllLabel) el.btnBottomProcessAllLabel.textContent = `Dừng lại (${completed}/${total})`;
         updateFilterCounts();
+
+        // Nhường micro-task giải phóng bộ nhớ
+        await new Promise(resolve => setTimeout(resolve, 20));
       }
     }
 
     const workers = [];
-    for (let i = 0; i < Math.min(CLEAN_CONCURRENCY, total); i++) workers.push(worker(i));
+    for (let i = 0; i < effectiveConcurrency; i++) workers.push(worker(i));
     await Promise.all(workers);
 
     el.queueProgressFill.style.width = '100%';

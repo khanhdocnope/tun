@@ -95,6 +95,7 @@ export function unloadCardImage(card) {
     el.toggleSkipSFX.checked = state.settings.skipSFX;
     if (el.selectReadingOrder) el.selectReadingOrder.value = state.settings.readingOrder;
 
+    if (el.selectCleanEngine) el.selectCleanEngine.value = state.settings.cleanEngine || 'webgpu';
     el.toggleStepClean.checked = state.settings.stepClean;
     el.toggleStepTranslate.checked = state.settings.stepTranslate;
     el.selectCleanModel.value = state.settings.cleanModel;
@@ -149,6 +150,10 @@ export function unloadCardImage(card) {
       localStorage.setItem('manga_reading_order', state.settings.readingOrder);
     }
 
+    if (el.selectCleanEngine) {
+      state.settings.cleanEngine = el.selectCleanEngine.value;
+      localStorage.setItem('manga_clean_engine', state.settings.cleanEngine);
+    }
     state.settings.cleanModel = el.selectCleanModel.value;
     state.settings.cleanSFX = el.checkCleanSFX.checked;
     state.settings.cleanDilation = parseInt(el.rangeCleanDilation.value, 10) || 0;
