@@ -203,6 +203,40 @@
 }
 
 /* 1-Click Fast Pipeline Button */
+.btn-magic-1click {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--ts-radius-sm);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 13px;
+  height: 30px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.45);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-magic-1click:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.6);
+}
+
+.btn-magic-1click:active {
+  transform: translateY(0);
+}
+
+.btn-magic-1click:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.5);
+}
+
 .btn-pipeline-fast {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
   border: none;

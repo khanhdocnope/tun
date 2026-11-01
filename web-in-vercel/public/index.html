@@ -231,6 +231,14 @@
         </div>
 
         <div class="typeset-subbar-right">
+          <!-- ⚡ 1-Click Magic Studio: 1-Pass Unified Vision Pipeline -->
+          <button type="button" class="btn-magic-1click" id="btnMagic1ClickStudio" title="1-Pass Unified Vision Pipeline: Tự động Định vị 2D, Tẩy chữ WebGPU & Typeset Elip chuẩn Manga">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+            <span>⚡ 1-Click Magic Studio</span>
+          </button>
+
+          <div class="studio-divider"></div>
+
           <!-- Hardware Badge Tẩy Chữ Offline (WebGPU / WASM) -->
           <div class="hardware-status-capsule" id="topHardwareStatusCapsule" title="Tình trạng Mô hình Tẩy chữ LaMa (Bấm để mở Cài đặt)">
             <span class="status-dot-pulse" id="topHardwareDot" style="background: #94a3b8; width: 7px; height: 7px; border-radius: 50%; display: inline-block;"></span>
@@ -685,6 +693,7 @@
                 <button class="dropdown-item" id="btnExportDoc">Tải file .doc</button>
                 <button class="dropdown-item" id="btnExportZipClean">Tải ZIP ảnh sạch</button>
                 <button class="dropdown-item" id="btnExportZipBoth">Tải ZIP ảnh sạch + script</button>
+                <button class="dropdown-item" id="btnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">📦 Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
                 <button class="dropdown-item" id="btnCopyChapter">Copy toàn bộ kịch bản</button>
                 <button class="dropdown-item" id="btnOpenExportModal">Xem trước & Tải file...</button>
               </div>
@@ -1166,6 +1175,7 @@
         <button type="button" class="sheet-action-item" id="sheetBtnDownloadTxt">Tải .txt</button>
         <button type="button" class="sheet-action-item" id="sheetBtnExportZipClean">Tải ZIP ảnh sạch</button>
         <button type="button" class="sheet-action-item" id="sheetBtnExportZipBoth">Tải ZIP ảnh sạch + script</button>
+        <button type="button" class="sheet-action-item" id="sheetBtnExportZipBundle" style="color: #a5b4fc; font-weight: 600;">📦 Tải ZIP Bundle (Cleaned + Typeset + Script)</button>
         <button type="button" class="sheet-action-item" id="sheetBtnOpenExportModal">Xuất file...</button>
         <button type="button" class="sheet-btn-danger" id="sheetBtnClearAll">Xóa tất cả</button>
       </div>
