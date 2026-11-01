@@ -16,7 +16,7 @@ import { initFonts, populateFontSelect, loadUserFontFile, BUILTIN_FONTS, getAvai
 import { TypesetCanvasEditor } from "./canvas-editor.js";
 import { SmartMaskTool } from "./smart-mask.js";
 import { MangaReaderPreview } from "./reader-preview.js";
-import { translateText, runOcrOnRegion, GENRE_PRESETS } from "./translator.js";
+import { translateText, runOcrOnRegion, runUnifiedSpatialPipeline, GENRE_PRESETS } from "./translator.js";
 import { exportProjectJSON, importProjectJSON, exportChapterZip } from "./export-project.js";
 import { WebLamaEngine } from "./web-lama.js";
 
@@ -1264,7 +1264,12 @@ export class TypesetStudioApp {
 
     // 1-Click Pipeline Tự động cả trang: Detect DBNet -> Dịch -> Tẩy AOT -> Typeset
     document.getElementById("btnAutoPipelinePage")?.addEventListener("click", async () => {
-      await this.runAutoPipelineCurrentPage();
+      await this.runUnifiedSpatialPipelineCurrentPage();
+    });
+
+    // 1-Pass Unified Vision & Spatial Pipeline: 1 Lần gọi duy nhất Gemini + WebGPU LaMa + Emotion Typeset
+    document.getElementById("btnMagic1ClickStudio")?.addEventListener("click", async () => {
+      await this.runUnifiedSpatialPipelineCurrentPage();
     });
   }
 
@@ -1301,128 +1306,184 @@ export class TypesetStudioApp {
     }
   }
 
-  // ---------------- 1-Click Auto Pipeline ----------------
+  // ---------------- 1-Pass Unified Vision & Spatial Pipeline ----------------
   async runAutoPipelineCurrentPage() {
-    if (this.pages.length === 0) return;
-    const page = this.pages[this.currentPageIndex];
-    const btn = document.getElementById("btnAutoPipelinePage");
+    return this.runUnifiedSpatialPipelineCurrentPage();
+  }
 
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = `<span class="spinner-mini"></span> Đang chạy AI tự động...`;
+  async runUnifiedSpatialPipelineCurrentPage() {
+    if (this.pages.length === 0) {
+      this.showToast("Chưa có trang nào trong Chapter để xử lý.", "warning");
+      return;
+    }
+    const page = this.pages[this.currentPageIndex];
+    if (!page || !page.rawImage) {
+      this.showToast("Không tìm thấy dữ liệu ảnh trang hiện tại.", "error");
+      return;
     }
 
-    try {
-      this.showToast("Đang phát hiện bóng thoại và tẩy chữ bằng AI...", "info");
-      const backendUrl = await getSetting("backend_url", "https://dobietdc-manga-text-cleaner.hf.space");
+    const btnMagic = document.getElementById("btnMagic1ClickStudio");
+    const btnAuto = document.getElementById("btnAutoPipelinePage");
+    const btnEmptyAuto = document.getElementById("btnEmptyAutoPipeline");
 
-      // 1. Gọi backend nhận diện khung chữ DBNet
-      const detectResp = await fetch("/api/detect-boxes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageBase64: page.rawImage,
-          readingOrder: "manga",
-          detector: "default",
-          backendUrl: backendUrl,
-        }),
+    const setButtonsLoading = (text) => {
+      [btnMagic, btnAuto, btnEmptyAuto].forEach((btn) => {
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="spinner-mini"></span> ${text}`;
+        }
+      });
+    };
+
+    const resetButtonState = () => {
+      if (btnMagic) {
+        btnMagic.disabled = false;
+        btnMagic.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i> <span>⚡ 1-Click Magic Studio</span>`;
+      }
+      if (btnAuto) {
+        btnAuto.disabled = false;
+        btnAuto.innerHTML = `<i class="fa-solid fa-bolt text-amber-300"></i> <span>⚡ Tự động</span>`;
+      }
+      if (btnEmptyAuto) {
+        btnEmptyAuto.disabled = false;
+        btnEmptyAuto.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> <span>⚡ 1-Click AI Tự Động Cả Trang</span>`;
+      }
+    };
+
+    setButtonsLoading("Đang phân tích Vision 2D...");
+
+    try {
+      this.showToast("🔮 [1-Pass Unified Vision] Đang định vị 2D, phân tích cảm xúc & dịch...", "info");
+
+      // 1. Lấy thiết lập & ngữ cảnh trang trước
+      const sourceLang = await getSetting("source_lang", "ja");
+      const targetLang = await getSetting("target_lang", "vi");
+      const tone = await getSetting("genre_preset", "natural");
+      const readingOrder = await getSetting("reading_order", "manga");
+      const skipSFX = await getSetting("skip_sfx", false);
+
+      const prevContext = [];
+      if (this.currentPageIndex > 0) {
+        for (let pIdx = Math.max(0, this.currentPageIndex - 2); pIdx < this.currentPageIndex; pIdx++) {
+          const prevPage = this.pages[pIdx];
+          if (prevPage && Array.isArray(prevPage.boxes) && prevPage.boxes.length > 0) {
+            prevPage.boxes.forEach((b) => {
+              if (b.textJa || b.textVi) {
+                prevContext.push({ src: b.textJa || "", tgt: b.textVi || "" });
+              }
+            });
+          }
+        }
+      }
+
+      // 2. Chạy 1-Pass Unified Spatial Pipeline (1 lần gọi Gemini duy nhất)
+      const spatialResult = await runUnifiedSpatialPipeline(page.rawImage, {
+        sourceLang,
+        targetLang,
+        tone,
+        readingOrder,
+        skipSFX,
+        prevContext,
       });
 
-      if (!detectResp.ok) throw new Error("Lỗi phát hiện khung chữ.");
-      const detectData = await detectResp.json();
-      const rawBoxes = detectData.boxes || [];
+      const rawBubbles = spatialResult.bubbles || [];
+      if (rawBubbles.length === 0) {
+        this.showToast("Không phát hiện được bóng thoại nào trên trang này.", "warning");
+        return;
+      }
 
-      // 2. Tẩy chữ nền: Ưu tiên 100% Client-Side WebGPU / WASM LaMa
+      this.showToast(`✨ Đã nhận diện ${rawBubbles.length} bóng thoại! Đang tẩy chữ nền...`, "info");
+      setButtonsLoading("Đang tẩy chữ nền...");
+
+      // 3. Quy đổi Bounding Box chuẩn hóa 0-1000 sang pixel thực cho WebGPU LaMa
+      const pw = this.editor.pageWidth || 1000;
+      const ph = this.editor.pageHeight || 1400;
+      const pixelBoxes = rawBubbles.map((b) => {
+        const box2d = b.box_2d || [100, 100, 300, 300];
+        const ymin = Number(box2d[0]) || 0;
+        const xmin = Number(box2d[1]) || 0;
+        const ymax = Number(box2d[2]) || 1000;
+        const xmax = Number(box2d[3]) || 1000;
+        const x = Math.round((xmin / 1000) * pw);
+        const y = Math.round((ymin / 1000) * ph);
+        const w = Math.max(40, Math.round(((xmax - xmin) / 1000) * pw));
+        const h = Math.max(30, Math.round(((ymax - ymin) / 1000) * ph));
+        return { x, y, width: w, height: h, box: [x, y, w, h] };
+      });
+
+      // 4. Tẩy chữ nền: Ưu tiên 100% Client-Side WebGPU / WASM LaMa
       let cleanedSuccessfully = false;
       const preferWebLama = await getSetting("prefer_web_lama", true);
+
       if (preferWebLama && this.webLama && (this.webLama.isReady || this.webLama.isCached)) {
         try {
           if (!this.webLama.isReady) await this.webLama._warmupSessionInBackground();
-          this.showToast(`⚡ Đang tẩy chữ bằng Web LaMa (${this.webLama.deviceMode.toUpperCase()})...`, "info");
-          const lamaRes = await this.webLama.inpaintBoxes(page.rawImage, rawBoxes, {
+          setButtonsLoading(`Tẩy chữ Web LaMa (${this.webLama.deviceMode.toUpperCase()})...`);
+          const lamaRes = await this.webLama.inpaintBoxes(page.rawImage, pixelBoxes, {
             onProgress: (cur, tot, pct) => {
-              if (btn) btn.innerHTML = `<span class="spinner-mini"></span> Tẩy chữ ${cur}/${tot} (${pct}%)...`;
+              setButtonsLoading(`Tẩy chữ ${cur}/${tot} (${pct}%)...`);
             },
           });
           if (lamaRes && lamaRes.cleanedDataUrl) {
             page.cleanedImage = lamaRes.cleanedDataUrl;
             await this.editor.setBackground(page.cleanedImage);
             cleanedSuccessfully = true;
-            this.showToast(`⚡ Đã tẩy chữ bằng Web LaMa (${lamaRes.device.toUpperCase()}) trong ${lamaRes.durationMs}ms!`, "success");
+            this.showToast(`⚡ Đã tẩy chữ bằng Web LaMa (${lamaRes.device.toUpperCase()}) trong ${lamaRes.durationMs}ms!`, "info");
           }
         } catch (lamaErr) {
-          console.warn("Web LaMa auto pipeline lỗi, fallback sang Cloud:", lamaErr);
+          console.warn("Web LaMa inpainting error in Unified Pipeline:", lamaErr);
         }
       }
 
-      // Fallback sang Cloud Backend nếu client inpaint chưa bật
+      // Fallback Cloud Inpainting nếu thiết bị chưa bật/tải Web LaMa
       if (!cleanedSuccessfully) {
-        const cleanResp = await fetch("/api/clean", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64: page.rawImage,
-            detector: "default",
-            inpainter: "aot",
-            dilation_offset: 2,
-            backendUrl: backendUrl,
-          }),
-        });
-
-        if (cleanResp.ok) {
-          const cleanData = await cleanResp.json();
-          if (cleanData.cleanedImageBase64) {
-            page.cleanedImage = cleanData.cleanedImageBase64;
-            await this.editor.setBackground(page.cleanedImage);
+        try {
+          setButtonsLoading("Tẩy chữ qua Cloud AI...");
+          const backendUrl = await getSetting("backend_url", "https://dobietdc-manga-text-cleaner.hf.space");
+          const cleanResp = await fetch("/api/clean", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              imageBase64: page.rawImage,
+              detector: "default",
+              inpainter: "aot",
+              dilation_offset: 2,
+              backendUrl: backendUrl,
+            }),
+          });
+          if (cleanResp.ok) {
+            const cleanData = await cleanResp.json();
+            if (cleanData.cleanedImageBase64) {
+              page.cleanedImage = cleanData.cleanedImageBase64;
+              await this.editor.setBackground(page.cleanedImage);
+              cleanedSuccessfully = true;
+            }
           }
+        } catch (cloudErr) {
+          console.warn("Cloud clean fallback error:", cloudErr);
         }
       }
 
-      // 3. OCR & Dịch từng box rồi chèn Textbox lên Canvas
-      const newBoxes = [];
-      for (let i = 0; i < rawBoxes.length; i++) {
-        const rb = rawBoxes[i];
-        const boxCoord = rb.box || [rb.x, rb.y, rb.w, rb.h];
-        const rect = {
-          x: boxCoord[0],
-          y: boxCoord[1],
-          width: boxCoord[2],
-          height: boxCoord[3],
-        };
+      // 5. Typeset thông minh: Nạp bubbles với Emotion-to-Font Engine & Elliptical Diamond Wrap
+      setButtonsLoading("Đang typeset uốn elip...");
+      const createdBoxes = this.editor.loadSpatialBubbles(rawBubbles, true);
+      const boxesData = this.editor.getAllBoxesData();
 
-        // Crop ảnh bóng thoại từ ảnh gốc để OCR
-        const cropB64 = this.smartMask.cropRegionB64(this.editor.backgroundImage._element, rect);
-        const textJa = await runOcrOnRegion(cropB64);
-        let textVi = "";
-        if (textJa) {
-          textVi = await translateText(textJa);
-        } else {
-          textVi = "Lời thoại";
-        }
-
-        const tb = this.editor.createNewTextBox(rect.x, rect.y, textVi);
-        tb.textJa = textJa;
-        tb.set({ width: Math.max(60, rect.width) });
-        this.editor.autoFitFontSize(tb, rect.height);
-        this.editor.autoInvertColors(tb);
-
-        newBoxes.push(this.editor.getBoxData(tb));
-      }
-
-      page.boxes = newBoxes;
+      page.boxes = boxesData;
       page.status = "editing";
       await savePage(page);
       this.renderPagesList();
-      this.renderParallelDialogs(newBoxes);
-      this.showToast(`Hoàn tất AI Pipeline! Đã tạo ${newBoxes.length} bóng thoại.`, "success");
+      this.renderParallelDialogs(boxesData);
+
+      this.showToast(
+        `⚡ Hoàn tất Magic Studio! Đã typeset ${createdBoxes.length} bóng thoại với Emotion Fonts & Elip Diamond Fit.`,
+        "success"
+      );
     } catch (e) {
-      console.error("Auto pipeline error:", e);
-      this.showToast(`Lỗi pipeline: ${e.message}`, "error");
+      console.error("Unified Spatial Pipeline error:", e);
+      this.showToast(`Lỗi Pipeline: ${e.message}`, "error");
     } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = `⚡ Tự động cả trang`;
-      }
+      resetButtonState();
     }
   }
 
