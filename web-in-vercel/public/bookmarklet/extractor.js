@@ -818,6 +818,7 @@
         name: `${state.title}_${String(i + 1).padStart(3, "0")}.jpg`,
         dataUrl: dataUrl || null,
         src: p.src,
+        referer: window.location.href,
       });
     }
 
@@ -933,46 +934,84 @@
       const zip = new JSZip();
       const progressBar = shadow.getElementById("hudProgressFill");
 
-      showToast(`Đang đóng gói ${selected.length} trang...`);
+      showToast(`Đang tải & đóng gói ${selected.length} trang truyện...`);
 
-      for (let i = 0; i < selected.length; i++) {
-        const p = selected[i];
-        if (progressBar) progressBar.style.width = `${Math.round(((i + 1) / selected.length) * 100)}%`;
+      let addedFiles = 0;
+      let completed = 0;
 
-        const filename = `${String(i + 1).padStart(3, "0")}.jpg`;
+      // Hàm trích xuất / tải 1 ảnh với 3 lớp fallback an toàn
+      async function fetchSingleImage(p, idx) {
+        const filename = `${String(idx + 1).padStart(3, "0")}.jpg`;
 
         if (p.dataUrl) {
-          const base64Data = p.dataUrl.split(",")[1];
-          zip.file(filename, base64Data, { base64: true });
-        } else {
-          // Thử trích xuất từ DOM img canvas trước để vượt CORS
-          let blob = null;
-          if (p.domElement && p.domElement.complete) {
-            try {
-              const canvas = document.createElement("canvas");
-              canvas.width = p.domElement.naturalWidth || p.domElement.width;
-              canvas.height = p.domElement.naturalHeight || p.domElement.height;
-              const ctx = canvas.getContext("2d");
-              ctx.drawImage(p.domElement, 0, 0);
-              blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.95));
-            } catch (_) {}
-          }
+          try {
+            const base64Data = p.dataUrl.split(",")[1];
+            zip.file(filename, base64Data, { base64: true });
+            addedFiles++;
+            return;
+          } catch (_) {}
+        }
 
-          // Fallback fetch nếu không capture được canvas
-          if (!blob) {
-            try {
-              const resp = await fetch(p.src);
-              blob = await resp.blob();
-            } catch (_) {}
-          }
+        let blob = null;
 
-          if (blob) {
-            zip.file(filename, blob);
-          }
+        // Lớp 1: Thử trích xuất từ DOM img canvas nếu không bị tainted
+        if (p.domElement && p.domElement.complete) {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = p.domElement.naturalWidth || p.domElement.width;
+            canvas.height = p.domElement.naturalHeight || p.domElement.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(p.domElement, 0, 0);
+            blob = await new Promise((res, rej) => {
+              canvas.toBlob((b) => (b ? res(b) : rej()), "image/jpeg", 0.95);
+            });
+          } catch (_) {}
+        }
+
+        // Lớp 2: Thử fetch trực tiếp
+        if (!blob) {
+          try {
+            const resp = await fetch(p.src);
+            if (resp.ok) blob = await resp.blob();
+          } catch (_) {}
+        }
+
+        // Lớp 3: Fallback qua API Proxy của Manga Studio (vượt rào CORS & Anti-hotlink của CDN)
+        if (!blob && scriptOrigin) {
+          try {
+            const proxyUrl = `${scriptOrigin}/api/proxy-image?url=${encodeURIComponent(p.src)}&referer=${encodeURIComponent(window.location.href)}`;
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) blob = await resp.blob();
+          } catch (_) {}
+        }
+
+        if (blob) {
+          zip.file(filename, blob);
+          addedFiles++;
         }
       }
 
-      showToast("Đang tạo tệp nén...");
+      // Tải song song với Concurrency = 6 để vừa nhanh vừa không nghẽn mạng
+      const CONCURRENCY = 6;
+      for (let i = 0; i < selected.length; i += CONCURRENCY) {
+        const chunk = selected.slice(i, i + CONCURRENCY);
+        await Promise.all(chunk.map((p, offset) => fetchSingleImage(p, i + offset)));
+        completed += chunk.length;
+        if (progressBar) {
+          progressBar.style.width = `${Math.round((completed / selected.length) * 100)}%`;
+        }
+        updateScanStatus(`Đang tải ${completed}/${selected.length} trang (${Math.round((completed / selected.length) * 100)}%)...`);
+      }
+
+      if (addedFiles === 0) {
+        if (progressBar) progressBar.style.width = "0%";
+        updateScanStatus("Lỗi tải ảnh");
+        showToast("⚠️ Không thể tải được ảnh nào do CDN chặn và proxy không khả dụng!");
+        return;
+      }
+
+      updateScanStatus("Đang nén file ZIP...");
+      showToast(`Đang nén ${addedFiles} ảnh thành file .${format}...`);
       const blob = await zip.generateAsync({ type: "blob" });
       const ext = format === "cbz" ? "cbz" : "zip";
       const downloadName = `${state.title}.${ext}`;
@@ -981,10 +1020,12 @@
       link.href = URL.createObjectURL(blob);
       link.download = downloadName;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
 
       if (progressBar) progressBar.style.width = "0%";
-      showToast(`✅ Đã tải về ${downloadName}!`);
+      updateScanStatus("Sẵn sàng");
+      const mbSize = (blob.size / (1024 * 1024)).toFixed(1);
+      showToast(`🎉 Đã tải về ${downloadName} (${mbSize} MB)!`, 4000);
     } catch (err) {
       console.error(err);
       showToast(`Lỗi tạo ZIP: ${err.message}`);

@@ -17,6 +17,7 @@ const cleanHandler = require("./api/clean");
 const aiVisionHandler = require("./api/ai-vision");
 const configHandler = require("./api/config");
 const downloadScriptHandler = require("./api/download-script");
+const proxyImageHandler = require("./api/proxy-image");
 
 app.all("/api/health", (req, res) => healthHandler(req, res));
 app.all("/api/clean", (req, res) => cleanHandler(req, res));
@@ -24,6 +25,7 @@ app.all("/api/ai-vision", (req, res) => aiVisionHandler(req, res));
 app.all("/api/process-batch", (req, res) => aiVisionHandler(req, res)); // Alias backwards compatibility
 app.all("/api/config", (req, res) => configHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
+app.all("/api/proxy-image", (req, res) => proxyImageHandler(req, res));
 
 // Trang chủ phục vụ public/index.html (Manga Studio với 3 Tabs chính)
 app.get(["/", "/index.html"], (req, res) => {

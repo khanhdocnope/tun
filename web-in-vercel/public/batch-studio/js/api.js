@@ -650,14 +650,25 @@ export function getBatchWebLama() {
         const f = dataUrlToFile(it.dataUrl, name);
         if (f) fileList.push(f);
       } else if (it.src) {
+        let blob = null;
         try {
           const resp = await fetch(it.src);
-          if (resp.ok) {
-            const blob = await resp.blob();
-            fileList.push(new File([blob], name, { type: blob.type || 'image/jpeg' }));
+          if (resp.ok) blob = await resp.blob();
+        } catch (_) {}
+
+        // Fallback qua proxy nếu CDN chặn CORS
+        if (!blob) {
+          try {
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(it.src)}&referer=${encodeURIComponent(it.referer || '')}`;
+            const resp = await fetch(proxyUrl);
+            if (resp.ok) blob = await resp.blob();
+          } catch (pe) {
+            console.warn('Lỗi fetch qua proxy:', pe);
           }
-        } catch (fe) {
-          console.warn('Không thể fetch ảnh trực tiếp từ src:', it.src);
+        }
+
+        if (blob) {
+          fileList.push(new File([blob], name, { type: blob.type || 'image/jpeg' }));
         }
       }
     }
