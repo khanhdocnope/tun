@@ -52,6 +52,23 @@ export function getBatchWebLama() {
 
   // Apply Settings to UI
 
+  // Data URL to Binary Blob
+  export function dataUrlToBlob(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return null;
+    try {
+      const parts = dataUrl.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) u8arr[n] = bstr.charCodeAt(n);
+      return new Blob([u8arr], { type: mime });
+    } catch (_) {
+      return null;
+    }
+  }
+
   export function compressAndLoadFile(file) {
     return new Promise((resolve) => {
       const THRESHOLD = 1024 * 1024; // Ngưỡng 1MB theo yêu cầu của bạn
@@ -230,11 +247,36 @@ export function getBatchWebLama() {
         prevContext: mode === 'ocr_only' ? [] : getPrevContext(item)
       };
 
-      const res = await fetch('/api/process-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const blob = dataUrlToBlob(optimizedImage);
+      let res;
+      if (blob) {
+        const fd = new FormData();
+        fd.append('image', blob, 'page.jpg');
+        fd.append('mode', mode);
+        fd.append('existingOcr', item.ocrText || '');
+        fd.append('model', state.settings.model);
+        fd.append('apiKey', state.settings.apiKey || '');
+        fd.append('apiKey2', state.settings.apiKey2 || '');
+        if (preferredKey) fd.append('preferredKey', preferredKey);
+        fd.append('tone', state.settings.tone);
+        fd.append('skipSFX', String(state.settings.skipSFX));
+        fd.append('readingOrder', state.settings.readingOrder);
+        fd.append('sourceLang', 'ja');
+        fd.append('targetLang', 'vi');
+        fd.append('glossary', state.settings.glossary || '');
+        fd.append('prevContext', JSON.stringify(mode === 'ocr_only' ? [] : getPrevContext(item)));
+
+        res = await fetch('/api/ai-vision', {
+          method: 'POST',
+          body: fd
+        });
+      } else {
+        res = await fetch('/api/ai-vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
 
       const data = await res.json();
 
@@ -286,11 +328,13 @@ export function getBatchWebLama() {
     try {
       const optimizedImage = await getOptimizedBase64(item.base64, 1200);
 
-      const res = await fetch('/api/translate-text', {
+      const res = await fetch('/api/ai-vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: 'translate_only',
           text_jp: item.ocrText,
+          existingOcr: item.ocrText,
           imageBase64: optimizedImage,
           model: state.settings.model,
           apiKey: state.settings.apiKey,

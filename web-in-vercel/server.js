@@ -11,35 +11,18 @@ app.use(cors());
 app.use(express.json({ limit: "60mb" }));
 app.use(express.urlencoded({ extended: true, limit: "60mb" }));
 
-// Serverless API handlers (Core Manga Studio)
+// Serverless API handlers (Clean Core)
 const healthHandler = require("./api/health");
 const cleanHandler = require("./api/clean");
-const ocrHandler = require("./api/ocr");
-const batchZipHandler = require("./api/batch-zip");
-const translateHandler = require("./api/translate");
-const visionHandler = require("./api/vision");
-const detectBoxesHandler = require("./api/detect-boxes");
-const translateGoogleHandler = require("./api/translate-google");
-
-// Serverless API handlers (Batch Studio Pro Sub-Web)
+const aiVisionHandler = require("./api/ai-vision");
 const configHandler = require("./api/config");
-const processBatchHandler = require("./api/process-batch");
-const translateTextHandler = require("./api/translate-text");
 const downloadScriptHandler = require("./api/download-script");
 
 app.all("/api/health", (req, res) => healthHandler(req, res));
 app.all("/api/clean", (req, res) => cleanHandler(req, res));
-app.all("/api/ocr", (req, res) => ocrHandler(req, res));
-app.all("/api/detect-boxes", (req, res) => detectBoxesHandler(req, res));
-app.all("/api/batch-zip", (req, res) => batchZipHandler(req, res));
-app.all("/api/translate", (req, res) => translateHandler(req, res));
-app.all("/api/translate-google", (req, res) => translateGoogleHandler(req, res));
-app.all("/api/vision", (req, res) => visionHandler(req, res));
-
-// Batch Studio Pro routes
+app.all("/api/ai-vision", (req, res) => aiVisionHandler(req, res));
+app.all("/api/process-batch", (req, res) => aiVisionHandler(req, res)); // Alias backwards compatibility
 app.all("/api/config", (req, res) => configHandler(req, res));
-app.all("/api/process-batch", (req, res) => processBatchHandler(req, res));
-app.all("/api/translate-text", (req, res) => translateTextHandler(req, res));
 app.all("/api/download-script", (req, res) => downloadScriptHandler(req, res));
 
 // Trang chủ phục vụ public/index.html (Manga Studio với 3 Tabs chính)

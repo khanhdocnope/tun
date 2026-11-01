@@ -69,28 +69,15 @@ export async function translateGoogleGTX(text, options = {}) {
       }
     }
   } catch (err) {
-    // Nếu gặp lỗi CORS hoặc mạng, fallback sang server proxy
-    console.warn("Direct Google GTX call failed, falling back to server proxy:", err);
+    console.warn("Direct Google GTX call failed, falling back to Gemini:", err);
   }
 
-  // Fallback qua /api/translate-google proxy
+  // Fallback qua Gemini AI nếu direct GTX bị lỗi mạng
   try {
-    const proxyResp = await fetch("/api/translate-google", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, sl, tl }),
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!proxyResp.ok) {
-      throw new Error(`Proxy status ${proxyResp.status}`);
-    }
-
-    const resJson = await proxyResp.json();
-    return resJson.translatedText || resJson.text_vi || "";
+    return await translateGemini(text, options);
   } catch (err) {
-    console.error("Google Translate error:", err);
-    throw new Error(`Không thể dịch bằng Google: ${err.message}`);
+    console.error("Google / Gemini Translate error:", err);
+    throw new Error(`Không thể dịch văn bản: ${err.message}`);
   }
 }
 
@@ -161,27 +148,7 @@ Quy tắc:
 
     return translated;
   } catch (err) {
-    // Thử fallback qua /api/translate nếu direct gặp lỗi
-    console.warn("Direct OpenRouter failed, attempting backend proxy:", err);
-    try {
-      const proxyResp = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseUrl: "https://openrouter.ai/api/v1",
-          apiKey: apiKey,
-          model: model,
-          messages: messages,
-        }),
-      });
-      if (proxyResp.ok) {
-        const pData = await proxyResp.json();
-        let translated = pData.choices?.[0]?.message?.content || "";
-        return translated.replace(/^(?:Dịch:|Bản dịch:|Translation:)/i, "").trim();
-      }
-    } catch (pe) {
-      console.warn("Backend proxy also failed:", pe);
-    }
+    console.warn("OpenRouter API error:", err);
     throw err;
   }
 }
@@ -203,6 +170,7 @@ export async function translateGemini(text, options = {}) {
   }
 
   const payload = {
+    mode: "translate_only",
     text_jp: text,
     apiKey: apiKey,
     apiKey2: apiKey2,
@@ -214,7 +182,7 @@ export async function translateGemini(text, options = {}) {
     imageBase64: options.imageBase64 || null,
   };
 
-  const resp = await fetch("/api/translate-text", {
+  const resp = await fetch("/api/ai-vision", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -227,24 +195,25 @@ export async function translateGemini(text, options = {}) {
   }
 
   const data = await resp.json();
-  return data.text_vi || data.translatedText || "";
+  return data.text_vi || data.viTextBlock || data.translatedText || "";
 }
 
 /**
  * Trích xuất text tiếng Nhật từ ảnh vùng chọn (OCR)
- * Dùng /api/ocr hoặc Gemini OCR
+ * Dùng /api/ai-vision mode "ocr_only"
  */
 export async function runOcrOnRegion(croppedImageB64) {
   if (!croppedImageB64) return "";
 
   const geminiKey = await getSetting("gemini_api_key", "");
   const payload = {
+    mode: "ocr_only",
     imageBase64: croppedImageB64,
     apiKey: geminiKey,
   };
 
   try {
-    const resp = await fetch("/api/ocr", {
+    const resp = await fetch("/api/ai-vision", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -253,10 +222,10 @@ export async function runOcrOnRegion(croppedImageB64) {
 
     if (resp.ok) {
       const data = await resp.json();
-      return (data.text || data.text_jp || data.ocr_text || "").trim();
+      return (data.text || data.text_jp || data.ocrTextBlock || data.ocr_text || "").trim();
     }
   } catch (err) {
-    console.warn("/api/ocr call failed:", err);
+    console.warn("/api/ai-vision ocr call failed:", err);
   }
 
   // Fallback: Nếu có Tesseract.js trong trình duyệt
@@ -275,8 +244,29 @@ export async function runOcrOnRegion(croppedImageB64) {
 }
 
 /**
+ * Chuyển Base64 / DataURL sang Blob nhị phân để gửi qua FormData
+ */
+export function dataUrlToBlob(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return null;
+  try {
+    const parts = dataUrl.split(",");
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
  * 1-Pass Unified Vision & Spatial Pipeline
- * Gọi Gemini Vision API qua /api/process-batch với mode: "unified_spatial"
+ * Gọi Gemini Vision API qua /api/ai-vision với mode: "unified_spatial" (Hỗ trợ Binary FormData)
  * Trả về danh sách bubbles đã chuẩn hóa với toạ độ 2D [ymin, xmin, ymax, xmax], emotion type, OCR & Bản dịch
  *
  * @param {string} imageBase64 - Ảnh trang manga (Data URL hoặc Base64)
@@ -308,27 +298,53 @@ export async function runUnifiedSpatialPipeline(imageBase64, options = {}) {
     } catch (_) {}
   }
 
-  const payload = {
-    mode: "unified_spatial",
-    imageBase64,
-    apiKey,
-    apiKey2,
-    model,
-    sourceLang,
-    targetLang,
-    tone,
-    readingOrder,
-    skipSFX,
-    glossary: glossaryText,
-    prevContext: options.prevContext || [],
-  };
+  const blob = dataUrlToBlob(imageBase64);
+  let resp;
 
-  const resp = await fetch("/api/process-batch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60000),
-  });
+  // Ưu tiên gửi Binary Multipart để triệt tiêu lỗi 413 Payload Too Large
+  if (blob) {
+    const formData = new FormData();
+    formData.append("mode", "unified_spatial");
+    formData.append("image", blob, "page.jpg");
+    formData.append("apiKey", apiKey);
+    formData.append("apiKey2", apiKey2);
+    formData.append("model", model);
+    formData.append("sourceLang", sourceLang);
+    formData.append("targetLang", targetLang);
+    formData.append("tone", tone);
+    formData.append("readingOrder", readingOrder);
+    formData.append("skipSFX", String(skipSFX));
+    formData.append("glossary", glossaryText);
+    formData.append("prevContext", JSON.stringify(options.prevContext || []));
+
+    resp = await fetch("/api/ai-vision", {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(60000),
+    });
+  } else {
+    const payload = {
+      mode: "unified_spatial",
+      imageBase64,
+      apiKey,
+      apiKey2,
+      model,
+      sourceLang,
+      targetLang,
+      tone,
+      readingOrder,
+      skipSFX,
+      glossary: glossaryText,
+      prevContext: options.prevContext || [],
+    };
+
+    resp = await fetch("/api/ai-vision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(60000),
+    });
+  }
 
   if (!resp.ok) {
     const errText = await resp.text();

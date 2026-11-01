@@ -1,8 +1,127 @@
 // Shared helper for Batch Studio Pro Gemini OCR & Translation
+const crypto = require("crypto");
+
 const LITE_MODELS_FALLBACK = [
   "gemini-3.1-flash-lite",
   "gemini-3.5-flash-lite"
 ];
+
+/**
+ * -------------------------------------------------------------
+ * 1. BỘ NHỚ ĐỆM NỘI DUNG (SHA-256 LRU DEDUPLICATION CACHE)
+ * -------------------------------------------------------------
+ * Lưu kết quả của 100 trang / yêu cầu gần nhất trong bộ nhớ Serverless
+ * Trả về kết quả ngay trong < 5ms nếu trang truyện đã từng xử lý
+ */
+class LRUCache {
+  constructor(maxSize = 100) {
+    this.maxSize = maxSize;
+    this.cache = new Map();
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, value);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const aiDeduplicationCache = new LRUCache(100);
+
+function computeDeduplicationHash(dataBufferOrBase64, configObj = {}) {
+  const hash = crypto.createHash("sha256");
+  if (Buffer.isBuffer(dataBufferOrBase64)) {
+    hash.update(dataBufferOrBase64);
+  } else if (typeof dataBufferOrBase64 === "string") {
+    // Tránh quá tải RAM khi hash string lớn
+    if (dataBufferOrBase64.length > 200000) {
+      hash.update(dataBufferOrBase64.slice(0, 100000));
+      hash.update(dataBufferOrBase64.slice(-100000));
+      hash.update(String(dataBufferOrBase64.length));
+    } else {
+      hash.update(dataBufferOrBase64);
+    }
+  }
+  hash.update(JSON.stringify(configObj));
+  return hash.digest("hex");
+}
+
+/**
+ * -------------------------------------------------------------
+ * 2. BỘ ĐIỀU TỐC TOKEN-BUCKET RATE LIMITER (CHỐNG LỖI 429)
+ * -------------------------------------------------------------
+ * Quản lý hạn ngạch Gemini Flash Lite (tối đa 15 RPM = 4.000ms / request / key)
+ * Dual-Key so le: 30 RPM = 2.000ms / request
+ * Tự động khóa tạm key bị 429 trong 30s & lùi lũy tiến (Exponential Backoff + Jitter)
+ */
+class GeminiRateLimiter {
+  constructor() {
+    this.lastCallTime = new Map();
+    this.quarantinedKeys = new Map();
+    this.keyIndexCounter = 0;
+    this.minKeyIntervalMs = 4000; // 15 RPM -> 4.000ms
+  }
+
+  isKeyQuarantined(apiKey) {
+    if (!this.quarantinedKeys.has(apiKey)) return false;
+    const expireTime = this.quarantinedKeys.get(apiKey);
+    if (Date.now() >= expireTime) {
+      this.quarantinedKeys.delete(apiKey);
+      return false;
+    }
+    return true;
+  }
+
+  quarantineKey(apiKey, durationMs = 30000) {
+    const masked = String(apiKey).slice(-6);
+    console.warn(`[GeminiRateLimiter] Tạm khóa API Key (...${masked}) trong ${durationMs / 1000}s do nhận 429/Resource Exhausted.`);
+    this.quarantinedKeys.set(apiKey, Date.now() + durationMs);
+  }
+
+  async throttleKey(apiKey) {
+    const lastTime = this.lastCallTime.get(apiKey) || 0;
+    const now = Date.now();
+    const elapsed = now - lastTime;
+    const waitTime = this.minKeyIntervalMs - elapsed;
+
+    if (waitTime > 0) {
+      // Thêm jitter ngẫu nhiên 50 - 150ms để triệt tiêu vi-xung đột song song
+      const jitter = Math.floor(Math.random() * 100) + 50;
+      await new Promise((resolve) => setTimeout(resolve, waitTime + jitter));
+    }
+
+    this.lastCallTime.set(apiKey, Date.now());
+  }
+
+  pickAvailableKeys(allKeys) {
+    if (!allKeys || allKeys.length === 0) return [];
+    const valid = allKeys.filter((k) => !this.isKeyQuarantined(k));
+    const candidates = valid.length > 0 ? valid : allKeys;
+
+    // Luân phiên Round-Robin giữa các keys
+    const startIdx = this.keyIndexCounter % candidates.length;
+    this.keyIndexCounter = (this.keyIndexCounter + 1) % 10000;
+    return [...candidates.slice(startIdx), ...candidates.slice(0, startIdx)];
+  }
+}
+
+const geminiRateLimiter = new GeminiRateLimiter();
 
 function getAllGeminiApiKeys(clientKey, clientKey2) {
   const keys = [];
@@ -47,20 +166,23 @@ function getGeminiApiKey(clientKey, clientKey2) {
 
 async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload) {
   // Normalize keys to array
-  let keys = [];
+  let rawKeys = [];
   if (Array.isArray(apiKeyOrKeys)) {
-    keys = apiKeyOrKeys.filter(Boolean);
+    rawKeys = apiKeyOrKeys.filter(Boolean);
   } else if (typeof apiKeyOrKeys === "string" && apiKeyOrKeys.includes(",")) {
-    keys = apiKeyOrKeys.split(",").map(k => k.trim()).filter(Boolean);
+    rawKeys = apiKeyOrKeys.split(",").map(k => k.trim()).filter(Boolean);
   } else if (apiKeyOrKeys) {
-    keys = [String(apiKeyOrKeys).trim()];
+    rawKeys = [String(apiKeyOrKeys).trim()];
   } else {
-    keys = getAllGeminiApiKeys();
+    rawKeys = getAllGeminiApiKeys();
   }
 
-  if (keys.length === 0) {
+  if (rawKeys.length === 0) {
     throw new Error("Không có Gemini API Key hợp lệ. Vui lòng cấu hình API_KEY_GEMINI trong .env hoặc trong Cài đặt.");
   }
+
+  // Lọc và luân phiên key khả dụng qua Rate Limiter (bỏ qua các key đang bị tạm khóa do 429)
+  const keys = geminiRateLimiter.pickAvailableKeys(rawKeys);
 
   const defaultModel = (primaryModel === "gemini-3.5-flash-lite") ? "gemini-3.5-flash-lite" : "gemini-3.1-flash-lite";
   const modelsToTry = [
@@ -70,9 +192,12 @@ async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload
 
   let lastError = null;
 
-  // Try each API Key in order (Key 1 -> Key 2 if Key 1 hits 429/quota)
+  // Thử lần lượt từng API Key khả dụng (Round-Robin & Token-Bucket Throttled)
   for (let kIdx = 0; kIdx < keys.length; kIdx++) {
     const currentKey = keys[kIdx];
+
+    // Điều tốc nhịp nhàng (Token/Leaky Bucket) tối thiểu 4.000ms cho cùng 1 key
+    await geminiRateLimiter.throttleKey(currentKey);
 
     for (const model of modelsToTry) {
       try {
@@ -80,7 +205,8 @@ async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestPayload)
+          body: JSON.stringify(requestPayload),
+          signal: AbortSignal.timeout(60000),
         });
 
         if (response.ok) {
@@ -92,7 +218,7 @@ async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload
         const errMsg = errData.error?.message || response.statusText;
         console.warn(`[Batch Studio] Key #${kIdx + 1} with Model ${model} returned (${response.status}): ${errMsg}`);
 
-        // Rate Limit (429) or Quota Exhausted on current key: immediately switch to next key if available!
+        // Rate Limit (429) hoặc Quota Exhausted: Tạm khóa Key này trong 30s & Jitter Backoff
         if (
           response.status === 429 ||
           errMsg.includes("Resource has been exhausted") ||
@@ -100,11 +226,15 @@ async function callGeminiWithFallback(primaryModel, apiKeyOrKeys, requestPayload
           errMsg.includes("Quota exceeded")
         ) {
           lastError = `[Key #${kIdx + 1}] ${errMsg}`;
-          // Break inner loop to try next API Key immediately
-          break;
+          geminiRateLimiter.quarantineKey(currentKey, 30000);
+
+          // Exponential backoff + Jitter ngẫu nhiên 500-1500ms
+          const jitter = Math.floor(Math.random() * 1000) + 500;
+          await new Promise((r) => setTimeout(r, jitter));
+          break; // Đổi sang API Key tiếp theo ngay lập tức
         }
 
-        // 503 Overloaded or High demand: try fallback model on same key first
+        // 503 Overloaded hoặc High demand: thử fallback model trên cùng key
         if (
           response.status === 503 ||
           errMsg.includes("high demand") ||
@@ -261,9 +391,15 @@ const PREV_CONTEXT_MAX_CHARS = 200;
 // Lấy tối đa N dòng cuối của trang trước làm ngữ cảnh (chỉ để giữ nhất quán xưng hô / tên riêng).
 function sanitizePrevContext(prevContext) {
   if (!prevContext) return [];
+  if (typeof prevContext === "string" && prevContext.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(prevContext);
+      if (Array.isArray(parsed)) prevContext = parsed;
+    } catch (_) {}
+  }
   const arr = Array.isArray(prevContext) ? prevContext : String(prevContext).split(/\r?\n/);
   return arr
-    .map((l) => String(l || "").replace(/\s+/g, " ").trim().slice(0, PREV_CONTEXT_MAX_CHARS))
+    .map((l) => (typeof l === "object" ? `${l.src || ""} -> ${l.tgt || ""}` : String(l || "")).replace(/\s+/g, " ").trim().slice(0, PREV_CONTEXT_MAX_CHARS))
     .filter(Boolean)
     .slice(-PREV_CONTEXT_MAX_LINES);
 }
@@ -605,5 +741,8 @@ module.exports = {
   buildUnifiedSpatialPrompt,
   parseUnifiedSpatialOutput,
   extractText,
-  sanitizePrevContext
+  sanitizePrevContext,
+  aiDeduplicationCache,
+  computeDeduplicationHash,
+  geminiRateLimiter
 };

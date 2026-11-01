@@ -1,5 +1,32 @@
 // Vercel Serverless Function: POST /api/clean
+// Proxy inpainting backend (AOT / LaMa) with Multer Binary & 413 Payload Guard
+const multer = require("multer");
+
 const DEFAULT_BACKEND = (process.env.BACKEND_URL || "https://dobietdc-manga-text-cleaner.hf.space").replace(/\/$/, "");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+  },
+});
+
+function runMulterMiddleware(req, res) {
+  return new Promise((resolve) => {
+    const contentType = req.headers["content-type"] || "";
+    if (contentType.includes("multipart/form-data")) {
+      upload.fields([
+        { name: "image", maxCount: 1 },
+        { name: "mask", maxCount: 1 },
+      ])(req, res, (err) => {
+        if (err) console.warn("[api/clean] Multer parse warning:", err.message);
+        resolve();
+      });
+    } else {
+      resolve();
+    }
+  });
+}
 
 function normalizeBackendUrl(url) {
   if (!url || typeof url !== "string") return DEFAULT_BACKEND;
@@ -8,8 +35,6 @@ function normalizeBackendUrl(url) {
   // Tự động sửa lỗi gõ thiếu chữ r: manga-text-cleane -> manga-text-cleaner
   trimmed = trimmed.replace(/manga-text-cleane(?=$|[\/?#])/i, "manga-text-cleaner");
 
-  // Nếu người dùng dán link dạng UI https://huggingface.co/spaces/owner/name
-  // Chuyển sang dạng direct host: https://owner-name.hf.space
   const spaceMatch = trimmed.match(/huggingface\.co\/spaces\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)/i);
   if (spaceMatch) {
     const user = spaceMatch[1].toLowerCase();
@@ -34,9 +59,41 @@ module.exports = async (req, res) => {
   }
 
   try {
+    await runMulterMiddleware(req, res);
+
+    const body = req.body || {};
+
+    // 413 Payload Guard
+    const rawBase64 = body.imageBase64 || body.image || "";
+    if (typeof rawBase64 === "string" && rawBase64.length > 4.2 * 1024 * 1024) {
+      return res.status(413).json({
+        error: "Payload Base64 quá lớn (> 4.2MB). Vui lòng gửi ảnh dưới dạng Blob nhị phân (multipart/form-data) hoặc nén ảnh JPEG/WebP trước khi gửi.",
+        code: 413,
+      });
+    }
+
+    let imageBase64 = "";
+    let maskBase64 = body.maskBase64 || "";
+
+    if (req.files && req.files.image && req.files.image[0]) {
+      const imgFile = req.files.image[0];
+      const mime = imgFile.mimetype || "image/jpeg";
+      imageBase64 = `data:${mime};base64,${imgFile.buffer.toString("base64")}`;
+    } else if (rawBase64) {
+      imageBase64 = rawBase64;
+    }
+
+    if (req.files && req.files.mask && req.files.mask[0]) {
+      const maskFile = req.files.mask[0];
+      const mime = maskFile.mimetype || "image/png";
+      maskBase64 = `data:${mime};base64,${maskFile.buffer.toString("base64")}`;
+    }
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Thiếu dữ liệu ảnh (imageBase64 hoặc binary file)." });
+    }
+
     const {
-      imageBase64,
-      maskBase64,
       cleanSFX,
       dilationPx,
       dilation_offset,
@@ -46,16 +103,12 @@ module.exports = async (req, res) => {
       detector = "default",
       inpainter = "aot",
       backendUrl,
-    } = req.body || {};
-
-    if (!imageBase64) {
-      return res.status(400).json({ error: "Thiếu dữ liệu ảnh (imageBase64)." });
-    }
+    } = body;
 
     const targetBackend = normalizeBackendUrl(backendUrl);
     const dilationVal = dilationOffset !== undefined ? dilationOffset : (dilation_offset !== undefined ? dilation_offset : (dilationPx !== undefined ? dilationPx : 0));
 
-    // Thử gọi /api/clean trước (Chuẩn backend mới manga-image-translator-ref)
+    // Thử gọi /api/clean trước
     const mitPayload = {
       imageBase64,
       detector: detector || "default",
@@ -90,7 +143,6 @@ module.exports = async (req, res) => {
         });
       }
 
-      // Nếu không phải 404/405/422, trả về lỗi từ server
       if (respMit.status !== 404 && respMit.status !== 405 && respMit.status !== 422) {
         const errText = await respMit.text();
         return res.status(respMit.status).json({
@@ -98,7 +150,6 @@ module.exports = async (req, res) => {
         });
       }
     } catch (e) {
-      // Nếu không kết nối được /api/clean, thử tiếp /clean_page (trừ khi là local)
       if (targetBackend.includes("localhost")) {
         throw e;
       }
@@ -148,4 +199,3 @@ module.exports = async (req, res) => {
     });
   }
 };
-

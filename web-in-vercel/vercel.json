@@ -15,6 +15,10 @@
     {
       "source": "/batch-studio/",
       "destination": "/batch-studio/index.html"
+    },
+    {
+      "source": "/api/process-batch",
+      "destination": "/api/ai-vision.js"
     }
   ],
   "functions": {
