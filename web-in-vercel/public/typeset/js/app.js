@@ -1386,7 +1386,9 @@ export class TypesetStudioApp {
         prevContext,
       });
 
-      const rawBubbles = spatialResult.bubbles || [];
+      const rawBubbles = (spatialResult.layers && spatialResult.layers.length > 0)
+        ? spatialResult.layers
+        : (spatialResult.bubbles || []);
       if (rawBubbles.length === 0) {
         this.showToast("Không phát hiện được bóng thoại nào trên trang này.", "warning");
         return;
@@ -1464,9 +1466,9 @@ export class TypesetStudioApp {
         }
       }
 
-      // 5. Typeset thông minh: Nạp bubbles với Emotion-to-Font Engine & Elliptical Diamond Wrap
+      // 5. Typeset thông minh: Nạp Manga Layers với Emotion-to-Font Engine & Elliptical Diamond Wrap
       setButtonsLoading("Đang typeset uốn elip...");
-      const createdBoxes = this.editor.loadSpatialBubbles(rawBubbles, true);
+      const createdBoxes = this.editor.loadMangaLayers(rawBubbles, true);
       const boxesData = this.editor.getAllBoxesData();
 
       page.boxes = boxesData;

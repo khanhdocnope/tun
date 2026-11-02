@@ -27,6 +27,16 @@ from mask_logic import (
     MaskSet,
     build_masks,
     build_masks_from_polygons,
+    flat_fill_uniform_paper,
+    rect_mask,
+)
+from manga_schema import (
+    LayerGeometry,
+    LayerTypography,
+    MangaLayer,
+    sort_reading_order,
+    to_normalized_box,
+    to_pixel_bounds,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
@@ -218,16 +228,18 @@ class MangaCleanerPipeline:
         bubble_threshold: float = 0.20,
         inpaint_model: str = "anime-lama",
         min_box_size: int = 0,
+        reading_direction: str = "rtl",
     ) -> Tuple[Image.Image, Image.Image, Dict[str, Any]]:
         with MODEL_LOCK:
             return self._clean_locked(
                 image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
-                user_mask, bubble_threshold, inpaint_model, min_box_size
+                user_mask, bubble_threshold, inpaint_model, min_box_size, reading_direction
             )
 
     def _clean_locked(
         self, image_input, clean_sfx, dilation_px, det_threshold, force_cpu,
-        user_mask, bubble_threshold, inpaint_model, min_box_size: int = 0
+        user_mask, bubble_threshold, inpaint_model, min_box_size: int = 0,
+        reading_direction: str = "rtl"
     ):
         t_start = time.perf_counter()
         dev = "cpu" if force_cpu else get_device()
@@ -321,23 +333,89 @@ class MangaCleanerPipeline:
         if not target.any():
             timings["total"] = round((time.perf_counter() - t_start) * 1000.0, 2)
             stats = self._make_stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "No text to erase", dev)
+            stats["layers"] = []
             return img_pil, color_mask, stats
 
-        # 6. Inpaint phase (LaMa / OpenCV)
-        rects, jobs = self._plan_jobs(img_rgb, target)
-        if jobs:
-            t_inp = time.perf_counter()
-            results = _inpaint_jobs(jobs, inpaint_model, force_cpu)
-            timings["inpaint"] = round((time.perf_counter() - t_inp) * 1000.0, 2)
-            final = self._paste(img_rgb, target, rects, results)
+        # 5b. Dual-Path: Fast Flat-Paper Fill for pure white bubbles (Near 0ms, zero artifacts)
+        t_flat = time.perf_counter()
+        flat_work_bgr, filled_mask = flat_fill_uniform_paper(img_bgr, ms.chat_erase, ms.chat_boxes)
+        timings["flat_fill"] = round((time.perf_counter() - t_flat) * 1000.0, 2)
+
+        # Trích xuất layers hình học chuẩn hóa theo V2 Specification
+        layers_list: List[MangaLayer] = []
+        for idx, (x1, y1, x2, y2) in enumerate(ms.chat_boxes):
+            box_2d = to_normalized_box(x1, y1, x2, y2, w, h)
+            pb = to_pixel_bounds(box_2d, w, h)
+            box_m = rect_mask(h, w, [(x1, y1, x2, y2)], pad=0)
+            erase_part = cv2.bitwise_and(ms.chat_erase, box_m)
+            is_white = False
+            if erase_part.any():
+                filled_part = cv2.bitwise_and(filled_mask, erase_part)
+                is_white = bool(int(filled_part.sum()) >= int(erase_part.sum()) * 0.85)
+
+            layers_list.append(
+                MangaLayer(
+                    id=f"bubble_{idx + 1:02d}",
+                    order_index=idx + 1,
+                    type="speech_bubble",
+                    box_2d=box_2d,
+                    pixel_bounds=pb,
+                    geometry=LayerGeometry(is_pure_white_bg=is_white, confidence=0.98),
+                    typography=LayerTypography(
+                        orientation="vertical" if pb.height > pb.width * 1.2 else "horizontal",
+                        suggested_font_size_pt=max(12, min(36, int(pb.width / 5))),
+                    ),
+                )
+            )
+
+        if clean_sfx:
+            for idx, (x1, y1, x2, y2) in enumerate(ms.sfx_boxes):
+                box_2d = to_normalized_box(x1, y1, x2, y2, w, h)
+                pb = to_pixel_bounds(box_2d, w, h)
+                layers_list.append(
+                    MangaLayer(
+                        id=f"sfx_{idx + 1:02d}",
+                        order_index=len(layers_list) + 1,
+                        type="sfx",
+                        box_2d=box_2d,
+                        pixel_bounds=pb,
+                        geometry=LayerGeometry(is_pure_white_bg=False, confidence=0.90),
+                        typography=LayerTypography(
+                            orientation="horizontal",
+                            suggested_font_size_pt=max(14, min(48, int(pb.width / 4))),
+                        ),
+                    )
+                )
+
+        # Sắp xếp thứ tự đọc chuẩn Manga/Webtoon
+        sorted_layers = sort_reading_order(layers_list, reading_direction=reading_direction, height=h)
+
+        # 6. Inpaint phase (Chỉ nạp LaMa AI cho các vùng phức tạp chưa flat-fill)
+        lama_target = cv2.bitwise_and(target, cv2.bitwise_not(filled_mask))
+        flat_work_rgb = cv2.cvtColor(flat_work_bgr, cv2.COLOR_BGR2RGB)
+
+        if lama_target.any():
+            rects, jobs = self._plan_jobs(flat_work_rgb, lama_target)
+            if jobs:
+                t_inp = time.perf_counter()
+                results = _inpaint_jobs(jobs, inpaint_model, force_cpu)
+                timings["inpaint"] = round((time.perf_counter() - t_inp) * 1000.0, 2)
+                final = self._paste(flat_work_rgb, lama_target, rects, results)
+            else:
+                final = flat_work_bgr
         else:
-            final = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+            final = flat_work_bgr
+            timings["inpaint"] = 0.0
+            rects = []
 
         timings["total"] = round((time.perf_counter() - t_start) * 1000.0, 2)
         timings["regions"] = len(rects)
 
         stats = self._make_stats(clean_sfx, dilation_px, inpaint_model, w, h, n_chat, n_sfx, timings, "Success", dev)
         stats["regions"] = len(rects)
+        stats["flat_filled_pixels"] = int((filled_mask > 0).sum())
+        stats["layers"] = [l.model_dump() for l in sorted_layers]
+
         return Image.fromarray(cv2.cvtColor(final, cv2.COLOR_BGR2RGB)), color_mask, stats
 
     @staticmethod

@@ -1,6 +1,7 @@
 // Vercel Serverless Function: POST /api/clean
-// Proxy inpainting backend (AOT / LaMa) with Multer Binary & 413 Payload Guard
+// Proxy inpainting backend (AOT / LaMa) with Multer Binary, 413 Guard & V2 Contract
 const multer = require("multer");
+const { formatMangaPageResponse } = require("./manga-contract");
 
 const DEFAULT_BACKEND = (process.env.BACKEND_URL || "https://dobietdc-manga-text-cleaner.hf.space").replace(/\/$/, "");
 
@@ -103,6 +104,7 @@ module.exports = async (req, res) => {
       detector = "default",
       inpainter = "aot",
       backendUrl,
+      readingDirection = "rtl",
     } = body;
 
     const targetBackend = normalizeBackendUrl(backendUrl);
@@ -115,6 +117,7 @@ module.exports = async (req, res) => {
       inpainter: inpainter || (inpaintModel === "anime-lama" ? "lama_large" : "aot"),
       dilation_offset: Number(dilationVal),
       dilationOffset: Number(dilationVal),
+      readingDirection: readingDirection || "rtl",
     };
     if (maskBase64) {
       mitPayload.maskBase64 = maskBase64;
@@ -166,6 +169,7 @@ module.exports = async (req, res) => {
       dilationPx: Number(dilationVal || 4),
       detThreshold: Number(detThreshold || 0.20),
       inpaintModel: safeLegacyModel,
+      readingDirection: readingDirection || "rtl",
     };
 
     const response = await fetch(`${targetBackend}/clean_page`, {
@@ -191,7 +195,13 @@ module.exports = async (req, res) => {
     }
 
     const result = await response.json();
-    return res.status(200).json(result);
+    return res.status(200).json({
+      success: true,
+      cleanedImageBase64: result.cleanedImageBase64,
+      colorMaskBase64: result.colorMaskBase64,
+      layers: result.layers || [],
+      ...result,
+    });
   } catch (err) {
     console.error("api/clean error:", err);
     return res.status(500).json({

@@ -21,9 +21,11 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel
 
+from job_engine import job_engine
 from manga_cleaner import cleaner_pipeline
 
 logging.basicConfig(
@@ -89,6 +91,7 @@ class CleanPagePayload(BaseModel):
     detThreshold: Optional[float] = 0.20
     inpaintModel: Optional[str] = "anime-lama"
     minBoxSize: Optional[int] = 0
+    readingDirection: Optional[str] = "rtl"
 
 
 @app.get("/")
@@ -115,6 +118,8 @@ def health():
 
 @app.post("/clean_page")
 @app.post("/api/clean_page")
+@app.post("/api/v2/clean")
+@app.post("/api/v2/manga/process")
 async def clean_page(req: CleanPagePayload):
     t_api = time.perf_counter()
     raw = (req.imageBase64 or "").strip()
@@ -152,6 +157,7 @@ async def clean_page(req: CleanPagePayload):
             det_threshold=float(req.detThreshold if req.detThreshold is not None else 0.20),
             inpaint_model=inpaint_model,
             min_box_size=int(req.minBoxSize or 0),
+            reading_direction=str(req.readingDirection or "rtl"),
         )
     except Exception as exc:
         logger.exception("clean_page error")
@@ -169,12 +175,80 @@ async def clean_page(req: CleanPagePayload):
         "total_http": round(total_api_ms, 2),
     }
 
+    layers = stats.get("layers", [])
+
     return {
+        "version": "2.0.0",
+        "status": "success",
         "success": True,
         "cleanedImageBase64": f"data:image/png;base64,{cleaned_b64}",
         "colorMaskBase64": f"data:image/png;base64,{mask_b64}",
+        "layers": layers,
         "stats": stats,
     }
+
+
+# ==============================================================================
+# ASYNC JOB ENGINE & SSE REALTIME STREAMING (V2.0)
+# ==============================================================================
+
+@app.on_event("startup")
+async def on_startup():
+    job_engine.start()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await job_engine.stop()
+
+
+class CreateJobPayload(BaseModel):
+    pages: List[Dict[str, Any]]
+    defaultOptions: Optional[Dict[str, Any]] = None
+
+
+@app.post("/api/v2/jobs/create")
+async def create_job(payload: CreateJobPayload):
+    """Tạo tác vụ xử lý Batch hàng chục trang mà không làm nghẽn HTTP."""
+    if not payload.pages:
+        raise HTTPException(status_code=400, detail="Danh sách pages không được rỗng.")
+    job = job_engine.create_job(payload.pages, payload.defaultOptions)
+    return {"success": True, "job": job.to_summary_dict()}
+
+
+@app.get("/api/v2/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """Lấy trạng thái và kết quả chi tiết của Job (Polling fallback)."""
+    job = job_engine.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy job: {job_id}")
+    return {"success": True, "job": job.to_full_dict()}
+
+
+@app.get("/api/v2/jobs/{job_id}/stream")
+async def stream_job_events(job_id: str):
+    """Mở luồng SSE (Server-Sent Events) đẩy tiến trình theo thời gian thực."""
+    job = job_engine.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy job: {job_id}")
+    return StreamingResponse(
+        job_engine.subscribe_stream(job_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/v2/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Hủy tác vụ đang chạy."""
+    success = job_engine.cancel_job(job_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Không thể hủy job: {job_id}")
+    return {"success": True, "message": f"Đã hủy job {job_id}"}
 
 
 if __name__ == "__main__":

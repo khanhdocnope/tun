@@ -353,9 +353,10 @@ export async function runUnifiedSpatialPipeline(imageBase64, options = {}) {
 
   const data = await resp.json();
   return {
-    bubbles: data.bubbles || [],
+    layers: data.layers || [],
+    bubbles: data.bubbles || (data.layers ? data.layers : []),
     ocrTextBlock: data.ocrTextBlock || "",
     viTextBlock: data.viTextBlock || "",
-    lineCount: data.lineCount || (data.bubbles ? data.bubbles.length : 0),
+    lineCount: data.lineCount || (data.layers ? data.layers.length : (data.bubbles ? data.bubbles.length : 0)),
   };
 }

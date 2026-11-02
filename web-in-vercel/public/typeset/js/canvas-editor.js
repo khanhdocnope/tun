@@ -640,12 +640,46 @@ export class TypesetCanvasEditor {
       this.onSelectionChanged(null);
     });
 
-    // Nhấp đúp để mở chế độ gõ chữ mượt mà ngay trên Canvas
+    // Nhấp đúp để mở chế độ gõ chữ mượt mà trực tiếp ngay trên Canvas
     this.fabricCanvas.on("mouse:dblclick", (opt) => {
       if (opt.target instanceof fabric.Textbox) {
         opt.target.enterEditing();
         opt.target.selectAll();
         this.fabricCanvas.renderAll();
+      } else if (!opt.target || opt.target === this.backgroundImage) {
+        // Double-click vào vùng trống canvas để tạo ngay bong bóng thoại mới tại vị trí chuột
+        const pointer = this.fabricCanvas.getPointer(opt.e);
+        const newBox = this.createNewTextBox(Math.round(pointer.x - 70), Math.round(pointer.y - 35), "Lời thoại mới");
+        if (newBox) {
+          setTimeout(() => {
+            newBox.enterEditing();
+            newBox.selectAll();
+            this.fabricCanvas.renderAll();
+          }, 30);
+        }
+      }
+    });
+
+    // Hover feedback: Khi rê chuột qua bóng thoại, viền sáng nhẹ báo hiệu có thể click/sửa
+    this.fabricCanvas.on("mouse:over", (opt) => {
+      if (opt.target instanceof fabric.Textbox) {
+        if (!opt.target.isEditing && opt.target !== this.fabricCanvas.getActiveObject()) {
+          opt.target.set({
+            borderColor: "#818cf8",
+          });
+          this.fabricCanvas.renderAll();
+        }
+      }
+    });
+
+    this.fabricCanvas.on("mouse:out", (opt) => {
+      if (opt.target instanceof fabric.Textbox) {
+        if (!opt.target.isEditing && opt.target !== this.fabricCanvas.getActiveObject()) {
+          opt.target.set({
+            borderColor: "#6366f1",
+          });
+          this.fabricCanvas.renderAll();
+        }
       }
     });
 
@@ -666,6 +700,18 @@ export class TypesetCanvasEditor {
         e.target.textVi = e.target.text;
         this.onBoxModified(this.getBoxData(e.target));
         this.positionMicroToolbar();
+      }
+    });
+
+    this.fabricCanvas.on("text:editing:exited", (e) => {
+      if (e.target instanceof fabric.Textbox) {
+        e.target.textVi = e.target.text;
+        e.target.initDimensions();
+        e.target.setCoords();
+        this.positionMicroToolbar(e.target);
+        this.pushHistoryState();
+        this.onBoxModified(this.getBoxData(e.target));
+        this.onBoxesListChanged(this.getAllBoxesData());
       }
     });
   }
@@ -1073,10 +1119,10 @@ export class TypesetCanvasEditor {
   }
 
   /**
-   * Thêm một bóng thoại từ cấu trúc Unified Spatial 2D [ymin, xmin, ymax, xmax] (thang 0-1000)
+   * Thêm một bóng thoại từ cấu trúc MangaLayer V2 hoặc Unified Spatial 2D [ymin, xmin, ymax, xmax] (thang 0-1000)
    * Tự động áp dụng Emotion-to-Font Engine và uốn chữ theo dáng elip (Elliptical Diamond Wrap).
    *
-   * @param {Object} bubble - { id, box_2d, type, text_original, text_translated }
+   * @param {Object} bubble - MangaLayer V2 hoặc Bubble V1
    * @param {Object} [options]
    * @returns {fabric.Textbox}
    */
@@ -1091,23 +1137,43 @@ export class TypesetCanvasEditor {
     const pw = this.pageWidth || 1000;
     const ph = this.pageHeight || 1400;
 
-    const pixelX = Math.round((xmin / 1000) * pw);
-    const pixelY = Math.round((ymin / 1000) * ph);
-    const pixelW = Math.max(50, Math.round(((xmax - xmin) / 1000) * pw));
-    const pixelH = Math.max(35, Math.round(((ymax - ymin) / 1000) * ph));
+    // Ưu tiên pixel_bounds từ V2 layer nếu có
+    const pb = bubble.pixel_bounds;
+    const pixelX = pb && pb.x !== undefined ? pb.x : Math.round((xmin / 1000) * pw);
+    const pixelY = pb && pb.y !== undefined ? pb.y : Math.round((ymin / 1000) * ph);
+    const pixelW = pb && pb.width ? pb.width : Math.max(50, Math.round(((xmax - xmin) / 1000) * pw));
+    const pixelH = pb && pb.height ? pb.height : Math.max(35, Math.round(((ymax - ymin) / 1000) * ph));
 
-    const emotionType = (bubble.type || "dialogue").toLowerCase().trim();
+    const rawType = bubble.type || "speech_bubble";
+    const emotionType = (rawType === "speech_bubble" ? "dialogue" : rawType).toLowerCase().trim();
     const preset = getEmotionFontPreset(emotionType);
 
-    let textContent = (bubble.text_translated || bubble.textVi || bubble.text || "").trim();
-    if (!textContent) textContent = bubble.text_original || "Lời thoại";
+    // Lấy nội dung bản dịch & văn bản gốc (hỗ trợ cả V1 và V2 Content)
+    let textContent = (
+      bubble.content?.translated_text ||
+      bubble.text_translated ||
+      bubble.textVi ||
+      bubble.text ||
+      ""
+    ).trim();
+
+    const originalText = (
+      bubble.content?.original_text ||
+      bubble.text_original ||
+      bubble.textJa ||
+      ""
+    ).trim();
+
+    if (!textContent) textContent = originalText || "Lời thoại";
 
     if (preset.capsAll) {
       textContent = textContent.toUpperCase();
     }
 
-    // Tính toán cỡ chữ cơ sở tương ứng với chiều cao khung bóng thoại và tỷ lệ emotion
-    const baseFontSize = Math.max(14, Math.min(54, Math.round(pixelH * 0.32 * preset.sizeScale)));
+    // Tính toán cỡ chữ cơ sở: tôn trọng gợi ý từ V2 Typography nếu có
+    const suggestedSize = bubble.typography?.suggested_font_size_pt;
+    const baseFontSize = suggestedSize || Math.max(14, Math.min(54, Math.round(pixelH * 0.32 * preset.sizeScale)));
+
     const wrapResult = this.ellipticalDiamondWrap(
       textContent,
       pixelW,
@@ -1116,8 +1182,9 @@ export class TypesetCanvasEditor {
       baseFontSize
     );
 
-    // Kiểm tra màu nền bóng thoại để tự động đảo màu nếu cần
-    const isLightBg = this.detectBackgroundLuminance(pixelX, pixelY, pixelW, pixelH);
+    // Kiểm tra màu nền bóng thoại: Ưu tiên cờ is_pure_white_bg từ backend V2
+    const isPureWhite = bubble.geometry?.is_pure_white_bg;
+    const isLightBg = isPureWhite !== undefined ? isPureWhite : this.detectBackgroundLuminance(pixelX, pixelY, pixelW, pixelH);
     let fill = preset.fill;
     let stroke = preset.stroke;
     if (!isLightBg && emotionType !== "sfx") {
@@ -1125,10 +1192,13 @@ export class TypesetCanvasEditor {
       stroke = "#000000";
     }
 
+    const orderVal = bubble.order_index || bubble.order || bubble.id || this.getNextOrder();
+    const cleanId = typeof bubble.id === "string" && bubble.id ? bubble.id : `bubble_${orderVal}`;
+
     const boxData = {
-      id: bubble.id ? `bubble_${bubble.id}` : `box_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      order: bubble.id || this.getNextOrder(),
-      textJa: bubble.text_original || bubble.textJa || "",
+      id: cleanId.startsWith("bubble_") || cleanId.startsWith("box_") ? cleanId : `bubble_${cleanId}`,
+      order: typeof orderVal === "number" ? orderVal : parseInt(orderVal) || this.getNextOrder(),
+      textJa: originalText,
       textVi: wrapResult.text || textContent,
       text: wrapResult.text || textContent,
       x: pixelX,
@@ -1140,19 +1210,33 @@ export class TypesetCanvasEditor {
         fill: fill,
         stroke: stroke,
         strokeWidth: preset.strokeWidth,
-        align: preset.align,
+        align: bubble.typography?.text_align || preset.align || "center",
         bold: preset.bold,
         italic: preset.italic,
         lineHeight: 1.15,
       },
       bubbleType: emotionType,
       box_2d: [ymin, xmin, ymax, xmax],
+      geometry: bubble.geometry || { is_pure_white_bg: isLightBg },
+      typography: bubble.typography || {},
     };
 
     const textbox = this.addTextBoxFromData(boxData);
     textbox.bubbleType = emotionType;
     textbox.box_2d = [ymin, xmin, ymax, xmax];
+    textbox.geometry = boxData.geometry;
     return textbox;
+  }
+
+  /**
+   * Nạp danh sách layers từ MangaLayer V2 hoặc Unified Spatial Pipeline
+   *
+   * @param {Array} layers - Mảng MangaLayer V2 hoặc Bubble V1
+   * @param {boolean} [replaceExisting=true] - Xóa các Textbox cũ trước khi nạp
+   * @returns {Array<fabric.Textbox>}
+   */
+  loadMangaLayers(layers, replaceExisting = true) {
+    return this.loadSpatialBubbles(layers, replaceExisting);
   }
 
   /**

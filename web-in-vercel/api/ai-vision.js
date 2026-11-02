@@ -15,6 +15,7 @@ const {
   aiDeduplicationCache,
   computeDeduplicationHash,
 } = require("./batch-helper");
+const { sortReadingOrder } = require("./manga-contract");
 
 // Cấu hình Multer nhận Binary Multipart (Buffer in memory)
 const upload = multer({
@@ -255,7 +256,34 @@ module.exports = async (req, res) => {
 
     const durationMs = Date.now() - startTime;
 
+    // Chuẩn hóa layers theo chuẩn V2 Contract
+    const rawLayers = (bubblesOutput || []).map((b, idx) => ({
+      id: b.id || `bubble_${String(idx + 1).padStart(2, "0")}`,
+      order_index: idx + 1,
+      type: b.type || (b.is_sfx ? "sfx" : "speech_bubble"),
+      box_2d: b.box_2d || b.box || [0, 0, 0, 0],
+      geometry: {
+        is_pure_white_bg: b.is_pure_white_bg ?? true,
+        confidence: b.confidence ?? 0.95,
+      },
+      typography: {
+        orientation: b.orientation || "vertical",
+        suggested_font_size_pt: b.font_size || 18,
+        text_align: "center",
+        font_color: "#000000",
+      },
+      content: {
+        original_text: b.text_original || b.src || "",
+        translated_text: b.text_translated || b.tgt || "",
+        confidence: b.confidence ?? 0.95,
+      },
+    }));
+
+    const sortedLayers = sortReadingOrder(rawLayers, readingOrder);
+
     const responsePayload = {
+      version: "2.0.0",
+      status: "success",
       success: true,
       mode,
       modelUsed: modelUsedFinal,
@@ -264,6 +292,7 @@ module.exports = async (req, res) => {
       lineCount: ocrTextBlock ? ocrTextBlock.split("\n").filter(Boolean).length : 0,
       ocrTextBlock,
       viTextBlock,
+      layers: sortedLayers,
       bubbles: bubblesOutput,
       missing,
       // Các trường alias hỗ trợ tương thích ngược tối đa
