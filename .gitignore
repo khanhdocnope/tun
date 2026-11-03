@@ -1,0 +1,21 @@
+# Environment variables & secrets
+.env
+*.dat
+cf_cookies.dat
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Temp & build
+temp_app.py
+*.tmp
+
+# Test output images (optional, comment out if wanting to track)
+# image-test/*_cleaned.webp
