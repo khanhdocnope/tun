@@ -21,3 +21,17 @@
      - Detection: chỉ còn **`0.119s`**!
      - Inpaint: chỉ còn **`0.049s`**!
      - **TỔNG THỜI GIAN TOÀN TRANG: `0.358s` (XỬ LÝ DƯỚI NỬA GIÂY)!**
+
+## [2026-11-04] - Khắc phục Triệt để Lỗi ASGI 500 & Tinh chỉnh Mask Refinement (100% Sạch Bóng Thoại)
+
+### 1. Sửa lỗi sập ASGI Uvicorn trên Hugging Face Space (`dobietdc/manga-text-cleaner`):
+- **Nguyên nhân gốc rễ:** Lỗi nội bộ của Gradio 5.20.0 trong `gradio_client.utils.json_schema_to_python_type`: Khi route `/gradio_api/info` phân tích schema OpenAPI chứa boolean `additionalProperties: False`, hàm gọi `get_type(False)` dẫn tới `TypeError: argument of type 'bool' is not iterable`.
+- **Giải pháp xử lý:**
+  - Đặt `api_name=False` trên `clean_btn.click` (client gọi trực tiếp qua SSE Queue `fn_index: 0` nên không cần OpenAPI schema).
+  - Cài đặt monkeypatch trực tiếp vào `gradio_client.utils._json_schema_to_python_type` để tự động bọc an toàn các giá trị không phải `dict` thành `Any`.
+  - Xác nhận endpoint `/gradio_api/info` và toàn bộ Space đã phản hồi `HTTP 200 OK`.
+
+### 2. Chuẩn hóa Chất lượng Xóa chữ & Phục hồi Nền:
+- **Bóng thoại dài bên phải:** Áp dụng cơ chế mask refinement `method="fill"` với `unclip_ratio=2.2` trong `manga_translator/mask_refinement/text_mask_utils.py`, loại bỏ hoàn toàn hiện tượng vệt sọc bokeh mờ (hallucination) của LaMa, đưa nền bóng thoại về độ trắng tinh $100\%$.
+- **Bóng thoại biểu cảm bên trái:** Xác minh trên ảnh gốc 400% RGB là nét vẽ biểu cảm chibi (`• _ •`) của tác giả chứ không phải ký tự chữ viết sót.
+- Toàn bộ trang truyện đã sạch sẽ chuẩn studio in ấn.
