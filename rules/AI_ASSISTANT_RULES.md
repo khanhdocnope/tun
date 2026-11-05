@@ -29,7 +29,17 @@
 
 ---
 
-### NGUYÊN TẮC 3: QUY TẮC BẮT BUỘC VỀ "TỰ ĐỘNG CẬP NHẬT DOCS" (DOCUMENTATION EVOLUTION)
+### NGUYÊN TẮC 3: ƯU TIÊN SỬ DỤNG THỊ GIÁC TRỰC QUAN (MULTIMODAL VISION FIRST - QUY TẮC BẮT BUỘC)
+*AI Assistant sở hữu năng lực thị giác đa phương thức (Multimodal Vision) bẩm sinh. Khi làm việc với hình ảnh truyện tranh:*
+1. **Quan sát trực quan trực tiếp:**
+   - Khi người dùng đính kèm ảnh hoặc phản hồi về lỗi hình ảnh (vết lem, dính ô, biến dạng nét vẽ, sót chữ), AI **PHẢI nhìn trực tiếp vào ảnh bằng thị giác** để nhận định tình hình và đánh giá chất lượng thẩm mỹ.
+   - **TUYỆT ĐỐI KHÔNG** dùng lệnh/script đo đếm pixel mù quáng, đếm màu hay crop ảnh qua code để "đoán mò" khi mắt của mô hình đã nhìn thấy rõ ràng bức ảnh.
+2. **Chỉ dùng code khi hành động thực tế:**
+   - Chỉ sử dụng script / terminal khi cần chỉnh sửa file mã nguồn, gọi API hoặc xử lý dữ liệu thực tế trên Space / Repo.
+
+---
+
+### NGUYÊN TẮC 4: QUY TẮC BẮT BUỘC VỀ "TỰ ĐỘNG CẬP NHẬT DOCS" (DOCUMENTATION EVOLUTION)
 *Mỗi khi có sự điều chỉnh, cải tiến hoặc thêm tính năng mới, AI PHẢI đồng bộ lại với tài liệu:*
 
 1. **Khi đề xuất hoặc thay đổi logic/kiến trúc mới:**
