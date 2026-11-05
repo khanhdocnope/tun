@@ -40,6 +40,7 @@ class HfGradioMangaCleanerClient:
         detector: str = "default",      # Ưu tiên 'default' (DBNet) để không sót chữ
         inpainter: str = "lama_large",  # Ưu tiên 'lama_large' (LaMa) để nền mịn phẳng
         dilation_offset: int = 2,       # Dilation 2px tối ưu chuẩn fit_text nuốt trọn viền chữ mà không lấn nét vẽ
+        clean_mode: str = "all",        # 'all' (xóa tất cả) hoặc 'bubble_only' (giữ nguyên SFX, tóc, áo)
         max_dim: Optional[int] = None,  # Mặc định giữ nguyên độ phân giải gốc
         timeout: int = 120
     ) -> Tuple[bytes, Dict[str, Any]]:
@@ -91,7 +92,7 @@ class HfGradioMangaCleanerClient:
         }
         session_hash = f"moeject_{int(time.time() * 1000)}"
         payload = {
-            "data": [file_data, detector, inpainter, dilation_offset],
+            "data": [file_data, detector, inpainter, dilation_offset, clean_mode],
             "fn_index": 0,
             "session_hash": session_hash
         }

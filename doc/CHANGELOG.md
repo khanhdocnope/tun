@@ -40,7 +40,31 @@
 - **Kết quả đo lường thực tế:**
   - Lòng bóng thoại trắng tinh khôi chuẩn studio scanlation, đường viền bóng thoại sắc nét $100\%$, nền tranh xung quanh bảo toàn nguyên vẹn.
 
-## [2026-11-04] - Triển khai Phương án A: Bảo toàn Nghệ thuật 100% & Xóa sạch Furigana / Dấu chấm
+## [2026-11-05] - Triển khai Tùy chọn Bỏ qua SFX / Chữ trên Tranh & Cải tiến Giao diện Space
+
+### 1. Phân loại Vùng chữ Thông minh (Adaptive Speech Bubble vs SFX/Artwork Classifier)
+- **Bài toán:** Người dùng cần tùy chọn giữ lại chữ SFX (hiệu ứng âm thanh) vẽ đè lên tóc, áo, phong cảnh nhân vật, đồng thời loại bỏ triệt để tình trạng bôi mây trắng nhòe nhoẹt (do AOT-GAN) hoặc dán khối hình chữ nhật trắng che mất mặt/người nhân vật.
+- **Giải pháp:**
+  - Phát triển bộ phân loại tự động `classify_text_region` dựa trên đặc trưng thị giác viền & nền:
+    - **`bubble` (Bóng thoại):** Viền giấy trắng đồng nhất (>70% viền trắng, độ bão hòa màu < 40) hoặc bóng thoại đen chữ trắng đặc thù.
+    - **`sfx` (Chữ trên tranh/nghệ thuật):** Nằm trên nền tóc, áo, chi tiết tranh có màu sắc, gradient hoặc độ bão hòa cao.
+  - Tích hợp nhãn `"type": "bubble" | "sfx"` vào metadata của từng bounding box trả về qua API.
+
+### 2. Tùy chọn Chế độ Xóa (`clean_mode`):
+- **Giao diện Gradio (Ảnh đơn & File ZIP) & FastAPI:**
+  - Bổ sung tùy chọn `clean_mode`:
+    - `🧹 Xóa tất cả (Cả bóng thoại & SFX/tranh)`: Xóa toàn bộ nhưng dùng `fit_text` + `lama_large` để hòa trộn mịn màng, không để lại mây trắng.
+    - `🛡️ Chỉ xóa bóng thoại (Giữ nguyên SFX, chữ trên tóc/áo)`: Bỏ qua 100% các chữ nằm trên tranh vẽ/tóc/áo nhân vật, giữ nguyên vẹn 100% nét vẽ của họa sĩ.
+
+### 3. Chuẩn hóa Mặc định Inpainter:
+- Đặt **`lama_large`** làm Inpainter mặc định số 1 (loại bỏ nhãn `"AOT (Mặc định)"` gây hiểu lầm).
+- Đặt `dilation_offset = 2` làm mặc định để dọn sạch toàn bộ viền bóng ma và furigana mờ.
+
+### 4. Kiểm chứng Trực quan Thực tế (Multimodal Vision First):
+- **Trang màu `0.webp`:**
+  - Chế độ `bubble_only`: Giữ nguyên 100% SFX "運命を" trên tóc tím và "左右するー！？" trên áo vest, trong khi tất cả bóng thoại trắng được xóa sạch tinh khôi.
+  - Lòng bóng thoại trắng hoàn hảo, không còn vết lem mờ hay sót furigana `たしな`.
+
 
 ### 1. Phân tích Bản chất Vấn đề
 - **Vấn đề sót Furigana và Dấu chấm `……`:**
