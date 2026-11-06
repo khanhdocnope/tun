@@ -28,6 +28,19 @@ class Chapter:
 
 
 @dataclass
+class MangaSearchResult:
+    """Kết quả tìm kiếm manga rút gọn."""
+    id: str
+    title: str
+    url: str
+    cover_url: Optional[str] = None
+    latest_chapter: Optional[str] = None
+    description: Optional[str] = None
+    authors: List[str] = field(default_factory=list)
+    genres: List[str] = field(default_factory=list)
+
+
+@dataclass
 class MangaInfo:
     """Thông tin toàn diện của bộ manga."""
     id: str
@@ -57,6 +70,7 @@ class DownloadReport:
     total_pages: int
     downloaded_pages: List[Tuple[int, bytes]] = field(default_factory=list)
     failures: List[ImageFailure] = field(default_factory=list)
+    output_path: Optional[Path] = None
 
     @property
     def is_successful(self) -> bool:

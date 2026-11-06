@@ -40,13 +40,68 @@
 - **Kết quả đo lường thực tế:**
   - Lòng bóng thoại trắng tinh khôi chuẩn studio scanlation, đường viền bóng thoại sắc nét $100\%$, nền tranh xung quanh bảo toàn nguyên vẹn.
 
-## [2026-11-06] - Chuẩn hóa Kiến trúc Đa nền tảng (PC & Mobile) & Đặc tả Ingestion Engine
+## [2026-11-06] - Chuẩn hóa Kiến trúc Đa nền tảng (PC & Mobile) & Hoàn thiện Ingestion & Scraper Engine
 
 ### 1. Nâng cấp Kiến trúc Toàn diện (Decoupled Client-Server):
 - **Phân tách Rõ rệt:** Định hình rõ mô hình **Python Headless Engine** (xử lý logic nặng: Ingestion, WAF bypass, AI Vision, nén CBZ) kết hợp với **Cross-platform Client** (hướng tới Flutter/Tauri trên Desktop PC và Mobile Android/iOS) để app điện thoại siêu nhẹ (RAM 30-50MB, 60-120fps mượt mà, không vướng rào cản nền tảng).
 - **Cam kết Tối ưu Bộ nhớ (RAM < 80MB):** Bổ sung đặc tả cơ chế **Chunk Streaming & Disk Flush** (tải trang nào nén tức thì vào CBZ, không buffer cả chapter) và **Ephemeral Browser Lifecycle** (đóng triệt để `nodriver` Chromium ngay sau khi trích xuất `cf_cookies.dat`).
 - **Đặc tả Giao diện Kép:** Bổ sung `src/cli/` (Rich/Typer CLI tương tác trực quan) và `src/server/` (FastAPI REST backend chuẩn hóa) làm bệ phóng cho app Desktop/Mobile.
 - **Tích hợp Comic Metadata:** Bổ sung chuẩn `ComicInfo.xml` bên trong file `.cbz` để các ứng dụng đọc truyện trên di động và máy tính nhận diện tự động metadata.
+
+### 2. Triển khai Hoàn chỉnh Phân hệ Ingestion & Scraper Engine (100% Passed):
+- **Manga Source Connectors (`src/api/`):**
+  - `MangaDexSource`: Tích hợp chuẩn REST API v5, tự động giải mã endpoint MangaDex@Home, hỗ trợ lọc đa ngôn ngữ (`vi`, `en`, `ja`).
+  - `CuutruyenSource`: Kết nối API nội bộ v2, bóc tách chapter và link CDN tốc độ cao.
+  - `ComixSource`: Kế thừa sâu từ `comix-downloader`, bóc tách dữ liệu từ `initial-data` và DOM reader của `comix.to`.
+  - `Smart DoH Resolver`: Tích hợp Cloudflare DoH `1.1.1.1` chống nhiễm độc DNS từ ISP tại Việt Nam (`src/utils/dns.py`).
+  - `CloudflareBypassRunner`: Vượt rào cản Cloudflare / Turnstile bằng Chromium headless/headed, tích hợp cơ chế đóng CDP socket websocket an toàn (`await browser.aclose()` với timeout 3s) và dọn dẹp triệt để tiến trình con qua `psutil`.
+- **Bộ tải & Đóng gói Phân luồng Hai tầng (`src/core/downloader.py` & `src/formats/`):**
+  - **Two-tier Concurrency:** Tách biệt Chapter Pool (`max_workers=3`) và Image Pool (`max_workers=8`), điều phối qua `HostConnectionGate` (`BoundedSemaphore`) chống nghẽn và chống bị host cấm IP.
+  - **Xuất ZIP ảnh thô (`src/formats/zip_packager.py`):** Hỗ trợ xuất định dạng `.zip` chứa ảnh tuần tự (`001.webp`, `002.webp`...) để người dùng ném trực tiếp vào tool batch AI Cleaner trên Space.
+  - **Xuất CBZ chuẩn hóa (`src/formats/cbz.py`):** Tự động tạo và nhúng file `ComicInfo.xml` (tiêu đề, số chương, tác giả, nhóm dịch).
+  - **Streaming Disk-buffered:** Ghi trực tiếp vào file `.tmp` và giải phóng vùng nhớ byte ngay lập tức (`del data`), cam kết RAM < 80MB.
+- **Giao diện CLI Tương tác & REST API Server (`src/cli/` & `src/server/`):**
+  - **CLI (Typer/Rich):** Các lệnh `sources`, `search`, `info`, `download` với thanh Dual Progress Bar hiển thị song song tiến trình chapter và từng trang ảnh.
+  - **FastAPI Server:** Cung cấp REST endpoints (`/api/sources`, `/api/search`, `/api/manga/{source}/{id}`, `/api/download`, `/api/download/{task_id}`) kèm CORS Middleware và Background Task Manager phục vụ trực tiếp cho Desktop/Mobile app.
+- **Kiểm thử Tự động (Verification):** Đạt 100% pass trên toàn bộ 52 test cases (`tests/test_api.py`: 11, `tests/test_cli_and_server.py`: 22, `tests/test_downloader_and_formats.py`: 19).
+
+## [2026-11-06] - Triển khai Core Downloader Two-Tier Concurrency & Packaging Engine (CBZ, ZIP)
+
+### 1. Đóng gói Nén ZIP (`src/formats/zip_packager.py`):
+- Xây dựng hàm `create_chapter_zip(output_path, pages, extension)`:
+  - Đóng gói danh sách byte ảnh vào file `.zip` theo tên chuẩn tuần tự `001.webp`, `002.webp`,...
+  - Sử dụng chuẩn nén `zipfile.ZIP_DEFLATED`.
+  - Hỗ trợ cả danh sách trang đánh chỉ số từ 0 (0-based) lẫn 1 (1-based) với cơ chế tự động căn chỉnh và padding 3 chữ số trở lên.
+- Xây dựng lớp `ZipStreamPackager`:
+  - Cho phép ghi trực tiếp từng trang ảnh vào file `.zip.tmp` trên đĩa ngay khi tải xong.
+  - Tự động đổi tên nguyên tử (atomic rename) sang `.zip` khi hoàn tất hoặc dọn dẹp file tạm khi gặp sự cố (`abort()`).
+
+### 2. Đóng gói Chuẩn Truyện tranh Quốc tế CBZ & ComicInfo.xml (`src/formats/cbz.py`):
+- Xây dựng hàm `generate_comic_info_xml(manga_info, chapter, page_count)`:
+  - Khởi tạo nội dung XML chuẩn `ComicInfo.xml` tương thích 100% với các ứng dụng đọc truyện (Mihon, Tachiyomi, Kuro Reader, ComicRack).
+  - Đầy đủ các thẻ: `<ComicInfo>`, `<Title>`, `<Series>`, `<Number>`, `<Writer>`, `<Summary>`, `<Genre>`, `<PageCount>`, `<ScanInformation>`, `<Web>`, `<Manga>YesAndRightToLeft</Manga>`.
+- Xây dựng hàm `create_chapter_cbz(output_path, manga_info, chapter, pages, extension)`:
+  - Đóng gói các trang ảnh tuần tự và tự động chèn `ComicInfo.xml` vào gốc của file `.cbz`.
+- Xây dựng lớp `CBZStreamPackager`:
+  - Hỗ trợ ghi đệm trực tiếp (Streaming Memory) cho file `.cbz`, tự động chèn `ComicInfo.xml` trước khi hoàn tất đóng gói.
+- Duy trì hàm tương thích ngược `export_to_cbz` cho các tác vụ cũ.
+
+### 3. Nâng cấp Bộ Tải Đa Luồng Hai Tầng & Streaming Memory (`src/core/downloader.py`):
+- **Tầng 1 Concurrency (`download_manga_chapters`):**
+  - Điều phối tải song song nhiều chapter cùng lúc (`max_chapter_workers`, mặc định 2 luồng).
+  - Tích hợp callback báo cáo tiến độ linh hoạt (`progress_callback`), trả về danh sách `DownloadReport` đúng thứ tự.
+- **Tầng 2 Concurrency (`download_chapter`):**
+  - Tải song song các trang ảnh trong một chapter (`max_image_workers`, mặc định 5 luồng) dưới sự kiểm soát của `HostConnectionGate` (`BoundedSemaphore` theo host/CDN) nhằm chống rate-limit / ban IP.
+  - Tích hợp Exponential Backoff & Jitter retry logic khi gặp sự cố mạng hoặc lỗi tạm thời.
+  - Tự động nhận diện lỗi WAF/Cloudflare HTTP 403 (`HTTP_403_WAF`).
+- **Cơ chế Streaming Memory (Cam kết RAM < 80MB):**
+  - Xác thực Magic Bytes (`validate_image_bytes`) với Pillow ngay khi nhận response.
+  - Tự động phát hiện định dạng ảnh (`detect_image_extension`) qua magic bytes (WebP, PNG, JPEG, GIF, AVIF).
+  - Ghi đệm trực tiếp vào CBZ, ZIP, thư mục ảnh thô (IMAGES) hoặc PDF, sau đó giải phóng ngay vùng nhớ byte của ảnh khỏi RAM (`del data`). Bộ nhớ chỉ duy trì số trang đang bay trong worker pool.
+- **Tự động Phân giải & Đóng gói:**
+  - Tự động sinh tên thư mục/file chuẩn hóa chống ký tự cấm trên Windows/Linux (`sanitize_filename`, `resolve_chapter_output_path`).
+  - Hỗ trợ đầy đủ 4 định dạng: `CBZ`, `ZIP`, `IMAGES`, `PDF`.
+- Bổ sung bộ 19 unit test toàn diện (`tests/test_downloader_and_formats.py`) kiểm chứng toàn bộ luồng hoạt động.
 
 ## [2026-11-06] - Khắc phục Triệt để Lỗi Xóa Nhầm SFX/Chữ Nghệ Thuật trên Tóc/Áo & Hoàn thiện Chế độ Giữ SFX
 
