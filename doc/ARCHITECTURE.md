@@ -53,7 +53,7 @@ Dự án được xây dựng dựa trên 2 trụ cột cốt lõi:
   - Tầng 2: Đa luồng tải ảnh trang truyện (`max_image_workers`, mặc định 5–8 ảnh/chapter).
 - **Connection Gating (Chống Rate-Limit):** Dùng `threading.BoundedSemaphore` giới hạn tối đa số kết nối đồng thời trên mỗi host/CDN (mặc định 4-5 connections) để tránh bị máy chủ truyện chặn IP.
 - **Phân loại lỗi chi tiết (Structured Failure Diagnostics):** Phân loại lỗi mạng, SSL, DNS, 403 WAF, ảnh hỏng; cơ chế retry với Exponential Backoff & Jitter.
-- **Multiple Output Formats & Comic Metadata:** Hỗ trợ lưu ảnh thô (raw), đóng gói chuẩn truyện tranh quốc tế **CBZ** (`zipfile`) tích hợp sẵn file đặc tả **`ComicInfo.xml`** để các ứng dụng đọc truyện trên PC và điện thoại tự động hiển thị metadata (bìa, tác giả, mô tả, số tập).
+- **Multiple Output Formats & Comic Metadata:** Hỗ trợ lưu thư mục ảnh thô (raw), đóng gói file **ZIP** (ảnh thô nguyên bản thuận tiện lưu trữ hoặc nạp trực tiếp vào tool AI Cleaner batch), đóng gói chuẩn truyện tranh quốc tế **CBZ** (`zipfile`) tích hợp sẵn file đặc tả **`ComicInfo.xml`** để các ứng dụng đọc truyện trên PC và điện thoại tự động hiển thị metadata (bìa, tác giả, mô tả, số tập), và PDF.
 
 #### B. Inpainting & Manga Cleaner Pipeline (Tối ưu cho CPU / Hugging Face Spaces)
 - **Bước 1: Phát hiện chữ & Tạo Polygon Mask (Text Detection):**

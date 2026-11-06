@@ -10,9 +10,10 @@ from typing import List, Optional, Tuple, Dict, Any
 
 
 class OutputFormat(str, Enum):
-    IMAGES = "images"
-    PDF = "pdf"
-    CBZ = "cbz"
+    IMAGES = "images"  # Thư mục ảnh rời
+    ZIP = "zip"        # File .zip chứa ảnh thô (thuận tiện cho lưu trữ hoặc tải lên AI Cleaner batch)
+    CBZ = "cbz"        # File .cbz chuẩn truyện tranh quốc tế (kèm ComicInfo.xml metadata)
+    PDF = "pdf"        # File PDF đóng gói
 
 
 @dataclass
