@@ -54,6 +54,10 @@
   - Loại bỏ hoàn toàn khối lệnh `sub_gray < 175` mở rộng ra ngoài phạm vi `textlines` trong `manga_translator/mask_refinement/text_mask_utils.py`.
   - Khóa chặt mask theo đúng biên độ nét chữ thực tế mà detector phát hiện.
   - Điều chỉnh `dist_mat >= 1.2 * unit` để chỉ gom các nét furigana/dấu chấm gắn liền với dòng chữ mà không vươn tới viền bóng thoại.
+- **Khắc phục Lỗi Bỏ Sót Bóng Thoại Mờ / Screentone / Gradient (`classify_text_region`):**
+  - Ngưỡng lọc cũ yêu cầu `border_white_pct > 70` quá gắt gao, khiến các bóng thoại có đổ bóng cảm xúc (screentone gradient xám hoặc bán trong suốt như ở `Trang 5 (11.webp)`) bị phân loại nhầm thành `sfx` và bị bỏ qua ở chế độ `bubble_only`.
+  - Hạ ngưỡng an toàn xuống `border_white_pct >= 52` và `pct_white >= 38` (đo trên ngưỡng xám `> 210` và `> 215`).
+  - **Kiểm chứng thực tế:** Quả bóng thoại mờ ở Trang 5 `11.webp` (`そんなこと...`) đã được nhận diện là `bubble` và xóa sạch 100%, bảo toàn nền trong suốt phía sau.
 - **Kiểm chứng Trực quan Thực tế (Multimodal Vision First):**
   - Đã đối chiếu trực tiếp mask mới (`fixed_mask_test.png`): Biến mất 100% các vòng cung viền bóng thoại `(` `)` và chóp nón đuôi bóng thoại `/ \`.
   - Bounding box trở lại đúng khuôn khổ chuẩn của dòng chữ, không còn bị biến dạng ("méo box"), nét viền bóng thoại được bảo toàn 100%.
