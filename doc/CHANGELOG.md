@@ -40,6 +40,24 @@
 - **Kết quả đo lường thực tế:**
   - Lòng bóng thoại trắng tinh khôi chuẩn studio scanlation, đường viền bóng thoại sắc nét $100\%$, nền tranh xung quanh bảo toàn nguyên vẹn.
 
+## [2026-11-06] - Khắc phục Triệt để Lỗi Mask Lem Viền & Đuôi Bóng Thoại (Loại bỏ Méo Box)
+
+### 1. Phân tích Hiện tượng & Nguyên nhân Thị giác:
+- **Hiện tượng:**
+  - Trên mask xuất hiện các vết lem vòng cung `(` và `)` ở đỉnh/đáy các cột chữ dọc và chóp nón nhọn `/ \` ở đuôi chữ.
+  - Hậu quả: Bounding box bị kéo dài chạm tận đỉnh/đáy bóng thoại làm méo box, đồng thời inpainting xóa lẹm vào đường viền nét vẽ của bóng thoại và đuôi bóng thoại.
+- **Nguyên nhân cốt lõi:**
+  - Logic cũ tự mở rộng cửa sổ dọc `y_top/y_bot = font_sz * 1.2` và thu nạp điểm tối `sub_gray < 175`. Khi chữ nằm sát mép, nó đã bắt nhầm nét viền đen cong và đuôi bóng thoại thành nét chữ.
+
+### 2. Giải pháp Đã Triển khai & Đẩy lên Space:
+- **Xóa bỏ hoàn toàn cơ chế quét mở rộng tự do:**
+  - Loại bỏ hoàn toàn khối lệnh `sub_gray < 175` mở rộng ra ngoài phạm vi `textlines` trong `manga_translator/mask_refinement/text_mask_utils.py`.
+  - Khóa chặt mask theo đúng biên độ nét chữ thực tế mà detector phát hiện.
+  - Điều chỉnh `dist_mat >= 1.2 * unit` để chỉ gom các nét furigana/dấu chấm gắn liền với dòng chữ mà không vươn tới viền bóng thoại.
+- **Kiểm chứng Trực quan Thực tế (Multimodal Vision First):**
+  - Đã đối chiếu trực tiếp mask mới (`fixed_mask_test.png`): Biến mất 100% các vòng cung viền bóng thoại `(` `)` và chóp nón đuôi bóng thoại `/ \`.
+  - Bounding box trở lại đúng khuôn khổ chuẩn của dòng chữ, không còn bị biến dạng ("méo box"), nét viền bóng thoại được bảo toàn 100%.
+
 ## [2026-11-05] - Triển khai Tùy chọn Bỏ qua SFX / Chữ trên Tranh & Cải tiến Giao diện Space
 
 ### 1. Phân loại Vùng chữ Thông minh (Adaptive Speech Bubble vs SFX/Artwork Classifier)
