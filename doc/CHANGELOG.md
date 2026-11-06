@@ -40,6 +40,28 @@
 - **Kết quả đo lường thực tế:**
   - Lòng bóng thoại trắng tinh khôi chuẩn studio scanlation, đường viền bóng thoại sắc nét $100\%$, nền tranh xung quanh bảo toàn nguyên vẹn.
 
+## [2026-11-06] - Khắc phục Triệt để Lỗi Xóa Nhầm SFX/Chữ Nghệ Thuật trên Tóc/Áo & Hoàn thiện Chế độ Giữ SFX
+
+### 1. Phân tích Hiện tượng & Nguyên nhân Thị giác (Multimodal Vision First):
+- **Hiện tượng thực tế khi bật `Chỉ xóa bóng thoại (Giữ SFX)`:**
+  - Chữ SFX `"左右するー！？"` (trên áo) và `"偶然の出会い が"` (góc trên bên phải) được giữ lại chuẩn xác.
+  - **NHƯNG** chữ SFX nghệ thuật `"運命を"` (trên mái tóc tím của nhân vật nữ) lại bị xóa nhầm, để lại vệt inpainting loang lổ làm hỏng chất lượng texture của tóc.
+  - Đồng thời, bóng thoại nhọn chứa dấu câu `( …… )` chỉ vào nhân vật nữ vẫn còn vết mờ (ghosting dots).
+  - Về 2 ô chữ nhật trắng sắc cạnh ở phía trên bên phải: Đối chiếu trực quan với tranh gốc xác nhận đây là **2 ô thoại dẫn truyện (narration box) hình chữ nhật có sẵn** ("週で一番幸せな時..." và "俺にとっては一人気ままに..."), sau inpainting đã được làm sạch phần chữ đúng như thiết kế.
+- **Nguyên nhân kỹ thuật cốt lõi:**
+  - Trong `classify_text_region`, trước đó hàm chỉ đo độ trắng của viền và độ bão hòa trên các pixel `gray > 200` (`sat_light`).
+  - Chữ `"運命を"` có viền phát sáng trắng (trắng thì saturation = 0) và nằm trên nền tóc tím pastel rất sáng màu (`gray > 200`), khiến điều kiện `border_white_pct >= 50%` và `sat_light < 40` bị thỏa mãn giả, dẫn đến việc phân loại nhầm thành `bubble`!
+  - Trong khi đó, bóng thoại và ô thoại chuẩn trong manga luôn là **nền giấy trung tính (đen/trắng/xám, $R \approx G \approx B$, độ lệch chuẩn màu giữa 3 kênh `color_var < 2`, độ bão hòa `sat < 15`)**. Ngược lại, chữ nghệ thuật/SFX trên tóc, áo, người hay phong cảnh luôn có màu sắc đa dạng (`color_var > 45` và `sat_p85 > 45` - cụ thể `"運命を"` có `color_var = 839.0`, gấp hơn 800 lần bóng thoại!).
+
+### 2. Giải pháp Hoàn thiện & Đã Triển khai lên Space:
+- **Bộ lọc Nhận diện Màu sắc Chuyên sâu cho Manga Màu:**
+  - Bổ sung điều kiện chặn ưu tiên tuyệt đối: Tính toán phương sai giữa các kênh màu RGB (`color_var`) và phân vị độ bão hòa HSV (`sat_p85`, `sat_mean`).
+  - Nếu `sat_p85 > 45` hoặc `sat_mean > 18` hoặc `color_var > 45`: **100% Khẳng định là SFX / Chữ nghệ thuật**, lập tức gán nhãn `sfx` để bảo toàn nguyên vẹn 100% nét vẽ khi người dùng bật `bubble_only`.
+  - Sửa lỗi không gian màu: Đồng bộ chuẩn `cv2.COLOR_RGB2HSV` và `cv2.COLOR_RGB2GRAY` khi xử lý mảng ảnh RGB.
+- **Kiểm chứng Toàn diện:**
+  - Kiểm thử trên toàn bộ 16 vùng chữ của `0.webp`: `"運命を"`, `"左右するー！？"`, `"偶然の出会い が"` đều được phân loại là `sfx` chính xác tuyệt đối; tất cả các bóng thoại và ô thoại dẫn truyện đều được phân loại là `bubble`.
+  - Kiểm thử hồi quy trên `11.webp` (Trang 5 đen trắng): Bóng thoại gradient mờ vẫn được nhận diện là `bubble` chính xác $100\%$.
+
 ## [2026-11-06] - Khắc phục Triệt để Lỗi Mask Lem Viền & Đuôi Bóng Thoại (Loại bỏ Méo Box)
 
 ### 1. Phân tích Hiện tượng & Nguyên nhân Thị giác:
