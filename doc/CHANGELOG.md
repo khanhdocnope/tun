@@ -40,6 +40,14 @@
 - **Kết quả đo lường thực tế:**
   - Lòng bóng thoại trắng tinh khôi chuẩn studio scanlation, đường viền bóng thoại sắc nét $100\%$, nền tranh xung quanh bảo toàn nguyên vẹn.
 
+## [2026-11-06] - Chuẩn hóa Kiến trúc Đa nền tảng (PC & Mobile) & Đặc tả Ingestion Engine
+
+### 1. Nâng cấp Kiến trúc Toàn diện (Decoupled Client-Server):
+- **Phân tách Rõ rệt:** Định hình rõ mô hình **Python Headless Engine** (xử lý logic nặng: Ingestion, WAF bypass, AI Vision, nén CBZ) kết hợp với **Cross-platform Client** (hướng tới Flutter/Tauri trên Desktop PC và Mobile Android/iOS) để app điện thoại siêu nhẹ (RAM 30-50MB, 60-120fps mượt mà, không vướng rào cản nền tảng).
+- **Cam kết Tối ưu Bộ nhớ (RAM < 80MB):** Bổ sung đặc tả cơ chế **Chunk Streaming & Disk Flush** (tải trang nào nén tức thì vào CBZ, không buffer cả chapter) và **Ephemeral Browser Lifecycle** (đóng triệt để `nodriver` Chromium ngay sau khi trích xuất `cf_cookies.dat`).
+- **Đặc tả Giao diện Kép:** Bổ sung `src/cli/` (Rich/Typer CLI tương tác trực quan) và `src/server/` (FastAPI REST backend chuẩn hóa) làm bệ phóng cho app Desktop/Mobile.
+- **Tích hợp Comic Metadata:** Bổ sung chuẩn `ComicInfo.xml` bên trong file `.cbz` để các ứng dụng đọc truyện trên di động và máy tính nhận diện tự động metadata.
+
 ## [2026-11-06] - Khắc phục Triệt để Lỗi Xóa Nhầm SFX/Chữ Nghệ Thuật trên Tóc/Áo & Hoàn thiện Chế độ Giữ SFX
 
 ### 1. Phân tích Hiện tượng & Nguyên nhân Thị giác (Multimodal Vision First):

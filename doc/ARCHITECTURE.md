@@ -1,22 +1,59 @@
 # DỰ ÁN MOEJECT (KUMO-MANGA / OMNI-MANGA)
 ## TÀI LIỆU KIẾN TRÚC TỔNG THỂ & ĐẶC TẢ HỆ THỐNG (SYSTEM ARCHITECTURE)
 
-> **Mục tiêu dự án:** Xây dựng hệ sinh thái đọc, tải và xử lý Manga/Manhwa thế hệ mới cho người dùng phổ thông. Kết hợp công nghệ thu thập dữ liệu tiên tiến (bypassing WAF/Cloudflare) với Pipeline AI Computer Vision (xóa chữ, khôi phục nền và dịch tự động) tối ưu cho phần cứng CPU/Hugging Face.
+> **Mục tiêu dự án:** Xây dựng hệ sinh thái đọc, tải và xử lý Manga/Manhwa thế hệ mới cho người dùng phổ thông trên cả **Máy tính (Desktop PC)** và **Điện thoại (Mobile App)**. 
+> Kết hợp công nghệ thu thập dữ liệu tiên tiến (bypassing WAF/Cloudflare) với Pipeline AI Computer Vision (xóa chữ, khôi phục nền và dịch tự động) theo mô hình **Kiến trúc Phân tách (Decoupled Client-Server)** tối ưu hóa tuyệt đối tài nguyên bộ nhớ (RAM < 80MB) và tốc độ tải.
 
 ---
 
-### 1. NGUỒN CỘNG HƯỞNG & THỪA HƯỞNG CÔNG NGHỆ
+### 1. KIẾN TRÚC ĐA NỀN TẢNG (DESKTOP & MOBILE DECOUPLED ARCHITECTURE)
+
+Để giải quyết triệt để bài toán hiệu năng, dung lượng ứng dụng và thời lượng pin trên thiết bị di động, hệ thống được thiết kế phân tách rõ rệt thành 2 tầng:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   FRONTEND CLIENTS (DESKTOP & MOBILE)                  │
+│  - Desktop App (Windows / macOS / Linux)                               │
+│  - Mobile App (Android / iOS) - Flutter / Native                       │
+│  * Nhiệm vụ: Đọc truyện mượt mà 60-120 FPS, RAM siêu nhẹ (~30-50MB),   │
+│    quản lý thư viện, điều khiển tìm kiếm & tải truyện                  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ (REST API / WebSocket / Local IPC)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               HEADLESS CORE ENGINE (PYTHON FASTAPI SERVICE)            │
+│  - Module Ingestion & Scraper (Bypass WAF, Gated Downloader)           │
+│  - Module Computer Vision & AI Cleaner (LaMa Inpainting, RapidOCR)     │
+│  - Module Packaging (CBZ + ComicInfo.xml metadata)                     │
+│  * Nhiệm vụ: Xử lý toàn bộ logic nặng về mạng, WAF, nén file và AI     │
+│  * Vận hành: Local Service trên PC, hoặc Self-hosted / Cloud Server    │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Đảm bảo về Hiệu năng & Bộ nhớ (RAM & Performance Guarantees):
+1. **Kiểm soát RAM tuyệt đối (< 80MB cho Ingestion):**
+   - Áp dụng cơ chế **Chunk Streaming & Disk Flush**: Trang ảnh sau khi tải và kiểm tra magic bytes sẽ được ghi trực tiếp vào file đệm hoặc nén tức thì vào file `.cbz`. 
+   - Bộ nhớ đệm trong RAM chỉ duy trì từ 3–5 trang ảnh đang xử lý đồng thời, tuyệt đối không gom toàn bộ cả chapter vào RAM.
+2. **Vòng đời Trình duyệt Ngắn hạn (Ephemeral Browser Lifecycle):**
+   - Trình duyệt `nodriver` (Chromium) **chỉ được khởi động khi gặp Cloudflare Challenge mới** hoặc khi cookie hết hạn.
+   - Ngay sau khi giải mã và trích xuất cookie thành công vào `cf_cookies.dat`, toàn bộ tiến trình Chromium sẽ được đóng và giải phóng $100\%$ khỏi RAM. Quá trình tải ảnh hàng loạt sau đó chạy thuần túy bằng `requests.Session` nhẹ nhàng.
+3. **Phân tách Native cho Mobile:**
+   - Ứng dụng điện thoại không cần phải nhúng Python runtime cồng kềnh, tránh được việc bị hệ điều hành tắt ngầm (*kill background task*) hay app bị phình to hàng trăm MB.
+
+---
+
+### 2. NGUỒN CỘNG HƯỞNG & THỪA HƯỞNG CÔNG NGHỆ
 
 Dự án được xây dựng dựa trên 2 trụ cột cốt lõi:
 
 #### A. Ingestion & Scraper Engine (Kế thừa từ `comix-downloader`)
-- **Bypass Cloudflare & WAF:** Sử dụng `nodriver` (giao tiếp trực tiếp qua Chrome DevTools Protocol - CDP), giải WAF challenge một lần, lưu cookie vào session (`cf_cookies.dat`) và tái sử dụng qua HTTP headers.
-- **Two-Tier Threading Pool:**
-  - Tầng 1: Đa luồng xử lý chương (`max_chapter_workers`).
-  - Tầng 2: Đa luồng tải ảnh trang truyện (`max_image_workers`).
-- **Connection Gating (Chống Rate-Limit):** Dùng `threading.BoundedSemaphore` giới hạn tối đa số kết nối đồng thời trên mỗi host/CDN (mặc định 4-5 connections).
-- **Phân loại lỗi chi tiết (Structured Failure Diagnostics):** Phân loại lỗi mạng, SSL, DNS, 403, ảnh hỏng; cơ chế retry với Exponential Backoff & Jitter.
-- **Multiple Output Formats:** Hỗ trợ lưu ảnh thô (raw), đóng gói PDF (`reportlab`), hoặc đóng gói chuẩn truyện tranh **CBZ** (`zipfile`).
+- **Bypass Cloudflare & WAF:** Sử dụng `nodriver` (giao tiếp trực tiếp qua Chrome DevTools Protocol - CDP), cơ chế **Smart Headless + Fallback Headed** (chạy ẩn, chỉ hiện cửa sổ khi Turnstile cần click tay), giải WAF challenge một lần, lưu cookie vào session (`cf_cookies.dat`) và tái sử dụng qua HTTP headers.
+- **Two-Tier Concurrency Pool:**
+  - Tầng 1: Đa luồng xử lý chương (`max_chapter_workers`, mặc định 2–3 chapters).
+  - Tầng 2: Đa luồng tải ảnh trang truyện (`max_image_workers`, mặc định 5–8 ảnh/chapter).
+- **Connection Gating (Chống Rate-Limit):** Dùng `threading.BoundedSemaphore` giới hạn tối đa số kết nối đồng thời trên mỗi host/CDN (mặc định 4-5 connections) để tránh bị máy chủ truyện chặn IP.
+- **Phân loại lỗi chi tiết (Structured Failure Diagnostics):** Phân loại lỗi mạng, SSL, DNS, 403 WAF, ảnh hỏng; cơ chế retry với Exponential Backoff & Jitter.
+- **Multiple Output Formats & Comic Metadata:** Hỗ trợ lưu ảnh thô (raw), đóng gói chuẩn truyện tranh quốc tế **CBZ** (`zipfile`) tích hợp sẵn file đặc tả **`ComicInfo.xml`** để các ứng dụng đọc truyện trên PC và điện thoại tự động hiển thị metadata (bìa, tác giả, mô tả, số tập).
 
 #### B. Inpainting & Manga Cleaner Pipeline (Tối ưu cho CPU / Hugging Face Spaces)
 - **Bước 1: Phát hiện chữ & Tạo Polygon Mask (Text Detection):**
@@ -36,7 +73,7 @@ Dự án được xây dựng dựa trên 2 trụ cột cốt lõi:
 
 ---
 
-### 2. SƠ ĐỒ LUỒNG DỮ LIỆU TOÀN HỆ THỐNG (DATA FLOW)
+### 3. SƠ ĐỒ LUỒNG DỮ LIỆU TOÀN HỆ THỐNG (DATA FLOW)
 
 ```
 [Web/App Manga Source]
@@ -71,7 +108,7 @@ Dự án được xây dựng dựa trên 2 trụ cột cốt lõi:
 
 ---
 
-### 3. CƠ CẤU TỔ CHỨC MÃ NGUỒN (PROJECT DIRECTORY STRUCTURE)
+### 4. CƠ CẤU TỔ CHỨC MÃ NGUỒN (PROJECT DIRECTORY STRUCTURE)
 
 ```text
 d:\MoeJect\
@@ -83,20 +120,27 @@ d:\MoeJect\
 ├── rules\
 │   └── AI_ASSISTANT_RULES.md      # Quy tắc ứng xử và phát triển cho AI Assistant
 ├── src\
-│   ├── core\                      # Logic nền tảng (Downloader, Session, Threading)
-│   │   ├── downloader.py          # Bộ tải ảnh đa luồng kèm Rate Gate
-│   │   ├── models.py              # Data classes (MangaInfo, Chapter, Page, MaskBox)
-│   │   └── session.py             # Quản lý request sessions, cookies
-│   ├── api\                       # Tương tác với các nguồn truyện (Bypass Cloudflare)
-│   │   └── browser.py             # Điều khiển nodriver / CDP headless browser
+│   ├── core\                      # Logic nền tảng (Downloader, Session, Two-tier Pool)
+│   │   ├── downloader.py          # Bộ tải ảnh đa luồng kèm Rate Gate & Streaming Flush
+│   │   ├── models.py              # Data classes (MangaInfo, Chapter, Page, ComicInfo)
+│   │   └── session.py             # Quản lý request sessions, nạp cookies cf_cookies.dat
+│   ├── api\                       # Tương tác với các nguồn truyện (Connectors & WAF)
+│   │   ├── base.py                # BaseMangaSource abstract class
+│   │   ├── mangadex.py            # Connector MangaDex qua REST API
+│   │   ├── cuutruyen.py           # Connector Cuutruyen (WAF/Cloudflare)
+│   │   └── browser_runner.py      # Điều khiển nodriver / CDP headless + fallback headed
 │   ├── vision\                    # Pipeline xử lý ảnh & AI
 │   │   ├── detector.py            # RapidOCR bóc text và tọa độ polygon
 │   │   ├── mask.py                # Xử lý mask nhị phân, padding, dilation
 │   │   ├── inpainter.py           # Engine LaMa ONNX (tối ưu CPU, patch cropping)
 │   │   └── pipeline.py            # Gắn kết toàn bộ luồng xử lý ảnh một trang truyện
 │   ├── formats\                   # Xuất bản file
-│   │   ├── cbz.py                 # Đóng gói CBZ
+│   │   ├── cbz.py                 # Đóng gói chuẩn CBZ kèm ComicInfo.xml metadata
 │   │   └── images.py              # Xử lý nén, lưu WebP/PNG
+│   ├── cli\                       # Giao diện dòng lệnh tương tác Desktop
+│   │   └── main.py                # Rich/Typer Interactive Terminal UI
+│   ├── server\                    # REST API Server phục vụ Desktop GUI & Mobile
+│   │   └── app.py                 # FastAPI endpoints (Search, Download Queue)
 │   └── utils\                     # Helpers, logging, config loader
 ├── tests\                         # Unit test & Integration test
 ├── config.json                    # Cấu hình người dùng (Workers, Paths, Models)
