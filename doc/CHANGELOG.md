@@ -1,5 +1,30 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-07] - Gỡ bỏ `.gemini` khỏi Git & Khởi tạo Khung Giao diện Flutter Đa Nền tảng (Catppuccin Mocha)
+
+### 1. Dọn dẹp Kho Lưu trữ Git & GitHub:
+- **Gỡ bỏ `.gemini`:** Đã thực hiện `git rm -r --cached .gemini` để loại bỏ hoàn toàn thư mục metadata trợ lý AI `.gemini` ra khỏi Git index và remote GitHub.
+- **Cập nhật `.gitignore`:** Thêm quy tắc chặn `.gemini/`, `.idea/`, `.vscode/` để vĩnh viễn không vô tình theo dõi vào kho mã nguồn.
+- **Đồng bộ từ xa:** Đã commit (`ad9f18c`) và push thành công lên GitHub remote branch `feature/manga-cleaner-optimization`.
+
+### 2. Khởi tạo Kiến trúc Giao diện Ứng dụng MoeJect (`ui_app/`):
+- **Công nghệ & Bảng màu:** Xây dựng ứng dụng Flutter 3 (Dart) theo ngôn ngữ thiết kế **Catppuccin Mocha** tối giản (Nền than ấm `#1E1E2E`, Mantle `#181825`, điểm nhấn Pastel Lavender `#B4BEFE` & Mint `#94E2D5`), lấy cảm hứng từ chuẩn mực Mihon (Tachiyomi) và Sorayomi.
+- **Kiến trúc Phân tầng (Layered MVVM + Repository Pattern):**
+  - `ui_app/lib/core/theme/catppuccin_theme.dart`: Hệ thống ThemeData Material 3 chuẩn Catppuccin Mocha.
+  - `ui_app/lib/data/models/manga_models.dart`: Định nghĩa đầy đủ các model `SourceMetadata`, `MangaSearchResult`, `Chapter`, `MangaInfo`, `DownloadTaskStatus` tương thích 100% với Pydantic schema từ Python FastAPI.
+  - `ui_app/lib/data/services/api_service.dart`: Client giao tiếp REST API (`checkHealth`, `getSources`, `searchManga`, `getMangaDetails`, `startDownload`, `getDownloadStatus`).
+  - `ui_app/lib/data/repositories/manga_repository.dart`: Tầng Repository trừu tượng hóa và cache dữ liệu cho UI.
+- **Bố cục Đa thích ứng (Responsive & Adaptive Navigation):**
+  - `ui_app/lib/ui/core/responsive_scaffold.dart`: Tự động nhận diện kích thước màn hình:
+    * Desktop ($\ge 768px$): **Navigation Rail** siêu mảnh bên trái với 5 mục điều hướng kèm badge đếm số lượng tải.
+    * Mobile ($< 768px$): **Bottom Navigation Bar** Material 3 mượt mà.
+- **Phân hệ Khám phá & Quản lý Tải (Browse & Downloader):**
+  - `BrowseView` & `BrowseViewModel`: Thanh tìm kiếm 1 ô tối giản, bộ chọn chip nguồn truyện (MangaDex, Cứu Truyện, Comix.to), Responsive Grid tự động co giãn 2 đến 6 cột.
+  - `MangaDetailView`: Header với Backdrop mờ nghệ thuật, tóm tắt truyện, danh sách chapter và thanh tải nhanh hàng loạt (hỗ trợ các định dạng `CBZ`, `ZIP`, `Images`, `PDF`).
+  - `DownloadsView` & `DownloadsViewModel`: Theo dõi tiến độ tải thời gian thực bằng cơ chế polling 800ms, thanh Dual Progress Bar hiển thị song song phần trăm, số chương và số trang ảnh.
+  - `CleanerView` & `SettingsView`: Màn hình Studio dọn chữ AI và Cấu hình Base URL kết nối engine linh hoạt cho Mobile (Wi-Fi/Cloud) và Desktop (Local).
+  - `ui_app/test/models_and_api_test.dart`: Bộ unit tests kiểm thử khả năng parse JSON và xử lý dữ liệu của các models.
+
 ## [2026-11-03] - Tối ưu hóa Detector & Smart Downscaling trên Branch mới
 
 ### Đã hoàn thành:

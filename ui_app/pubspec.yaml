@@ -1,0 +1,36 @@
+name: moeject_app
+description: "MoeJect - Modern Minimalist Cross-Platform Manga Reader & Downloader with AI Vision"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management & Architecture
+  provider: ^6.1.2
+
+  # Networking & Async
+  http: ^1.2.2
+  async: ^2.11.0
+
+  # UI & Styling
+  google_fonts: ^6.2.1
+  cached_network_image: ^3.3.1
+  flutter_staggered_grid_view: ^0.7.0
+
+  # Utilities
+  intl: ^0.19.0
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
