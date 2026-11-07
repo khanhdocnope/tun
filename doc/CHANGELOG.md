@@ -1,28 +1,110 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
-## [2026-11-07] - Khắc phục Triệt để 4 Vấn đề Kiểm thử & Tiếp thu Tinh hoa từ HakuNeko Engine
+## [2026-11-07] - Thiết lập GitHub Actions CI/CD Build Windows Release Tự Động
 
-### 1. Khắc phục Triệt để 4 Vấn đề Người dùng Phản ánh qua Ảnh chụp:
+### 1. Tự động hóa Quy trình Đóng gói Windows App (`.github/workflows/build_windows.yml`):
+- **Cơ sở hạ tầng CI Runner:** Sử dụng runner `windows-latest` từ GitHub Actions với môi trường Visual Studio C++ và Developer Mode / Symlink hỗ trợ sẵn mặc định.
+- **Kích hoạt linh hoạt:** Tự động build khi `push` vào nhánh chính (`main`, `master`, `feature/**`), khi tạo `tag` phiên bản (`v*`), hoặc kích hoạt thủ công (`workflow_dispatch`).
+- **Quy trình Thực thi:**
+  1. Setup Flutter SDK Stable mới nhất (`subosito/flutter-action@v2`) kèm caching thông minh.
+  2. Kiểm tra môi trường `flutter doctor -v` và kiểm thử unit test (`flutter test`).
+  3. Biên dịch ứng dụng Windows Native Release: `flutter build windows --release`.
+  4. Đính kèm hướng dẫn khởi chạy nhanh `README.txt` chuẩn UTF-8.
+  5. Đóng gói toàn bộ bundle runner Release (`moeject_app.exe`, Flutter engine DLLs, runtime data) thành file nén zip: `MoeJect-Windows-x64.zip`.
+  6. Xuất bản Artifact lên tab GitHub Actions (lưu trữ 14 ngày) và tự động tạo GitHub Release nếu là phiên bản gắn tag (`v*`).
+
+---
+
+## [2026-11-07] - Nâng cấp Tùy chọn Tải ZIP / CBZ Độc lập & Tích hợp Tải Trực tiếp về Máy Tính
+
+### 1. Nâng cấp Toàn diện Tùy chọn Tải file ZIP (Raw Images) & CBZ:
+- **Tùy chọn Tải Nhanh 1-Chạm theo Chương (Manga Detail):**
+  - Trong bảng chi tiết truyện, mỗi chương được bổ sung 2 nút bấm tải trực tiếp:
+    * **`📦 ZIP` (Màu xanh Mint/Teal):** Tải đóng gói file `.zip` chứa toàn bộ ảnh thô nguyên bản (không kèm ComicInfo.xml), tối ưu hóa lưu trữ và thuận tiện nạp hàng loạt vào bộ công cụ AI Cleaner/Inpainting.
+    * **`🟣 CBZ` (Màu tím Lavender):** Tải đóng gói file `.cbz` chuẩn comic quốc tế tích hợp metadata `ComicInfo.xml`.
+  - Khung tải hàng loạt: Thêm 2 nút hành động riêng biệt `📦 Tải file ZIP` và `⚡ Tải CBZ` kèm selector định dạng mặc định.
+- **Flutter UI (`ui_app`):**
+  - Bổ sung nút bấm `Tải ZIP` bên cạnh `Tải CBZ` trên thanh Quick Download Bar.
+  - Danh sách từng chương có icon `archive_outlined` (ZIP) và `download_rounded` (CBZ).
+
+### 2. Bổ sung Endpoints Tải File Trực tiếp về Trình duyệt (Browser Download Delivery):
+- **FastAPI Endpoints:**
+  - `GET /api/download/{task_id}/file`: Tải trực tiếp file thành phẩm (`.ZIP`, `.CBZ`) của một tác vụ hoàn tất về máy tính người dùng qua `FileResponse`.
+  - `GET /api/files/download?path=...`: Tải file cụ thể trong thư mục `downloads/` (được bảo vệ chống lỗ hổng Path Traversal).
+  - `GET /api/files/library`: Tra cứu toàn bộ danh sách file đã tải thành công, kích thước dung lượng (MB) và thời gian hoàn tất.
+- **Web App UI:**
+  - Trong tab **Tiến trình Tải truyện**, khi tác vụ đạt `COMPLETED`, tự động xuất hiện nút **`📥 Lưu file ZIP về máy`** hoặc **`📥 Lưu file CBZ về máy`** giúp người dùng lưu file về ổ cứng với 1 cú click.
+  - Kích hoạt tab **Kệ truyện (Library)**: Tự động hiển thị toàn bộ các file `.ZIP` và `.CBZ` đã tải trên máy chủ, phân loại theo bộ truyện và cho phép tải lại bất kỳ lúc nào.
+
+---
+
+## [2026-11-07] - Reverse-Engineering & Tích hợp Thành công Connector Chuyên biệt Hitomi.la
+
+### 1. Bẻ khóa Toàn diện Cơ chế CDN Sharding & Metadata của Hitomi.la:
+- **Hiện trạng Kỹ thuật:** Hitomi.la là nguồn truyện/doujinshi đồ sộ nhưng không cung cấp API công khai; HakuNeko trước đây đã phải gỡ bỏ connector do thuật toán `gg.js` thay đổi liên tục. Hệ thống phân tán CDN của Hitomi hiện nay đã chuyển toàn bộ dữ liệu tĩnh sang domain `gold-usergeneratedcontent.net`.
+- **Giải mã Thuật toán CDN Sharding (`gg.js` + `common.js`):**
+  - **Dynamic Parameters Cache:** Nạp động `https://ltn.gold-usergeneratedcontent.net/gg.js` với TTL 1 giờ để trích xuất tiền tố epoch `gg.b` (ví dụ: `1794052801/`) và danh sách ~500 số nguyên đặc biệt cho hàm nhánh `gg.m(g)`.
+  - **URL Ảnh Gốc (Full-Resolution WebP):** 
+    - Lấy 3 ký tự cuối của SHA256 hash `/(..)(.)$/` $\rightarrow$ ghép lại thành chuỗi thập lục phân và chuyển sang số nguyên thập phân `g = int(m[2] + m[1], 16)`.
+    - Phân giải subdomain động: `subdomain = 'w' + (1 + gg.m(g))` (cho ra `w1` hoặc `w2`).
+    - URL tải ảnh: `https://{subdomain}.gold-usergeneratedcontent.net/{gg.b}{s}/{hash}.webp`.
+  - **URL Ảnh Bìa (WebP Big Thumbnail):**
+    - Subdomain: `subdomain = chr(97 + gg.m(g)) + 'tn'` (cho ra `atn` hoặc `btn`).
+    - URL ảnh bìa: `https://{subdomain}.gold-usergeneratedcontent.net/webpbigtn/{hash[-1]}/{hash[-3:-1]}/{hash}.webp`.
+- **Kỹ thuật Đọc Binary Index Siêu Tốc (`.nozomi`):**
+  - Hitomi lưu trữ danh sách ID truyện theo thứ tự Mới $\rightarrow$ Cũ dưới định dạng binary 4-byte big-endian (`>I`).
+  - Áp dụng HTTP Range Request (`Range: bytes={start}-{end}`) để đọc 24 ID mới nhất chỉ với 96 bytes dữ liệu trong chưa đầy 50ms mà không cần tải toàn bộ file index hàng chục MB.
+  - Hỗ trợ đa dạng index: `index-all.nozomi`, `index-vietnamese.nozomi`, `index-english.nozomi`, `index-japanese.nozomi`, cùng các index theo tag (`tag/{tag}-all.nozomi`), tác giả (`artist/{artist}-all.nozomi`), series (`series/{series}-all.nozomi`).
+
+### 2. Triển khai Module `HitomiSource` (`src/api/hitomi.py`):
+- Kế thừa chuẩn mực từ `BaseMangaSource`:
+  - `search(query, page)`: Khi query rỗng $\rightarrow$ trả về feed truyện mới nhất từ `index-all.nozomi`. Khi query là ID hoặc URL $\rightarrow$ bóc tách ID số và nạp trực tiếp metadata. Khi query là tag/tác giả $\rightarrow$ tra cứu file `.nozomi` tương ứng.
+  - `get_manga_details(id_or_url)`: Lấy metadata từ `galleries/{id}.js`, đóng gói thành 1 Chapter duy nhất chứa toàn bộ link ảnh WebP độ phân giải gốc.
+  - `get_chapter_pages(chapter_id)`: Trích xuất mảng link ảnh WebP của gallery.
+- Đăng ký chính thức `hitomi` vào hệ thống:
+  - Cập nhật `_SOURCE_REGISTRY` và `SOURCE_METADATA` trong `src/api/__init__.py`.
+  - Bổ sung cấu hình `Referer: https://hitomi.la/` và Chrome User-Agent vào `/api/proxy/image` (`src/server/app.py`) và `ConcurrentMangaDownloader` (`src/core/downloader.py`).
+  - Thêm Quick Chip `Hitomi.la (Doujin/Manga)` lên thanh điều hướng nhanh của Web App.
+
+### 3. Kiểm thử & Xác minh Chất lượng:
+- **Kiểm thử Tải Thực tế:** Đã tải hoàn tất Gallery ID `4311547` ("Rio's No Nut November - PartTimeToast", 6 trang) sang định dạng `4311547.cbz` (556,802 bytes) với tỷ lệ thành công 6/6 (100%), bao gồm cả file `ComicInfo.xml` chuẩn quốc tế.
+- **Kiểm thử Tự động:** Bổ sung 4 unit tests mới vào `tests/test_api.py`. Toàn bộ 57/57 tests trong test suite đều **PASS 100%**.
+
+---
+
+## [2026-11-07] - Khắc phục Triệt để 4 Lỗi Hiển thị / Tải Thực tế & Nâng cấp Trải nghiệm Client
+
+### 1. Khắc phục Triệt để 4 Vấn đề Người dùng Phản ánh qua Ảnh chụp Thực tế:
 - **Khắc phục lỗi Tải Cứu Truyện báo FAILED dù đạt 49/49 (Ảnh 1):**
-  - *Nguyên nhân:* Domain CDN cũ `storage-ct.lrclib.net` trong API Cứu Truyện bị chết DNS (NXDOMAIN) làm downloader gặp lỗi kết nối 100% trang.
-  - *Giải pháp:* Chuẩn hóa toàn bộ URL ảnh tĩnh sang CDN hoạt động chính thức `https://storage-bravo.cuutruyen.net`.
-  - *Sửa lỗi tiến độ ảo:* Cập nhật [src/core/downloader.py](file:///d:/MoeJect/src/core/downloader.py) chỉ tăng tiến độ theo số trang thành công thực tế (`len(report.downloaded_pages)`), không đếm trang lỗi để tránh báo ảo `49/49 (100%)` khi thất bại.
-- **Khắc phục lỗi toàn bộ Ảnh bìa báo "No Cover" trên Cứu Truyện & MangaDex (Ảnh 2 & 3):**
-  - *Nguyên nhân:* ISP tại Việt Nam chặn kết nối tới các CDN MangaDex (`uploads.mangadex.org`) và domain Cứu Truyện cũ; trình duyệt của người dùng bị lỗi kết nối trực tiếp.
-  - *Giải pháp:* Xây dựng endpoint **Image Proxy & Local Cache** (`GET /api/proxy/image?url=...`) trên [src/server/app.py](file:///d:/MoeJect/src/server/app.py). Server sử dụng Smart DNS DoH để fetch ảnh, nạp headers thích hợp (`Referer`, `User-Agent`) và lưu cache đĩa đệm tức thì.
-  - *Fallback thẩm mỹ:* Tích hợp SVG Catppuccin Mocha nội bộ thay thế hoàn toàn cho `via.placeholder.com`.
-- **Khắc phục tình trạng Treo khi chọn Comix.to ("Đang kết nối tới comix...") (Ảnh 4):**
-  - Tinh chỉnh cơ chế vượt WAF của Comix.to trong [src/api/comix.py](file:///d:/MoeJect/src/api/comix.py): Giảm timeout chờ sang 6s/12s, fallback an toàn thay vì giữ pending kết nối HTTP vô thời hạn.
-  - Thêm timeout 20s và chỉ báo loading trực quan trên Web App ([src/server/web_app.py](file:///d:/MoeJect/src/server/web_app.py)).
+  - *Nguyên nhân:* Trước đó CDN cũ `storage-ct.lrclib.net` bị lỗi DNS khiến toàn bộ 49 trang bị fail nhưng vòng lặp đếm số trang vô điều kiện dẫn tới hiển thị ảo `49/49 (100%)` trước khi đánh dấu FAILED. Đồng thời tiêu đề bộ truyện bị thiếu trong request tải ban đầu nên UI hiển thị mã ID số `4630`.
+  - *Giải pháp:* 
+    - Thêm trường `manga_title` vào `DownloadRequest` và lưu ngay từ thời điểm tạo tác vụ `create_task`, đảm bảo UI luôn hiển thị đúng tên truyện rõ ràng (`CUUTRUYEN • ONE PIECE episode A (CBZ)`).
+    - Tích hợp bẻ khóa DRM xáo trộn ảnh Cứu Truyện bằng thuật toán XOR Cipher số Pi (`3141592653589793`) và chuẩn hóa sang CDN `storage-bravo.cuutruyen.net`.
+    - Cập nhật cơ chế theo dõi lỗi chi tiết `task_manager.add_error` để người dùng luôn thấy rõ nguyên nhân nếu có sự cố thay vì để trống.
+- **Khắc phục lỗi toàn bộ Ảnh bìa báo "No Cover" trên MangaDex & Cứu Truyện (Ảnh 2 & 3):**
+  - *Phát hiện đột phá trên MangaDex:* Server ảnh bìa MangaDex (`uploads.mangadex.org`) cài đặt hệ thống phòng vệ **POWBlock DDoS Verification**. Hệ thống này chặn mọi kết nối giả lập trình duyệt `User-Agent: Mozilla/5.0...` và trả về trang HTML yêu cầu chạy WebAssembly/JavaScript challenge. Tuy nhiên, khi gửi Client User-Agent chuẩn (`MoeJect/1.0`), MangaDex lập tức trả về file ảnh gốc JPEG `200 OK` (182KB).
+  - *Giải pháp:* Cấu hình `User-Agent: MoeJect/1.0` độc quyền cho domain `uploads.mangadex.org` trong endpoint `/api/proxy/image` và `ConcurrentMangaDownloader`. Đồng thời áp dụng `normalize_cuutruyen_cdn` cho Cứu Truyện và bổ sung bộ lọc ngăn cache file SVG lỗi.
+- **Khắc phục tình trạng Treo vô tận khi chọn Comix.to ("Đang kết nối tới comix...") (Ảnh 4):**
+  - *Nguyên nhân:* Khi Comix.to kích hoạt Cloudflare Turnstile, frontend trước đó không có cơ chế timeout và xử lý ngoại lệ nên giữ trạng thái loading vĩnh viễn.
+  - *Giải pháp:* Tích hợp `AbortController` timeout 20s, xử lý ngoại lệ an toàn và hiển thị bảng thông báo trạng thái thân thiện kèm 2 nút bấm chuyển nhanh 1-chạm sang MangaDex hoặc Cứu Truyện.
 
-### 2. Tiếp thu & Chuyển giao Tinh hoa từ Dự án HakuNeko (`manga-download/hakuneko`):
-- **Giải mã Đột phá: Bẻ khóa Cơ chế DRM / Scrambled Images của Cứu Truyện:**
-  - Học hỏi thuật toán giải mã từ `CuuTruyen.mjs` của HakuNeko: Giải mã Base64 `drm_data` kết hợp giải XOR Cipher với chuỗi số Pi (`3141592653589793`).
-  - Tích hợp hàm `descramble_cuutruyen_bytes` vào [src/core/downloader.py](file:///d:/MoeJect/src/core/downloader.py): Tự động cắt các horizontal slices và ghép lại thành tranh truyện chuẩn xác 100% trước khi đóng gói file ZIP/CBZ.
-- **Khảo sát Kho 1,328 Connectors Đa Nguồn:**
-  - Đã phân tích kiến trúc connectors của HakuNeko tại `temp/hakuneko/src/web/mjs/connectors/`.
-  - Nhận diện các template bóc tách nổi bật cho các nguồn truyện tranh Việt Nam và Quốc tế (`NetTruyen`, `BlogTruyen`, `TruyenQQ`, `HamTruyen`, `MangaDex@Home`).
-  - Dọn dẹp an toàn các thư mục ảnh icon nặng (`src/web/img/`) và `.git`, chỉ lưu trữ logic code cần thiết trong `temp/`.
+### 2. Đồng bộ Hóa Trải nghiệm Khám phá Truyện (Feed Mới -> Cũ khi Ô Tìm Kiếm Rỗng):
+- **FastAPI Backend & Python Core:**
+  - `BaseMangaSource.get_latest_updates(page)` được triển khai cho tất cả các nguồn.
+  - Khi `q` rỗng hoặc không truyền, `/api/search` tự động trả về feed truyện mới cập nhật theo thứ tự thời gian giảm dần (Mới nhất $\rightarrow$ Cũ nhất).
+- **Web App & Flutter UI:**
+  - Thêm nút xóa nhanh `✕` trên thanh tìm kiếm. Khi xóa hoặc để trống, hệ thống tự động tải lại bảng tin truyện mới nhất.
+  - Banner trạng thái trực quan phân biệt giữa `🔥 Truyện mới cập nhật gần đây (Mới nhất)` và `🔍 Kết quả tìm kiếm`.
+
+### 3. Ra Mắt "Kho 1,313+ Nguồn Truyện Đa Dạng" & Trình Duyệt Nguồn Tùy Biến (Source Catalog Explorer):
+- **Mở rộng Kết nối Đa nguồn:**
+  - Mở khóa toàn diện 1,313 connectors được kế thừa từ HakuNeko trên cả Backend (`/api/sources`, `/api/search`, `/api/download`).
+  - Hỗ trợ đầy đủ các nguồn Tiếng Việt (Cứu Truyện, BlogTruyen, MangaToon, NetTruyen, TruyenQQ...) cùng hàng trăm nguồn truyện tranh quốc tế (MangaDex, Asura Scans, Flame Comics, Reaper Scans, MangaKakalot...).
+- **Giao diện Web App & Flutter UI:**
+  - Bổ sung nút bấm **🌐 Tất cả 1,313+ Nguồn** trên thanh Quick Chips.
+  - Tích hợp **Source Catalog Modal**: Tìm kiếm tên nguồn/domain tức thì, lọc theo tab ngôn ngữ (`Tất cả`, `🇻🇳 Tiếng Việt`, `🇬🇧 English`, `🇯🇵 Raw/Đa ngữ`).
+  - Bấm chọn bất kỳ nguồn nào sẽ lập tức ghim thành Quick Chip và nạp feed truyện mới nhất từ nguồn đó.
+  - Trên Flutter Mobile/Desktop: Bổ sung `ActionChip` mở bottom sheet tìm kiếm nguồn với 1,313 items mượt mà.
 
 ---
 

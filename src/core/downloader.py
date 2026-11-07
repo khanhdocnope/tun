@@ -217,10 +217,18 @@ class ConcurrentMangaDownloader:
         headers = {}
         if referer:
             headers["Referer"] = referer
-        elif "cuutruyen.net" in host:
-            headers["Referer"] = "https://cuutruyen.net/"
+
+        if "cuutruyen.net" in host:
+            headers.setdefault("Referer", "https://cuutruyen.net/")
         elif "mangadex.org" in host:
-            headers["Referer"] = "https://mangadex.org/"
+            headers.setdefault("Referer", "https://mangadex.org/")
+            headers["User-Agent"] = "MoeJect/1.0"
+        elif "gold-usergeneratedcontent.net" in host or "hitomi.la" in host:
+            headers.setdefault("Referer", "https://hitomi.la/")
+            headers["User-Agent"] = (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+            )
 
         for attempt in range(1, self.max_retries + 1):
             try:

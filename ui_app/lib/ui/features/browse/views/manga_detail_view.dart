@@ -44,15 +44,16 @@ class _MangaDetailViewState extends State<MangaDetailView> {
     super.dispose();
   }
 
-  Future<void> _startDownload(BuildContext context, {String? singleChapterId}) async {
+  Future<void> _startDownload(BuildContext context, {String? singleChapterId, String? overrideFormat}) async {
     final downloadsVM = context.read<DownloadsViewModel>();
+    final targetFormat = overrideFormat ?? _selectedFormat;
     try {
       final taskId = await downloadsVM.startDownload(
         source: widget.sourceId,
         mangaId: widget.mangaId,
         chapterIds: singleChapterId != null ? [singleChapterId] : null,
         chapters: singleChapterId == null ? _rangeController.text.trim() : null,
-        format: _selectedFormat,
+        format: targetFormat,
       );
 
       if (mounted) {
@@ -65,7 +66,7 @@ class _MangaDetailViewState extends State<MangaDetailView> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Đã bắt đầu tải tác vụ: $taskId',
+                    'Đã bắt đầu tải tác vụ (${targetFormat.toUpperCase()}): $taskId',
                     style: const TextStyle(color: CatppuccinMocha.text, fontSize: 13),
                   ),
                 ),
@@ -303,11 +304,27 @@ class _MangaDetailViewState extends State<MangaDetailView> {
                                 ),
                                 const SizedBox(width: 10),
 
-                                // Nút bấm tải
+                                // Nút bấm tải hàng loạt
                                 ElevatedButton.icon(
-                                  onPressed: () => _startDownload(context),
-                                  icon: const Icon(Icons.download_rounded, size: 18),
-                                  label: const Text('Tải'),
+                                  onPressed: () => _startDownload(context, overrideFormat: 'zip'),
+                                  icon: const Icon(Icons.archive_outlined, size: 16),
+                                  label: const Text('Tải ZIP'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: CatppuccinMocha.teal,
+                                    foregroundColor: CatppuccinMocha.crust,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                ElevatedButton.icon(
+                                  onPressed: () => _startDownload(context, overrideFormat: 'cbz'),
+                                  icon: const Icon(Icons.download_rounded, size: 16),
+                                  label: const Text('Tải CBZ'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: CatppuccinMocha.lavender,
+                                    foregroundColor: CatppuccinMocha.crust,
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  ),
                                 ),
                               ],
                             ),
@@ -340,10 +357,20 @@ class _MangaDetailViewState extends State<MangaDetailView> {
                         chapter.scanlator ?? 'Mặc định',
                         style: const TextStyle(color: CatppuccinMocha.subtext0, fontSize: 11),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.download_rounded, color: CatppuccinMocha.lavender, size: 20),
-                        tooltip: 'Tải chương này',
-                        onPressed: () => _startDownload(context, singleChapterId: chapter.id),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.archive_outlined, color: CatppuccinMocha.teal, size: 20),
+                            tooltip: 'Tải file ZIP (Ảnh thô)',
+                            onPressed: () => _startDownload(context, singleChapterId: chapter.id, overrideFormat: 'zip'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.download_rounded, color: CatppuccinMocha.lavender, size: 20),
+                            tooltip: 'Tải file CBZ (ComicInfo.xml)',
+                            onPressed: () => _startDownload(context, singleChapterId: chapter.id, overrideFormat: 'cbz'),
+                          ),
+                        ],
                       ),
                     );
                   },

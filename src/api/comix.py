@@ -227,7 +227,7 @@ class ComixSource(BaseMangaSource):
         target_page_url = (
             f"{self.base_url}/browse?keyword={query_clean}&page={page}"
             if query_clean
-            else f"{self.base_url}/"
+            else f"{self.base_url}/browse?order=latest&page={page}"
         )
         resp = await self._request("GET", target_page_url)
         initial_data = self._parse_initial_data(resp.text)

@@ -17,7 +17,7 @@ import uuid
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 import httpx
 from pydantic import BaseModel, Field
 
@@ -111,6 +111,7 @@ class MangaDetailResponse(BaseModel):
 class DownloadRequest(BaseModel):
     source: str = Field("mangadex", description="Mã nguồn truyện (mangadex, cuutruyen)")
     manga_id: str = Field(..., description="Mã định danh hoặc URL bộ manga")
+    manga_title: Optional[str] = Field(None, description="Tiêu đề bộ manga hiển thị trên UI")
     chapter_ids: Optional[List[str]] = Field(
         None, description="Danh sách các chapter ID cụ thể cần tải"
     )
@@ -181,7 +182,7 @@ class DownloadTaskManager:
                 "status": "pending",
                 "source": req.source,
                 "manga_id": req.manga_id,
-                "manga_title": None,
+                "manga_title": req.manga_title,
                 "format": req.format.lower(),
                 "progress": {
                     "total_chapters": 0,
@@ -366,6 +367,7 @@ def _run_download_task_worker(task_id: str, req_data: Dict[str, Any]) -> None:
                 task_id, completed_chapters=total_finished_chapters
             )
 
+            err_msg = str(report.failures[0].message) if report.failures else None
             res_entry = {
                 "chapter_id": ch.id,
                 "chapter_number": ch.chapter_number,
@@ -373,9 +375,14 @@ def _run_download_task_worker(task_id: str, req_data: Dict[str, Any]) -> None:
                 "pages_downloaded": len(report.downloaded_pages),
                 "total_pages": report.total_pages,
                 "output_path": str(report.output_path) if report.output_path else None,
-                "error": str(report.failures[0].message) if report.failures else None,
+                "error": err_msg,
             }
             task_manager.add_result(task_id, res_entry)
+            if not report.is_successful:
+                task_manager.add_error(
+                    task_id,
+                    f"Chương {ch.chapter_number}: {err_msg or 'Tải ảnh không hoàn tất'}"
+                )
 
         # Đánh dấu trạng thái cuối cùng
         task_curr = task_manager.get_task(task_id)
@@ -452,11 +459,12 @@ async def get_available_sources() -> SourcesResponse:
 @app.get("/api/search", response_model=SearchResponse, tags=["Manga"])
 async def search_manga(
     source: str = Query("mangadex", description="Mã nguồn truyện (vd: mangadex, cuutruyen)"),
-    q: str = Query(..., min_length=1, description="Từ khóa tìm kiếm"),
+    q: Optional[str] = Query(None, description="Từ khóa tìm kiếm (để trống sẽ tự động trả về truyện mới cập nhật)"),
     page: int = Query(1, ge=1, description="Số trang kết quả"),
 ) -> SearchResponse:
-    """Tìm kiếm truyện tranh theo từ khóa từ nguồn chỉ định."""
+    """Tìm kiếm truyện tranh theo từ khóa hoặc lấy feed truyện mới nhất nếu từ khóa rỗng."""
     source_key = source.strip().lower()
+    query_str = (q or "").strip()
     try:
         src = get_source(source_key)
     except ValueError as err:
@@ -467,7 +475,7 @@ async def search_manga(
 
     try:
         async with src:
-            results = await src.search(query=q, page=page)
+            results = await src.search(query=query_str, page=page)
     except Exception as exc:
         logger.error(f"Lỗi khi tìm kiếm trên nguồn '{source_key}': {exc}")
         raise HTTPException(
@@ -491,7 +499,7 @@ async def search_manga(
 
     return SearchResponse(
         source=source_key,
-        query=q,
+        query=query_str,
         page=page,
         total=len(items),
         results=items,
@@ -563,10 +571,12 @@ async def create_download_task(
     Hỗ trợ tải theo chapter_ids cụ thể hoặc cú pháp dải chapters (vd: '1-5, 8').
     """
     source_key = payload.source.strip().lower()
-    if source_key not in AVAILABLE_SOURCES:
+    try:
+        get_source(source_key)
+    except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Nguồn '{payload.source}' không hợp lệ. Các nguồn hỗ trợ: {list(AVAILABLE_SOURCES.keys())}",
+            detail=f"Nguồn '{payload.source}' không hợp lệ hoặc chưa được hỗ trợ: {err}",
         )
 
     valid_formats = {"cbz", "zip", "images", "pdf"}
@@ -619,6 +629,115 @@ async def get_download_task_status(task_id: str) -> DownloadTaskStatusResponse:
     )
 
 
+@app.get("/api/download/{task_id}/file", tags=["Downloader"])
+async def download_task_file(task_id: str, chapter_idx: int = Query(0, ge=0, description="Chỉ mục chương đã tải")):
+    """
+    Tải file thành phẩm (.ZIP, .CBZ, .PDF) của tác vụ tải ngầm về máy tính của người dùng.
+    """
+    task = task_manager.get_task(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy tác vụ tải với ID: {task_id}",
+        )
+
+    results = task.get("results", [])
+    if not results or chapter_idx >= len(results):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tác vụ chưa có file hoàn tất cho chỉ mục chương {chapter_idx}",
+        )
+
+    entry = results[chapter_idx]
+    out_path_str = entry.get("output_path")
+    if not out_path_str:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chương này chưa có file đầu ra hợp lệ",
+        )
+
+    file_path = Path(out_path_str).resolve()
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File kết quả không tồn tại trên máy chủ: {file_path.name}",
+        )
+
+    suffix = file_path.suffix.lower()
+    media_type = "application/zip" if suffix == ".zip" else ("application/vnd.comicbook+zip" if suffix == ".cbz" else "application/octet-stream")
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=file_path.name,
+    )
+
+
+@app.get("/api/files/library", tags=["Library"])
+async def list_library_files():
+    """
+    Liệt kê toàn bộ các file truyện tranh (.CBZ, .ZIP, .PDF) đã tải lưu trong thư mục downloads.
+    """
+    downloads_dir = Path("downloads")
+    if not downloads_dir.exists():
+        return {"files": []}
+
+    files_list = []
+    for f in downloads_dir.glob("**/*"):
+        if f.is_file() and f.suffix.lower() in (".cbz", ".zip", ".pdf"):
+            try:
+                rel_path = f.relative_to(downloads_dir).as_posix()
+                stat_info = f.stat()
+                manga_folder = f.parent.name if f.parent != downloads_dir else "General"
+                files_list.append({
+                    "name": f.name,
+                    "manga": manga_folder,
+                    "path": rel_path,
+                    "format": f.suffix.lower().lstrip("."),
+                    "size_bytes": stat_info.st_size,
+                    "size_mb": round(stat_info.st_size / (1024 * 1024), 2),
+                    "created_at": stat_info.st_mtime,
+                })
+            except Exception:
+                pass
+
+    files_list.sort(key=lambda x: x["created_at"], reverse=True)
+    return {"files": files_list}
+
+
+@app.get("/api/files/download", tags=["Library"])
+async def download_file_by_rel_path(path: str = Query(..., description="Đường dẫn tương đối trong downloads/")):
+    """
+    Tải trực tiếp file truyện từ thư viện downloads về trình duyệt.
+    """
+    base_dir = Path("downloads").resolve()
+    target_path = (base_dir / path).resolve()
+
+    # Chống Path Traversal
+    try:
+        target_path.relative_to(base_dir)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Truy cập không hợp lệ: Không thể truy cập ngoài thư mục downloads",
+        )
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy file: {path}",
+        )
+
+    suffix = target_path.suffix.lower()
+    media_type = "application/zip" if suffix == ".zip" else ("application/vnd.comicbook+zip" if suffix == ".cbz" else "application/octet-stream")
+
+    return FileResponse(
+        path=target_path,
+        media_type=media_type,
+        filename=target_path.name,
+    )
+
+
 # ==========================================
 # IMAGE PROXY & CACHE (CATPPUCCIN THEMED)
 # ==========================================
@@ -665,27 +784,43 @@ async def proxy_image(url: str = Query(..., description="URL ảnh cần proxy")
     if cache_body.exists() and cache_meta.exists():
         try:
             content_type = cache_meta.read_text("utf-8").strip() or "image/jpeg"
-            return Response(
-                content=cache_body.read_bytes(),
-                media_type=content_type,
-                headers={"Cache-Control": "public, max-age=604800"},
-            )
+            if "svg" not in content_type.lower() and "html" not in content_type.lower():
+                return Response(
+                    content=cache_body.read_bytes(),
+                    media_type=content_type,
+                    headers={"Cache-Control": "public, max-age=604800"},
+                )
         except Exception:
             pass
 
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
-        ),
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     }
-    if "cuutruyen.net" in clean_url:
-        headers["Referer"] = "https://cuutruyen.net/"
-    elif "mangadex.org" in clean_url:
+    if "mangadex.org" in clean_url:
+        # uploads.mangadex.org chặn User-Agent browser thông qua POWBlock JS challenge.
+        # Dùng Client UA để nhận trực tiếp ảnh gốc.
         headers["Referer"] = "https://mangadex.org/"
+        headers["User-Agent"] = "MoeJect/1.0"
+    elif "cuutruyen.net" in clean_url:
+        headers["Referer"] = "https://cuutruyen.net/"
+        headers["User-Agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        )
     elif "comix.to" in clean_url:
         headers["Referer"] = "https://comix.to/"
+        headers["User-Agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        )
+    elif "gold-usergeneratedcontent.net" in clean_url or "hitomi.la" in clean_url:
+        headers["Referer"] = "https://hitomi.la/"
+        headers["User-Agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        )
+    else:
+        headers["User-Agent"] = "MoeJect/1.0"
 
     try:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:

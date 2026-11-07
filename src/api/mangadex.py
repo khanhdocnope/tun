@@ -157,7 +157,8 @@ class MangaDexSource(BaseMangaSource):
             params["title"] = query.strip()
             params["order[relevance]"] = "desc"
         else:
-            params["order[followedCount]"] = "desc"
+            # Khi không tìm kiếm: Trả về danh sách truyện vừa cập nhật chương mới nhất (Mới -> Cũ)
+            params["order[latestUploadedChapter]"] = "desc"
 
         resp = await self._request("GET", "/manga", params=params)
         data = resp.json().get("data", [])

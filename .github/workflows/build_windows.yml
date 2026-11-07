@@ -1,0 +1,99 @@
+name: Build MoeJect Windows App
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'feature/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build & Package Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Environment & Tools
+        run: flutter doctor -v
+
+      - name: Fetch Flutter Dependencies
+        working-directory: ui_app
+        run: flutter pub get
+
+      - name: Run Flutter Unit Tests
+        working-directory: ui_app
+        run: flutter test
+
+      - name: Compile Windows Release
+        working-directory: ui_app
+        run: flutter build windows --release
+
+      - name: Add Release Instructions
+        shell: pwsh
+        run: |
+          $readme = @"
+          ==================================================
+          MoeJect - Modern Manga Reader & Downloader (v1.0.0)
+          ==================================================
+
+          [Huong Dan Su Dung]:
+          1. Khoi chay ung dung: MoeJect.exe (hoac moeject_app.exe).
+          2. Server Backend (Python FastAPI):
+             - Mac dinh ung dung ket noi toi http://127.0.0.1:8000
+             - Khoi chay server Python tren PC:
+                 python -m src.server.app
+             - Hoac tuy chinh IP / Port may chu tu xa trong man hinh Settings (Bieu tuong banh rang).
+          3. Tinh nang:
+             - Da nguon truyen: MangaDex, Comick, Hitomi.la...
+             - Tim kiem & Cap nhat moi nhat tu dong khi de trong.
+             - Tai ve tuy chon dinh dang ZIP hoac CBZ tien loi.
+          "@
+          $readme | Out-File -FilePath "ui_app/build/windows/x64/runner/Release/README.txt" -Encoding utf8
+
+      - name: Compress Release Artifact
+        shell: pwsh
+        run: |
+          $releaseDir = "ui_app/build/windows/x64/runner/Release"
+          $zipOutput = "MoeJect-Windows-x64.zip"
+          if (Test-Path $releaseDir) {
+            Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipOutput -Force
+            Write-Host "Created $zipOutput successfully! Size: $((Get-Item $zipOutput).Length / 1MB) MB"
+          } else {
+            Write-Error "Release build folder was not found at $releaseDir"
+            exit 1
+          }
+
+      - name: Upload Windows Artifact to Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoeJect-Windows-x64
+          path: MoeJect-Windows-x64.zip
+          retention-days: 14
+
+      - name: Create Release & Publish Asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MoeJect-Windows-x64.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

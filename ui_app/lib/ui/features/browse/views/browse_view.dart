@@ -23,9 +23,115 @@ class _BrowseViewState extends State<BrowseView> {
   }
 
   void _onSearchSubmitted(String query) {
-    if (query.trim().isNotEmpty) {
-      context.read<BrowseViewModel>().search(query);
-    }
+    context.read<BrowseViewModel>().search(query);
+  }
+
+  void _openSourcePicker(BuildContext context, BrowseViewModel viewModel) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: CatppuccinMocha.mantle,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final filtered = viewModel.sources.where((s) {
+              if (query.isEmpty) return true;
+              final q = query.toLowerCase();
+              return s.name.toLowerCase().contains(q) ||
+                  s.id.toLowerCase().contains(q) ||
+                  s.languages.any((l) => l.toLowerCase().contains(q));
+            }).toList();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.75,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, scrollController) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Kho Nguồn Truyện (${viewModel.sources.length})',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: CatppuccinMocha.text,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, color: CatppuccinMocha.subtext0),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        decoration: const InputDecoration(
+                          hintText: 'Tìm nguồn (vd: cuutruyen, asura, truyen)...',
+                          prefixIcon: Icon(Icons.search_rounded, color: CatppuccinMocha.lavender),
+                          isDense: true,
+                        ),
+                        onChanged: (val) {
+                          setModalState(() {
+                            query = val.trim();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: ListView.separated(
+                          controller: scrollController,
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const Divider(color: CatppuccinMocha.surface0, height: 1),
+                          itemBuilder: (ctx, idx) {
+                            final src = filtered[idx];
+                            final isSel = src.id == viewModel.selectedSourceId;
+                            return ListTile(
+                              title: Text(
+                                src.name,
+                                style: TextStyle(
+                                  color: isSel ? CatppuccinMocha.lavender : CatppuccinMocha.text,
+                                  fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                                ),
+                              ),
+                              subtitle: Text(
+                                src.url,
+                                style: const TextStyle(color: CatppuccinMocha.subtext0, fontSize: 11),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Chip(
+                                label: Text(src.languages.join(', ').toUpperCase()),
+                                labelStyle: const TextStyle(fontSize: 10, color: CatppuccinMocha.lavender),
+                                backgroundColor: CatppuccinMocha.surface0,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              onTap: () {
+                                viewModel.selectSource(src.id);
+                                Navigator.pop(ctx);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -52,6 +158,7 @@ class _BrowseViewState extends State<BrowseView> {
                           onPressed: () {
                             _searchController.clear();
                             setState(() {});
+                            context.read<BrowseViewModel>().search('');
                           },
                         )
                       : null,
@@ -60,37 +167,59 @@ class _BrowseViewState extends State<BrowseView> {
               ),
             ),
 
-            // 2. Bộ chọn nguồn truyện (MangaDex, Cứu Truyện, Comix.to)
+            // 2. Bộ chọn nguồn truyện & Nút mở toàn bộ 1,313 nguồn
             SizedBox(
               height: 46,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                scrollDirection: Axis.horizontal,
-                itemCount: viewModel.sources.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final source = viewModel.sources[index];
-                  final isSelected = source.id == viewModel.selectedSourceId;
-
-                  return ChoiceChip(
-                    label: Text(source.name),
-                    selected: isSelected,
-                    onSelected: (_) => viewModel.selectSource(source.id),
-                    backgroundColor: CatppuccinMocha.surface0,
-                    selectedColor: CatppuccinMocha.lavender,
-                    labelStyle: TextStyle(
-                      color: isSelected ? CatppuccinMocha.crust : CatppuccinMocha.text,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      fontSize: 13,
-                    ),
-                    side: BorderSide(
-                      color: isSelected ? CatppuccinMocha.lavender : CatppuccinMocha.surface1,
-                      width: 0.8,
+              child: Row(
+                children: [
+                  const SizedBox(width: 16),
+                  ActionChip(
+                    avatar: const Icon(Icons.explore_rounded, size: 16, color: CatppuccinMocha.lavender),
+                    label: Text('${viewModel.sources.length} Nguồn'),
+                    backgroundColor: CatppuccinMocha.surface1,
+                    labelStyle: const TextStyle(
+                      color: CatppuccinMocha.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    showCheckmark: false,
-                  );
-                },
+                    side: const BorderSide(color: CatppuccinMocha.surface2, width: 0.8),
+                    onPressed: () => _openSourcePicker(context, viewModel),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: viewModel.sources.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final source = viewModel.sources[index];
+                        final isSelected = source.id == viewModel.selectedSourceId;
+
+                        return ChoiceChip(
+                          label: Text(source.name),
+                          selected: isSelected,
+                          onSelected: (_) => viewModel.selectSource(source.id),
+                          backgroundColor: CatppuccinMocha.surface0,
+                          selectedColor: CatppuccinMocha.lavender,
+                          labelStyle: TextStyle(
+                            color: isSelected ? CatppuccinMocha.crust : CatppuccinMocha.text,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            fontSize: 13,
+                          ),
+                          side: BorderSide(
+                            color: isSelected ? CatppuccinMocha.lavender : CatppuccinMocha.surface1,
+                            width: 0.8,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          showCheckmark: false,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                ],
               ),
             ),
             const SizedBox(height: 8),

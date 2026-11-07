@@ -18,11 +18,12 @@ temp/
 downloads/
 temp_app.py
 *.tmp
+space_repo/
 
 # IDE & AI Assistant metadata
 .gemini/
 .idea/
 .vscode/
 
-# Test output images (optional, comment out if wanting to track)
-# image-test/*_cleaned.webp
+# Test output images
+image-test/

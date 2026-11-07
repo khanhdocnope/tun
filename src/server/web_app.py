@@ -167,6 +167,31 @@ WEB_APP_HTML = """<!DOCTYPE html>
             color: var(--subtext0);
         }
 
+        .search-clear-btn {
+            background: transparent;
+            border: none;
+            color: var(--subtext0);
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .search-clear-btn:hover {
+            color: var(--text);
+        }
+
+        .feed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 24px 0 24px;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--lavender);
+        }
+
         .source-chips {
             display: flex;
             gap: 8px;
@@ -434,6 +459,29 @@ WEB_APP_HTML = """<!DOCTYPE html>
             width: 0%;
             transition: width 0.3s;
         }
+        .source-card {
+            background: var(--mantle);
+            border: 1px solid var(--surface1);
+            border-radius: 10px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .source-card:hover {
+            border-color: var(--lavender);
+            background: var(--surface0);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .source-card.active {
+            border-color: var(--teal);
+            background: rgba(148, 226, 213, 0.08);
+        }
     </style>
 </head>
 <body>
@@ -470,15 +518,31 @@ WEB_APP_HTML = """<!DOCTYPE html>
             <header class="top-bar">
                 <div class="search-box">
                     <svg width="18" height="18" fill="var(--lavender)" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                    <input type="text" id="search-input" placeholder="Tìm kiếm truyện tranh trên MangaDex, Cứu Truyện, Comix.to..." value="One Piece" onkeydown="if(event.key==='Enter') executeSearch()">
+                    <input type="text" id="search-input" placeholder="Tìm kiếm truyện tranh... (Để trống xem truyện mới cập nhật)" value="" oninput="handleSearchInput()" onkeydown="if(event.key==='Enter') executeSearch()">
+                    <button id="search-clear" class="search-clear-btn" onclick="clearSearch()" title="Xóa tìm kiếm">✕</button>
                 </div>
                 <button class="btn-primary" onclick="executeSearch()">Tìm kiếm</button>
             </header>
 
-            <div class="source-chips">
-                <div class="chip active" onclick="setSource('mangadex', this)">MangaDex (API v5)</div>
-                <div class="chip" onclick="setSource('cuutruyen', this)">Cứu Truyện (WAF nodriver)</div>
-                <div class="chip" onclick="setSource('comix', this)">Comix.to (Turnstile)</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+                <div class="source-chips" id="quick-source-chips" style="margin-bottom:0;">
+                    <div class="chip active" data-src="mangadex" onclick="setSource('mangadex', this)">MangaDex (API v5)</div>
+                    <div class="chip" data-src="cuutruyen" onclick="setSource('cuutruyen', this)">Cứu Truyện (Auto DRM)</div>
+                    <div class="chip" data-src="blogtruyen" onclick="setSource('blogtruyen', this)">BlogTruyen</div>
+                    <div class="chip" data-src="mangatoon-vi" onclick="setSource('mangatoon-vi', this)">MangaToon (VI)</div>
+                    <div class="chip" data-src="asurascans" onclick="setSource('asurascans', this)">Asura Scans</div>
+                    <div class="chip" data-src="hitomi" onclick="setSource('hitomi', this)">Hitomi.la (Doujin/Manga)</div>
+                    <div class="chip" data-src="comix" onclick="setSource('comix', this)">Comix.to (Turnstile)</div>
+                </div>
+                <button class="btn-primary" style="background:var(--surface1); color:var(--text); border:1px solid var(--surface2); padding:6px 14px; font-size:12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;" onclick="openSourceModal()">
+                    <span>🌐 Tất cả 1,313+ Nguồn</span>
+                    <span style="background:var(--lavender); color:var(--crust); font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px;">1,313</span>
+                </button>
+            </div>
+
+            <div id="feed-status" class="feed-header">
+                <span id="feed-title">🔥 Truyện mới cập nhật gần đây (Mới nhất)</span>
+                <span id="feed-count" style="color:var(--subtext0); font-weight:500; font-size:11px;"></span>
             </div>
 
             <div id="manga-grid" class="manga-grid">
@@ -505,8 +569,16 @@ WEB_APP_HTML = """<!DOCTYPE html>
 
         <!-- LIBRARY TAB -->
         <div id="tab-library" class="page-view">
-            <h2>Kệ truyện của bạn</h2>
-            <p style="color:var(--subtext0);">Thư viện cá nhân hiển thị các file .CBZ và .ZIP đã tải về máy.</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                    <h2>Kệ truyện của bạn (Thư viện file đã tải)</h2>
+                    <p style="color:var(--subtext0); font-size:13px; margin-top:4px;">Quản lý và tải trực tiếp các file .ZIP và .CBZ đã hoàn tất trên máy chủ về thiết bị.</p>
+                </div>
+                <button class="btn-primary" style="background:var(--surface1); color:var(--text); border:1px solid var(--surface2); padding:6px 14px; font-size:12px; cursor:pointer;" onclick="loadLibrary()">🔄 Làm mới</button>
+            </div>
+            <div id="library-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:14px;">
+                <div style="color:var(--subtext0); grid-column:1/-1;">Đang tải thư viện file...</div>
+            </div>
         </div>
     </main>
 
@@ -523,19 +595,59 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 <button class="modal-close" onclick="closeModal()">✕</button>
             </div>
             <div class="modal-body">
-                <div class="download-action-bar">
-                    <span style="font-weight:700; font-size:13px; color:var(--lavender);">Tải hàng loạt:</span>
-                    <select id="dl-format">
-                        <option value="cbz">CBZ (ComicInfo.xml)</option>
-                        <option value="zip">ZIP (Ảnh thô cho AI Cleaner)</option>
-                        <option value="images">Thư mục ảnh rời</option>
-                        <option value="pdf">Tài liệu PDF</option>
-                    </select>
-                    <input type="text" id="dl-range" class="range-input" placeholder="Dải chương: 1-3, all" value="1-2">
-                    <button class="btn-primary" onclick="submitDownload()">Bắt đầu Tải</button>
+                <div class="download-action-bar" style="flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:700; font-size:13px; color:var(--lavender);">Định dạng:</span>
+                        <select id="dl-format">
+                            <option value="zip" selected>ZIP (Ảnh thô cho AI Cleaner / Lưu trữ)</option>
+                            <option value="cbz">CBZ (ComicInfo.xml cho Manga Reader)</option>
+                            <option value="images">Thư mục ảnh rời</option>
+                            <option value="pdf">Tài liệu PDF</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="text" id="dl-range" class="range-input" placeholder="Dải chương: 1-3, all" value="1-2" style="width:130px;">
+                        <button class="btn-primary" style="background:var(--teal); color:var(--crust); font-weight:700;" onclick="submitDownload('zip')">📦 Tải file ZIP</button>
+                        <button class="btn-primary" style="background:var(--lavender); color:var(--crust); font-weight:700;" onclick="submitDownload('cbz')">⚡ Tải CBZ</button>
+                    </div>
                 </div>
-                <h3>Danh sách chương</h3>
+                <h3>Danh sách chương (Chọn tải trực tiếp ZIP hoặc CBZ)</h3>
                 <ul id="modal-chapters" class="chapter-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- SOURCE CATALOG MODAL (1,313 CONNECTORS) -->
+    <div id="source-modal" class="modal-overlay" onclick="closeSourceModal(event)">
+        <div class="modal-card" style="max-width:860px; height:80vh; display:flex; flex-direction:column; padding:0; overflow:hidden;" onclick="event.stopPropagation()">
+            <div style="padding:18px 24px; background:var(--mantle); border-bottom:1px solid var(--surface1); display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h2 style="font-size:18px; margin:0; display:flex; align-items:center; gap:8px;">
+                        <span>📚 Kho 1,313+ Nguồn Truyện</span>
+                        <span id="catalog-count-badge" style="background:var(--lavender); color:var(--crust); font-size:11px; font-weight:700; padding:2px 8px; border-radius:12px;">Đang nạp...</span>
+                    </h2>
+                    <p style="font-size:12px; color:var(--subtext0); margin:4px 0 0 0;">
+                        Chọn bất kỳ nguồn nào để duyệt truyện hoặc tải về không giới hạn.
+                    </p>
+                </div>
+                <button class="modal-close" style="position:static;" onclick="closeSourceModal()">✕</button>
+            </div>
+
+            <div style="padding:14px 24px; border-bottom:1px solid var(--surface1); display:flex; flex-direction:column; gap:10px; background:var(--crust);">
+                <div class="search-box" style="max-width:100%;">
+                    <svg width="16" height="16" fill="var(--lavender)" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                    <input type="text" id="source-filter-input" placeholder="Gõ tên nguồn, domain hoặc template (vd: asura, truyen, flame, reaper, madara)..." oninput="filterSourcesCatalog()">
+                </div>
+                <div class="source-chips" id="source-lang-tabs" style="margin-bottom:0; flex-wrap:wrap;">
+                    <div class="chip active" onclick="setCatalogLangFilter('all', this)">Tất cả (1,313)</div>
+                    <div class="chip" onclick="setCatalogLangFilter('vi', this)">🇻🇳 Tiếng Việt (17)</div>
+                    <div class="chip" onclick="setCatalogLangFilter('en', this)">🇬🇧 English (453)</div>
+                    <div class="chip" onclick="setCatalogLangFilter('raw', this)">🇯🇵 Raw / Đa ngữ</div>
+                </div>
+            </div>
+
+            <div id="source-catalog-grid" style="flex:1; overflow-y:auto; padding:20px 24px; display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px; align-content:start;">
+                <!-- Rendered dynamically -->
             </div>
         </div>
     </div>
@@ -543,7 +655,131 @@ WEB_APP_HTML = """<!DOCTYPE html>
     <script>
         let currentSource = 'mangadex';
         let currentMangaId = '';
+        let currentMangaTitle = '';
         let currentTasks = {};
+        let searchDebounceTimer = null;
+        let allSources = [];
+        let currentCatalogLang = 'all';
+
+        async function loadAllSourcesCatalog() {
+            try {
+                const res = await fetch('/api/sources');
+                const data = await res.json();
+                allSources = data.sources || [];
+                const badge = document.getElementById('catalog-count-badge');
+                if (badge) badge.innerText = allSources.length + ' nguồn';
+            } catch (e) {
+                console.error('Lỗi tải danh mục nguồn:', e);
+            }
+        }
+
+        function openSourceModal() {
+            const modal = document.getElementById('source-modal');
+            modal.style.display = 'flex';
+            filterSourcesCatalog();
+            setTimeout(() => {
+                const inp = document.getElementById('source-filter-input');
+                if (inp) inp.focus();
+            }, 100);
+        }
+
+        function closeSourceModal(e) {
+            document.getElementById('source-modal').style.display = 'none';
+        }
+
+        function setCatalogLangFilter(lang, el) {
+            currentCatalogLang = lang;
+            document.querySelectorAll('#source-lang-tabs .chip').forEach(c => c.classList.remove('active'));
+            if (el) el.classList.add('active');
+            filterSourcesCatalog();
+        }
+
+        function filterSourcesCatalog() {
+            const grid = document.getElementById('source-catalog-grid');
+            if (!grid) return;
+            const query = (document.getElementById('source-filter-input')?.value || '').trim().toLowerCase();
+            
+            let filtered = allSources;
+            if (currentCatalogLang === 'vi') {
+                filtered = filtered.filter(s => (s.languages || []).includes('vi'));
+            } else if (currentCatalogLang === 'en') {
+                filtered = filtered.filter(s => (s.languages || []).includes('en'));
+            } else if (currentCatalogLang === 'raw') {
+                filtered = filtered.filter(s => {
+                    const l = s.languages || [];
+                    return l.includes('ja') || l.includes('ko') || l.includes('zh') || l.includes('raw') || l.includes('multi');
+                });
+            }
+
+            if (query) {
+                filtered = filtered.filter(s => 
+                    (s.name && s.name.toLowerCase().includes(query)) ||
+                    (s.id && s.id.toLowerCase().includes(query)) ||
+                    (s.url && s.url.toLowerCase().includes(query)) ||
+                    (s.description && s.description.toLowerCase().includes(query))
+                );
+            }
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--subtext0);">Không tìm thấy nguồn truyện nào khớp với bộ lọc.</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.slice(0, 120).map(s => {
+                const isActive = s.id === currentSource;
+                const langs = (s.languages || []).join(', ').toUpperCase();
+                return `
+                <div class="source-card ${isActive ? 'active' : ''}" onclick="selectSourceFromCatalog('${s.id}', '${encodeURIComponent(s.name)}')">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                        <span style="font-weight:700; font-size:13px; color:${isActive ? 'var(--lavender)' : 'var(--text)'};">${s.name}</span>
+                        ${isActive ? '<span style="font-size:10px; background:var(--teal); color:var(--crust); font-weight:700; padding:1px 6px; border-radius:4px;">ĐANG CHỌN</span>' : ''}
+                    </div>
+                    <div style="font-size:11px; color:var(--subtext0); margin:4px 0 8px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.url}">${s.url}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px;">
+                        <span style="background:var(--surface0); color:var(--lavender); padding:2px 6px; border-radius:4px; font-weight:600;">${langs || 'MULTI'}</span>
+                        <span style="color:var(--subtext1); font-size:10px;">${s.needs_browser_bypass ? '🛡️ Cloudflare' : '⚡ Tốc độ cao'}</span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function selectSourceFromCatalog(sourceId, encodedName) {
+            const name = decodeURIComponent(encodedName);
+            closeSourceModal();
+
+            let chip = document.querySelector(`.source-chips .chip[data-src="${sourceId}"]`);
+            if (!chip) {
+                const quickChips = document.getElementById('quick-source-chips');
+                chip = document.createElement('div');
+                chip.className = 'chip';
+                chip.setAttribute('data-src', sourceId);
+                chip.innerText = name;
+                chip.onclick = function() { setSource(sourceId, chip); };
+                quickChips.insertBefore(chip, quickChips.firstChild);
+            }
+
+            setSource(sourceId, chip);
+        }
+
+        function handleSearchInput() {
+            const input = document.getElementById('search-input');
+            const clearBtn = document.getElementById('search-clear');
+            if (input.value.trim().length > 0) {
+                clearBtn.style.display = 'flex';
+            } else {
+                clearBtn.style.display = 'none';
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(executeSearch, 250);
+            }
+        }
+
+        function clearSearch() {
+            const input = document.getElementById('search-input');
+            input.value = '';
+            document.getElementById('search-clear').style.display = 'none';
+            executeSearch();
+        }
 
         function switchTab(tabId) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -551,6 +787,9 @@ WEB_APP_HTML = """<!DOCTYPE html>
             
             event.currentTarget.classList.add('active');
             document.getElementById('tab-' + tabId).classList.add('active');
+            if (tabId === 'library') {
+                loadLibrary();
+            }
         }
 
         function setSource(src, el) {
@@ -563,17 +802,27 @@ WEB_APP_HTML = """<!DOCTYPE html>
         async function executeSearch() {
             const query = document.getElementById('search-input').value.trim();
             const grid = document.getElementById('manga-grid');
+            const feedTitle = document.getElementById('feed-title');
+            const feedCount = document.getElementById('feed-count');
+
+            if (query) {
+                feedTitle.innerText = `🔍 Kết quả tìm kiếm cho: "${query}"`;
+            } else {
+                feedTitle.innerText = `🔥 Truyện mới cập nhật gần đây (Mới nhất)`;
+            }
+            feedCount.innerText = '';
             
             const loadingText = currentSource === 'comix' 
                 ? 'Đang kết nối tới Comix.to (Đang vượt bảo vệ Cloudflare Turnstile, vui lòng đợi vài giây)...'
-                : 'Đang kết nối tới ' + currentSource + '...';
+                : 'Đang nạp dữ liệu từ ' + currentSource + '...';
             grid.innerHTML = '<p style="color:var(--lavender); display:flex; align-items:center; gap:8px;">⏳ ' + loadingText + '</p>';
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 20000);
 
             try {
-                const res = await fetch(`/api/search?source=${currentSource}&q=${encodeURIComponent(query)}`, {
+                const searchParam = query ? `&q=${encodeURIComponent(query)}` : '';
+                const res = await fetch(`/api/search?source=${currentSource}${searchParam}`, {
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
@@ -581,10 +830,12 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 const items = Array.isArray(data) ? data : (data.results || []);
                 
                 if (!items || items.length === 0) {
-                    grid.innerHTML = '<p style="color:var(--subtext0);">Không tìm thấy kết quả nào cho "' + query + '" trên nguồn này.</p>';
+                    grid.innerHTML = '<p style="color:var(--subtext0);">' + (query ? 'Không tìm thấy kết quả nào cho "' + query + '".' : 'Hiện chưa có truyện mới cập nhật.') + '</p>';
+                    feedCount.innerText = '0 bộ truyện';
                     return;
                 }
 
+                feedCount.innerText = `${items.length} bộ truyện`;
                 grid.innerHTML = items.map(it => {
                     const proxyCover = it.cover_url ? ('/api/proxy/image?url=' + encodeURIComponent(it.cover_url)) : '/api/proxy/image?url=';
                     return `
@@ -597,19 +848,40 @@ WEB_APP_HTML = """<!DOCTYPE html>
                     </div>
                 `}).join('');
             } catch (err) {
+                clearTimeout(timeoutId);
                 if (err.name === 'AbortError') {
-                    grid.innerHTML = '<p style="color:var(--red);">⚠️ Kết nối tới ' + currentSource + ' quá thời gian chờ (Timeout). Vui lòng thử lại hoặc chọn nguồn khác.</p>';
+                    grid.innerHTML = `
+                        <div style="background:var(--surface0); border:1px solid var(--peach); padding:20px; border-radius:12px; margin-top:12px; grid-column:1/-1;">
+                            <h4 style="color:var(--peach); margin:0 0 8px 0; font-size:15px; display:flex; align-items:center; gap:8px;">
+                                ⚠️ Kết nối tới ${currentSource.toUpperCase()} quá thời gian chờ (Timeout)
+                            </h4>
+                            <p style="font-size:13px; color:var(--subtext1); margin:0 0 14px 0; line-height:1.5;">
+                                ${currentSource === 'comix' 
+                                    ? 'Comix.to đang kích hoạt bảo vệ Cloudflare Turnstile nghiêm ngặt. Bạn có thể thử tìm kiếm lại hoặc bấm chuyển nhanh sang nguồn MangaDex hoặc Cứu Truyện để đọc ngay tức thì.'
+                                    : 'Máy chủ phản hồi chậm hoặc bị quá tải mạng. Vui lòng thử lại sau.'}
+                            </p>
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn-primary" style="padding:6px 14px; font-size:12px;" onclick="setSource('mangadex', document.querySelector('.chip[data-src=\\'mangadex\\']'))">
+                                    Chuyển sang MangaDex
+                                </button>
+                                <button class="btn-primary" style="padding:6px 14px; font-size:12px; background:var(--surface1); border:1px solid var(--surface2); color:var(--text);" onclick="setSource('cuutruyen', document.querySelector('.chip[data-src=\\'cuutruyen\\']'))">
+                                    Chuyển sang Cứu Truyện
+                                </button>
+                            </div>
+                        </div>
+                    `;
                 } else {
-                    grid.innerHTML = '<p style="color:var(--red);">⚠️ Lỗi kết nối máy chủ: ' + err + '</p>';
+                    grid.innerHTML = '<p style="color:var(--red); grid-column:1/-1;">⚠️ Lỗi kết nối máy chủ: ' + (err.message || err) + '</p>';
                 }
             }
         }
 
         async function openMangaDetail(source, mangaId, title) {
             currentMangaId = mangaId;
+            currentMangaTitle = decodeURIComponent(title);
             const modal = document.getElementById('manga-modal');
             modal.style.display = 'flex';
-            document.getElementById('modal-title').innerText = decodeURIComponent(title);
+            document.getElementById('modal-title').innerText = currentMangaTitle;
             document.getElementById('modal-chapters').innerHTML = '<li>Đang nạp danh sách chương...</li>';
             document.getElementById('modal-cover').src = '/api/proxy/image?url=';
 
@@ -617,7 +889,8 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 const res = await fetch(`/api/manga/${source}/${encodeURIComponent(mangaId)}`);
                 const info = await res.json();
                 
-                document.getElementById('modal-title').innerText = info.title;
+                if (info.title) currentMangaTitle = info.title;
+                document.getElementById('modal-title').innerText = currentMangaTitle;
                 document.getElementById('modal-author').innerText = info.authors ? info.authors.join(', ') : 'Chưa rõ';
                 if (info.cover_url) {
                     document.getElementById('modal-cover').src = '/api/proxy/image?url=' + encodeURIComponent(info.cover_url);
@@ -628,9 +901,12 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 document.getElementById('modal-genres').innerHTML = (info.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('');
                 
                 document.getElementById('modal-chapters').innerHTML = (info.chapters || []).map(ch => `
-                    <li class="chapter-item">
-                        <span>Chương ${ch.chapter_number} ${ch.title ? ' - ' + ch.title : ''}</span>
-                        <button class="btn-primary" style="padding:4px 10px; font-size:11px;" onclick="downloadSingleChapter('${ch.id}')">Tải</button>
+                    <li class="chapter-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--surface0);">
+                        <span style="font-size:13px; font-weight:500;">Chương ${ch.chapter_number} ${ch.title ? ' - ' + ch.title : ''}</span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-primary" style="background:var(--teal); color:var(--crust); padding:4px 10px; font-size:11px; font-weight:700; border-radius:4px;" onclick="downloadSingleChapter('${ch.id}', 'zip')" title="Tải file ZIP ảnh thô (phù hợp cho AI Cleaner / Lưu trữ)">📦 ZIP</button>
+                            <button class="btn-primary" style="background:var(--lavender); color:var(--crust); padding:4px 10px; font-size:11px; font-weight:700; border-radius:4px;" onclick="downloadSingleChapter('${ch.id}', 'cbz')" title="Tải file CBZ chuẩn truyện tranh ComicInfo.xml">🟣 CBZ</button>
+                        </div>
                     </li>
                 `).join('');
             } catch (err) {
@@ -642,22 +918,24 @@ WEB_APP_HTML = """<!DOCTYPE html>
             document.getElementById('manga-modal').style.display = 'none';
         }
 
-        async function submitDownload() {
-            const format = document.getElementById('dl-format').value;
+        async function submitDownload(overrideFormat) {
+            const format = overrideFormat || document.getElementById('dl-format').value;
             const range = document.getElementById('dl-range').value;
             await triggerDownload({
                 source: currentSource,
                 manga_id: currentMangaId,
+                manga_title: currentMangaTitle,
                 chapters: range,
                 format: format
             });
         }
 
-        async function downloadSingleChapter(chapterId) {
-            const format = document.getElementById('dl-format').value;
+        async function downloadSingleChapter(chapterId, overrideFormat) {
+            const format = overrideFormat || document.getElementById('dl-format').value;
             await triggerDownload({
                 source: currentSource,
                 manga_id: currentMangaId,
+                manga_title: currentMangaTitle,
                 chapter_ids: [chapterId],
                 format: format
             });
@@ -673,14 +951,21 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 const data = await res.json();
                 alert('Đã kích hoạt tải tác vụ ID: ' + data.task_id);
                 closeModal();
-                trackTask(data.task_id);
+                trackTask(data.task_id, payload.manga_title);
             } catch (err) {
                 alert('Lỗi khởi tạo tải: ' + err);
             }
         }
 
-        function trackTask(taskId) {
-            currentTasks[taskId] = { task_id: taskId, status: 'running', progress: { percent: 0 } };
+        function trackTask(taskId, mangaTitle) {
+            currentTasks[taskId] = {
+                task_id: taskId,
+                source: currentSource,
+                manga_id: currentMangaId,
+                manga_title: mangaTitle || currentMangaTitle,
+                status: 'running',
+                progress: { percent: 0 }
+            };
             updateTasksUI();
             
             const timer = setInterval(async () => {
@@ -734,13 +1019,61 @@ WEB_APP_HTML = """<!DOCTYPE html>
                         <span>Trang: ${t.progress?.completed_pages || 0}/${t.progress?.total_pages || 0}</span>
                         <span>${(t.progress?.percent || 0).toFixed(1)}%</span>
                     </div>
-                    ${isFailed && errMsg ? `<div style="font-size:11px; color:var(--red); margin-top:2px;">⚠️ ${errMsg}</div>` : ''}
+                    ${isFailed ? `<div style="font-size:11px; color:var(--red); margin-top:4px;">⚠️ ${errMsg || 'Tải thất bại hoặc bị gián đoạn máy chủ'}</div>` : ''}
+                    ${isCompleted ? `
+                    <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:8px;">
+                        <a href="/api/download/${t.task_id}/file" download class="btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; font-size:12px; background:var(--teal); color:var(--crust); font-weight:700; border-radius:6px;">
+                            <span>📥 Lưu file ${t.format?.toUpperCase() || 'ZIP'} về máy</span>
+                        </a>
+                    </div>
+                    ` : ''}
                 </div>
             `}).join('');
         }
 
-        // Tự động tìm kiếm mẫu khi mở trang
-        window.onload = executeSearch;
+        async function loadLibrary() {
+            const container = document.getElementById('library-container');
+            if (!container) return;
+            try {
+                const res = await fetch('/api/files/library');
+                const data = await res.json();
+                const files = data.files || [];
+                if (files.length === 0) {
+                    container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:50px; color:var(--subtext0);">Chưa có file .ZIP hoặc .CBZ nào trong thư viện tải về. Hãy chọn truyện và tải về định dạng ZIP hoặc CBZ!</div>';
+                    return;
+                }
+                container.innerHTML = files.map(f => {
+                    const isZip = f.format === 'zip';
+                    const badgeColor = isZip ? 'var(--teal)' : 'var(--lavender)';
+                    const badgeText = isZip ? '📦 ZIP (Ảnh thô)' : '🟣 CBZ (ComicInfo)';
+                    return `
+                    <div class="task-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; gap:10px;">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="font-size:10px; font-weight:700; background:${badgeColor}; color:var(--crust); padding:2px 8px; border-radius:10px;">${badgeText}</span>
+                                <span style="font-size:11px; color:var(--subtext0); font-weight:600;">${f.size_mb} MB</span>
+                            </div>
+                            <strong style="font-size:13px; color:var(--text); display:block; margin-bottom:4px; word-break:break-word;">${f.name}</strong>
+                            <div style="font-size:11px; color:var(--subtext0);">Bộ: ${f.manga}</div>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end;">
+                            <a href="/api/files/download?path=${encodeURIComponent(f.path)}" download class="btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; font-size:11px; background:${badgeColor}; color:var(--crust); font-weight:700; border-radius:6px;">
+                                <span>📥 Lưu về máy</span>
+                            </a>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                container.innerHTML = '<div style="color:var(--red);">Lỗi nạp thư viện: ' + err + '</div>';
+            }
+        }
+
+        // Tự động nạp danh mục nguồn và tìm kiếm mẫu khi mở trang
+        window.onload = () => {
+            loadAllSourcesCatalog();
+            executeSearch();
+        };
     </script>
 </body>
 </html>

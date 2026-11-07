@@ -63,7 +63,7 @@ class CatppuccinMocha {
         onSurface: text,
       ),
       textTheme: textTheme,
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surface0,
         elevation: 0,
         shape: RoundedRectangleBorder(

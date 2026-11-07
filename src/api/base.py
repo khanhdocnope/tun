@@ -24,15 +24,23 @@ class BaseMangaSource(ABC):
     async def search(self, query: str, page: int = 1) -> List[MangaSearchResult]:
         """
         Tìm kiếm manga theo từ khóa và phân trang.
+        Nếu query rỗng hoặc khoảng trắng, mặc định trả về danh sách truyện mới cập nhật.
 
         Args:
-            query: Từ khóa tìm kiếm.
+            query: Từ khóa tìm kiếm (hoặc chuỗi rỗng để lấy feed mới nhất).
             page: Số trang (mặc định bắt đầu từ 1).
 
         Returns:
             Danh sách các đối tượng MangaSearchResult.
         """
         pass
+
+    async def get_latest_updates(self, page: int = 1) -> List[MangaSearchResult]:
+        """
+        Lấy danh sách các bộ truyện vừa mới cập nhật chương mới (Recently Updated / Mới -> Cũ).
+        Mặc định ủy quyền cho self.search("", page=page). Lớp con có thể ghi đè nếu có endpoint chuyên biệt.
+        """
+        return await self.search("", page=page)
 
     @abstractmethod
     async def get_manga_details(self, manga_id_or_url: str) -> MangaInfo:

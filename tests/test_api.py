@@ -12,6 +12,7 @@ from src.api.base import BaseMangaSource
 from src.api.browser_runner import CloudflareBypassRunner
 from src.api.comix import ComixSource
 from src.api.cuutruyen import CuutruyenSource
+from src.api.hitomi import HitomiSource
 from src.api.mangadex import MangaDexSource
 from src.api import get_source, list_sources, register_source
 from src.core.models import Chapter, MangaInfo, MangaSearchResult
@@ -358,3 +359,72 @@ async def test_browser_runner_aclose_safe_termination():
 
     mock_browser.aclose.assert_awaited_once()
     mock_browser.stop.assert_called_once()
+
+
+def test_hitomi_source_registry():
+    """Kiểm tra HitomiSource được đăng ký chính xác trong registry."""
+    src = get_source("hitomi")
+    assert isinstance(src, HitomiSource)
+    assert src.source_id == "hitomi"
+    assert src.source_name == "Hitomi.la"
+
+
+def test_hitomi_sharding_and_url_calculation():
+    """Kiểm tra giải thuật tính toán URL ảnh WebP và cover thumbnail từ SHA256 hash."""
+    src = HitomiSource()
+    src._gg_b = "1794052801/"
+    src._gg_cases = {425, 1000}
+
+    # Test hash có số đuôi trùng case (g=425)
+    # 425 = 0x01a9 -> nhóm 2 là 'a9', nhóm 1 là '1' -> hash đuôi là '1a9'
+    test_hash_in_case = "00000000000000000000000000000000000000000000000000000000000001a9"
+    # m[1] = "1a", m[2] = "9" -> "91a" = 2330
+    # Wait: let's test with exact verified hash from gallery 4311552:
+    verified_hash = "d9c17f7ddd72bafea88fe1cd3664d038f297fd7dea830c0dcc54b41eacb28a91"
+    # m[1] = "a9", m[2] = "1" -> "1a9" = 425.
+    # 425 in {425} -> m_val = 1 -> subdomain = w2, thumbnail = btn.
+    img_url = src._get_image_url({"hash": verified_hash})
+    assert img_url == "https://w2.gold-usergeneratedcontent.net/1794052801/425/d9c17f7ddd72bafea88fe1cd3664d038f297fd7dea830c0dcc54b41eacb28a91.webp"
+
+    cover_url = src._get_cover_url({"hash": verified_hash})
+    assert cover_url == "https://btn.gold-usergeneratedcontent.net/webpbigtn/1/a9/d9c17f7ddd72bafea88fe1cd3664d038f297fd7dea830c0dcc54b41eacb28a91.webp"
+
+
+def test_hitomi_extract_gallery_id():
+    """Kiểm tra bóc tách gallery ID từ các dạng chuỗi và URL."""
+    src = HitomiSource()
+    assert src._extract_gallery_id("4311552") == "4311552"
+    assert src._extract_gallery_id("https://hitomi.la/reader/4311552.html") == "4311552"
+    assert src._extract_gallery_id("https://hitomi.la/doujinshi/some-title-4311552.html") == "4311552"
+    assert src._extract_gallery_id("invalid-text") is None
+
+
+@pytest.mark.asyncio
+async def test_hitomi_get_manga_details_mocked():
+    """Kiểm tra get_manga_details trả về MangaInfo với 1 chapter chứa toàn bộ link ảnh."""
+    src = HitomiSource()
+    src._ensure_gg = AsyncMock()
+    src._gg_b = "1794052801/"
+    src._gg_cases = set()
+
+    fake_gallery = {
+        "id": "1234567",
+        "title": "Test Hitomi Gallery",
+        "type": "doujinshi",
+        "language": "vietnamese",
+        "artists": [{"artist": "Test Artist"}],
+        "tags": [{"tag": "romance"}, {"tag": "school life"}],
+        "files": [
+            {"hash": "1111111111111111111111111111111111111111111111111111111111111000", "haswebp": 1},
+            {"hash": "2222222222222222222222222222222222222222222222222222222222222001", "haswebp": 1},
+        ],
+    }
+    src._fetch_gallery_info = AsyncMock(return_value=fake_gallery)
+
+    manga_info = await src.get_manga_details("1234567")
+    assert manga_info.id == "1234567"
+    assert manga_info.title == "Test Hitomi Gallery"
+    assert manga_info.authors == ["Test Artist"]
+    assert len(manga_info.chapters) == 1
+    assert len(manga_info.chapters[0].pages) == 2
+    assert "gold-usergeneratedcontent.net" in manga_info.chapters[0].pages[0]

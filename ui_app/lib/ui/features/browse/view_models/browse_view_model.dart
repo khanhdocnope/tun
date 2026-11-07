@@ -44,9 +44,9 @@ class BrowseViewModel extends ChangeNotifier {
         _selectedSourceId = _sources.first.id;
       }
 
-      // Tự động tìm kiếm mẫu khi mở app (mặc định tìm truyện phổ biến)
+      // Tự động nạp danh sách truyện mới cập nhật khi mở app
       if (_searchResults.isEmpty) {
-        await search('One Piece');
+        await search('');
       }
     } catch (e) {
       _errorMessage = 'Không thể kết nối tới Core Engine. Vui lòng đảm bảo FastAPI Server đang chạy!';
@@ -61,17 +61,13 @@ class BrowseViewModel extends ChangeNotifier {
     if (_selectedSourceId != sourceId) {
       _selectedSourceId = sourceId;
       notifyListeners();
-      if (_currentQuery.isNotEmpty) {
-        search(_currentQuery);
-      }
+      search(_currentQuery);
     }
   }
 
-  /// Thực hiện tìm kiếm truyện
+  /// Thực hiện tìm kiếm truyện (Nếu rỗng sẽ lấy truyện mới cập nhật)
   Future<void> search(String query) async {
     final clean = query.trim();
-    if (clean.isEmpty) return;
-
     _currentQuery = clean;
     _isLoading = true;
     _errorMessage = null;
@@ -83,7 +79,7 @@ class BrowseViewModel extends ChangeNotifier {
         query: clean,
       );
     } catch (e) {
-      _errorMessage = 'Lỗi tìm kiếm: $e';
+      _errorMessage = 'Lỗi tải truyện: $e';
       _searchResults = [];
     } finally {
       _isLoading = false;

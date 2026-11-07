@@ -302,6 +302,23 @@ def test_api_search_success(dummy_search_results):
         assert data["results"][0]["title"] == "Manga Mẫu Siêu Đẳng"
 
 
+def test_api_search_empty_query_returns_latest_feed(dummy_search_results):
+    """Kiểm tra GET /api/search khi không truyền 'q' tự động trả về feed truyện mới cập nhật."""
+    mock_source = MagicMock()
+    mock_source.search = AsyncMock(return_value=dummy_search_results)
+    mock_source.__aenter__ = AsyncMock(return_value=mock_source)
+    mock_source.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("src.server.app.get_source", return_value=mock_source):
+        response = client.get("/api/search", params={"source": "mangadex"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["source"] == "mangadex"
+        assert data["query"] == ""
+        assert data["total"] == 2
+        mock_source.search.assert_called_once_with(query="", page=1)
+
+
 def test_api_search_invalid_source():
     """Kiểm tra GET /api/search báo lỗi 400 khi truyền nguồn không hợp lệ."""
     response = client.get("/api/search", params={"source": "invalid_source", "q": "Test"})
