@@ -34,8 +34,14 @@ class ApiService {
   Future<List<SourceMetadata>> getSources() async {
     final response = await _client.get(Uri.parse('$baseUrl${ApiConstants.sourcesEndpoint}'));
     if (response.statusCode == 200) {
-      final data = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
-      return data.map((item) => SourceMetadata.fromJson(item as Map<String, dynamic>)).toList();
+      final decoded = json.decode(utf8.decode(response.bodyBytes));
+      List<dynamic> items = [];
+      if (decoded is List) {
+        items = decoded;
+      } else if (decoded is Map && decoded['sources'] is List) {
+        items = decoded['sources'] as List<dynamic>;
+      }
+      return items.map((item) => SourceMetadata.fromJson(item as Map<String, dynamic>)).toList();
     }
     throw Exception('Không thể tải danh sách nguồn truyện: ${response.statusCode}');
   }
@@ -56,8 +62,14 @@ class ApiService {
 
     final response = await _client.get(uri);
     if (response.statusCode == 200) {
-      final data = json.decode(utf8.decode(response.bodyBytes)) as List<dynamic>;
-      return data.map((item) => MangaSearchResult.fromJson(item as Map<String, dynamic>)).toList();
+      final decoded = json.decode(utf8.decode(response.bodyBytes));
+      List<dynamic> items = [];
+      if (decoded is List) {
+        items = decoded;
+      } else if (decoded is Map && decoded['results'] is List) {
+        items = decoded['results'] as List<dynamic>;
+      }
+      return items.map((item) => MangaSearchResult.fromJson(item as Map<String, dynamic>)).toList();
     }
     throw Exception('Lỗi khi tìm kiếm manga: ${response.statusCode}');
   }

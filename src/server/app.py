@@ -15,7 +15,10 @@ import uuid
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+
+from src.server.web_app import WEB_APP_HTML
 
 from src.api import (
     AVAILABLE_SOURCES,
@@ -409,6 +412,12 @@ app.add_middleware(
 # ==========================================
 # REST API ENDPOINTS
 # ==========================================
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def serve_web_app():
+    """Giao diện Web App tương tác của MoeJect phục vụ nghiệm thu tức thì."""
+    return HTMLResponse(content=WEB_APP_HTML)
 
 
 @app.get("/api/health", response_model=HealthResponse, tags=["System"])
