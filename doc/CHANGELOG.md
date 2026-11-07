@@ -1,5 +1,20 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-07] - Mở rộng CI/CD Tự động Biên dịch Đa nền tảng (Windows & Android)
+
+### 1. Bổ sung Quy trình Biên dịch Android APK (`.github/workflows/build_apps.yml`):
+- **Runner:** `ubuntu-latest` với môi trường Java JDK 17 (`temurin`) và Gradle cache.
+- **Biên dịch Flutter Android Release:** Chạy lệnh `flutter build apk --release` tạo file APK hoàn chỉnh (`MoeJect-Android.apk`).
+- **Cấu hình Quyền Android (`AndroidManifest.xml`):**
+  - Khai báo `<uses-permission android:name="android.permission.INTERNET"/>` và `ACCESS_NETWORK_STATE`.
+  - Bật `android:usesCleartextTraffic="true"` cho phép ứng dụng kết nối tới server Python chạy trong mạng nội bộ LAN (`http://192.168.x.x:8000`).
+  - Đổi tên hiển thị nhãn ứng dụng thành `MoeJect`.
+- **Phát hành Tự động:**
+  - Xuất bản artifact `MoeJect-Android-APK` trên GitHub Actions.
+  - Tự động đính kèm `MoeJect-Android.apk` vào GitHub Release khi gắn tag phiên bản `v*`.
+
+---
+
 ## [2026-11-07] - Thiết lập GitHub Actions CI/CD Build Windows Release Tự Động
 
 ### 1. Tự động hóa Quy trình Đóng gói Windows App (`.github/workflows/build_windows.yml`):
