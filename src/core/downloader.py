@@ -10,6 +10,7 @@ Hiện thực hóa kiến trúc Two-Tier Concurrency & Streaming Memory từ com
   giải phóng RAM lập tức, cam kết tuyệt đối RAM < 80MB.
 """
 
+import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import os
@@ -27,6 +28,40 @@ from .models import MangaInfo, Chapter, OutputFormat, ImageFailure, DownloadRepo
 from .session import get_http_session
 from ..formats.cbz import create_chapter_cbz, CBZStreamPackager
 from ..formats.zip_packager import create_chapter_zip, ZipStreamPackager
+
+
+def descramble_cuutruyen_bytes(img_bytes: bytes, drm_b64: str) -> bytes:
+    """
+    Giải mã ảnh DRM xáo trộn từ Cứu Truyện theo thuật toán XOR Cipher Pi:
+    - Giải mã base64 và XOR với key '3141592653589793'
+    - Cắt ghép các horizontal slices về đúng tọa độ đích (dy)
+    """
+    try:
+        raw = base64.b64decode(drm_b64.strip())
+        key_bytes = b"3141592653589793"
+        decrypted = "".join(chr(b ^ key_bytes[i % len(key_bytes)]) for i, b in enumerate(raw))
+        if not decrypted.startswith("#v4|"):
+            return img_bytes
+
+        img = Image.open(io.BytesIO(img_bytes))
+        w, h = img.size
+        canvas = Image.new("RGB", (w, h))
+        sy = 0
+        for s in decrypted.split("|")[1:]:
+            if not s.strip():
+                continue
+            dy, height = map(int, s.strip().split("-"))
+            slice_img = img.crop((0, sy, w, sy + height))
+            canvas.paste(slice_img, (0, dy))
+            sy += height
+
+        buf = io.BytesIO()
+        canvas.save(buf, format="JPEG", quality=95)
+        out = buf.getvalue()
+        del canvas, img, buf
+        return out
+    except Exception:
+        return img_bytes
 
 
 class HostConnectionGate:
@@ -175,21 +210,29 @@ class ConcurrentMangaDownloader:
         Returns:
             Tuple (index, image_bytes_or_None, failure_report_or_None).
         """
-        gate = self.gate_manager.get_gate(url)
-        host = urlparse(url).netloc
+        fetch_url = url.split("#")[0]
+        gate = self.gate_manager.get_gate(fetch_url)
+        host = urlparse(fetch_url).netloc
 
         headers = {}
         if referer:
             headers["Referer"] = referer
+        elif "cuutruyen.net" in host:
+            headers["Referer"] = "https://cuutruyen.net/"
+        elif "mangadex.org" in host:
+            headers["Referer"] = "https://mangadex.org/"
 
         for attempt in range(1, self.max_retries + 1):
             try:
                 with gate:
-                    resp = self.session.get(url, headers=headers or None, timeout=15.0)
+                    resp = self.session.get(fetch_url, headers=headers or None, timeout=15.0)
 
                 if resp.status_code == 200:
                     data = resp.content
                     if validate_image_bytes(data):
+                        if "#drm=" in url:
+                            drm_b64 = url.split("#drm=")[1]
+                            data = descramble_cuutruyen_bytes(data, drm_b64)
                         return index, data, None
                     else:
                         raise ValueError("Dữ liệu trả về không phải là file ảnh hợp lệ (có thể là HTML WAF)")
@@ -393,7 +436,9 @@ class ConcurrentMangaDownloader:
                     completed_count += 1
                     if progress_callback:
                         try:
-                            progress_callback(completed_count, total)
+                            # Cập nhật số trang thành công thực tế để tránh tiến độ ảo khi thất bại
+                            success_pages = len(report.downloaded_pages)
+                            progress_callback(success_pages, total)
                         except Exception:
                             pass
 

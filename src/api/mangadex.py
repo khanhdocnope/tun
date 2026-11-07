@@ -193,7 +193,7 @@ class MangaDexSource(BaseMangaSource):
                 if rel.get("type") == "cover_art":
                     file_name = rel.get("attributes", {}).get("fileName")
                     if file_name:
-                        cover_url = f"{self.uploads_url}/covers/{manga_id}/{file_name}"
+                        cover_url = f"{self.uploads_url}/covers/{manga_id}/{file_name}.512.jpg"
                         break
 
             # Tác giả
@@ -261,7 +261,7 @@ class MangaDexSource(BaseMangaSource):
             if rel.get("type") == "cover_art":
                 file_name = rel.get("attributes", {}).get("fileName")
                 if file_name:
-                    cover_url = f"{self.uploads_url}/covers/{manga_id}/{file_name}"
+                    cover_url = f"{self.uploads_url}/covers/{manga_id}/{file_name}.512.jpg"
                     break
 
         authors: List[str] = []

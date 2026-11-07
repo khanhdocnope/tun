@@ -1,5 +1,31 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-07] - Khắc phục Triệt để 4 Vấn đề Kiểm thử & Tiếp thu Tinh hoa từ HakuNeko Engine
+
+### 1. Khắc phục Triệt để 4 Vấn đề Người dùng Phản ánh qua Ảnh chụp:
+- **Khắc phục lỗi Tải Cứu Truyện báo FAILED dù đạt 49/49 (Ảnh 1):**
+  - *Nguyên nhân:* Domain CDN cũ `storage-ct.lrclib.net` trong API Cứu Truyện bị chết DNS (NXDOMAIN) làm downloader gặp lỗi kết nối 100% trang.
+  - *Giải pháp:* Chuẩn hóa toàn bộ URL ảnh tĩnh sang CDN hoạt động chính thức `https://storage-bravo.cuutruyen.net`.
+  - *Sửa lỗi tiến độ ảo:* Cập nhật [src/core/downloader.py](file:///d:/MoeJect/src/core/downloader.py) chỉ tăng tiến độ theo số trang thành công thực tế (`len(report.downloaded_pages)`), không đếm trang lỗi để tránh báo ảo `49/49 (100%)` khi thất bại.
+- **Khắc phục lỗi toàn bộ Ảnh bìa báo "No Cover" trên Cứu Truyện & MangaDex (Ảnh 2 & 3):**
+  - *Nguyên nhân:* ISP tại Việt Nam chặn kết nối tới các CDN MangaDex (`uploads.mangadex.org`) và domain Cứu Truyện cũ; trình duyệt của người dùng bị lỗi kết nối trực tiếp.
+  - *Giải pháp:* Xây dựng endpoint **Image Proxy & Local Cache** (`GET /api/proxy/image?url=...`) trên [src/server/app.py](file:///d:/MoeJect/src/server/app.py). Server sử dụng Smart DNS DoH để fetch ảnh, nạp headers thích hợp (`Referer`, `User-Agent`) và lưu cache đĩa đệm tức thì.
+  - *Fallback thẩm mỹ:* Tích hợp SVG Catppuccin Mocha nội bộ thay thế hoàn toàn cho `via.placeholder.com`.
+- **Khắc phục tình trạng Treo khi chọn Comix.to ("Đang kết nối tới comix...") (Ảnh 4):**
+  - Tinh chỉnh cơ chế vượt WAF của Comix.to trong [src/api/comix.py](file:///d:/MoeJect/src/api/comix.py): Giảm timeout chờ sang 6s/12s, fallback an toàn thay vì giữ pending kết nối HTTP vô thời hạn.
+  - Thêm timeout 20s và chỉ báo loading trực quan trên Web App ([src/server/web_app.py](file:///d:/MoeJect/src/server/web_app.py)).
+
+### 2. Tiếp thu & Chuyển giao Tinh hoa từ Dự án HakuNeko (`manga-download/hakuneko`):
+- **Giải mã Đột phá: Bẻ khóa Cơ chế DRM / Scrambled Images của Cứu Truyện:**
+  - Học hỏi thuật toán giải mã từ `CuuTruyen.mjs` của HakuNeko: Giải mã Base64 `drm_data` kết hợp giải XOR Cipher với chuỗi số Pi (`3141592653589793`).
+  - Tích hợp hàm `descramble_cuutruyen_bytes` vào [src/core/downloader.py](file:///d:/MoeJect/src/core/downloader.py): Tự động cắt các horizontal slices và ghép lại thành tranh truyện chuẩn xác 100% trước khi đóng gói file ZIP/CBZ.
+- **Khảo sát Kho 1,328 Connectors Đa Nguồn:**
+  - Đã phân tích kiến trúc connectors của HakuNeko tại `temp/hakuneko/src/web/mjs/connectors/`.
+  - Nhận diện các template bóc tách nổi bật cho các nguồn truyện tranh Việt Nam và Quốc tế (`NetTruyen`, `BlogTruyen`, `TruyenQQ`, `HamTruyen`, `MangaDex@Home`).
+  - Dọn dẹp an toàn các thư mục ảnh icon nặng (`src/web/img/`) và `.git`, chỉ lưu trữ logic code cần thiết trong `temp/`.
+
+---
+
 ## [2026-11-07] - Gỡ bỏ `.gemini` khỏi Git & Khởi tạo Khung Giao diện Flutter Đa Nền tảng (Catppuccin Mocha)
 
 ### 1. Dọn dẹp Kho Lưu trữ Git & GitHub:

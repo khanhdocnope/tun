@@ -115,20 +115,21 @@ class ComixSource(BaseMangaSource):
                 )
 
                 if is_waf_blocked:
-                    if attempt <= self.max_waf_retries:
+                    if attempt <= 1:
                         logger.warning(
                             f"[Comix] Bị chặn bởi WAF (HTTP {resp.status_code}) tại {url}. "
-                            f"Đang kích hoạt bypass_comix_waf() (lần {attempt}/{self.max_waf_retries})..."
+                            f"Đang kích hoạt bypass_comix_waf() (lần {attempt})..."
                         )
-                        success = await bypass_comix_waf()
+                        success = await bypass_comix_waf(headless_timeout=6.0, headed_timeout=12.0)
                         if success:
                             self._reload_cookies()
-                            await asyncio.sleep(1.0)
+                            await asyncio.sleep(0.5)
                             continue
                         else:
-                            logger.error("[Comix] Không thể vượt qua WAF challenge.")
+                            logger.warning("[Comix] Không thể vượt qua WAF challenge trong thời gian cho phép.")
+                            break
                     else:
-                        resp.raise_for_status()
+                        break
 
                 if resp.status_code == 200:
                     return resp

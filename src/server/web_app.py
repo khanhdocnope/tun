@@ -563,29 +563,45 @@ WEB_APP_HTML = """<!DOCTYPE html>
         async function executeSearch() {
             const query = document.getElementById('search-input').value.trim();
             const grid = document.getElementById('manga-grid');
-            grid.innerHTML = '<p style="color:var(--lavender);">Đang kết nối tới ' + currentSource + '...</p>';
+            
+            const loadingText = currentSource === 'comix' 
+                ? 'Đang kết nối tới Comix.to (Đang vượt bảo vệ Cloudflare Turnstile, vui lòng đợi vài giây)...'
+                : 'Đang kết nối tới ' + currentSource + '...';
+            grid.innerHTML = '<p style="color:var(--lavender); display:flex; align-items:center; gap:8px;">⏳ ' + loadingText + '</p>';
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
 
             try {
-                const res = await fetch(`/api/search?source=${currentSource}&q=${encodeURIComponent(query)}`);
+                const res = await fetch(`/api/search?source=${currentSource}&q=${encodeURIComponent(query)}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
                 const data = await res.json();
                 const items = Array.isArray(data) ? data : (data.results || []);
                 
                 if (!items || items.length === 0) {
-                    grid.innerHTML = '<p style="color:var(--subtext0);">Không tìm thấy kết quả nào.</p>';
+                    grid.innerHTML = '<p style="color:var(--subtext0);">Không tìm thấy kết quả nào cho "' + query + '" trên nguồn này.</p>';
                     return;
                 }
 
-                grid.innerHTML = items.map(it => `
+                grid.innerHTML = items.map(it => {
+                    const proxyCover = it.cover_url ? ('/api/proxy/image?url=' + encodeURIComponent(it.cover_url)) : '/api/proxy/image?url=';
+                    return `
                     <div class="manga-card" onclick="openMangaDetail('${currentSource}', '${it.id}', '${encodeURIComponent(it.title)}')">
-                        <img class="card-cover" src="${it.cover_url || ''}" alt="${it.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/200x280?text=No+Cover'">
+                        <img class="card-cover" src="${proxyCover}" alt="${it.title}" loading="lazy" onerror="this.src='/api/proxy/image?url='">
                         <div class="card-info">
                             <div class="card-title">${it.title}</div>
                             <div class="card-latest">${it.latest_chapter ? 'Ch. ' + it.latest_chapter : 'Chi tiết'}</div>
                         </div>
                     </div>
-                `).join('');
+                `}).join('');
             } catch (err) {
-                grid.innerHTML = '<p style="color:var(--red);">Lỗi kết nối máy chủ: ' + err + '</p>';
+                if (err.name === 'AbortError') {
+                    grid.innerHTML = '<p style="color:var(--red);">⚠️ Kết nối tới ' + currentSource + ' quá thời gian chờ (Timeout). Vui lòng thử lại hoặc chọn nguồn khác.</p>';
+                } else {
+                    grid.innerHTML = '<p style="color:var(--red);">⚠️ Lỗi kết nối máy chủ: ' + err + '</p>';
+                }
             }
         }
 
@@ -595,6 +611,7 @@ WEB_APP_HTML = """<!DOCTYPE html>
             modal.style.display = 'flex';
             document.getElementById('modal-title').innerText = decodeURIComponent(title);
             document.getElementById('modal-chapters').innerHTML = '<li>Đang nạp danh sách chương...</li>';
+            document.getElementById('modal-cover').src = '/api/proxy/image?url=';
 
             try {
                 const res = await fetch(`/api/manga/${source}/${encodeURIComponent(mangaId)}`);
@@ -602,11 +619,15 @@ WEB_APP_HTML = """<!DOCTYPE html>
                 
                 document.getElementById('modal-title').innerText = info.title;
                 document.getElementById('modal-author').innerText = info.authors ? info.authors.join(', ') : 'Chưa rõ';
-                if (info.cover_url) document.getElementById('modal-cover').src = info.cover_url;
+                if (info.cover_url) {
+                    document.getElementById('modal-cover').src = '/api/proxy/image?url=' + encodeURIComponent(info.cover_url);
+                } else {
+                    document.getElementById('modal-cover').src = '/api/proxy/image?url=';
+                }
                 
                 document.getElementById('modal-genres').innerHTML = (info.genres || []).map(g => `<span class="genre-tag">${g}</span>`).join('');
                 
-                document.getElementById('modal-chapters').innerHTML = info.chapters.map(ch => `
+                document.getElementById('modal-chapters').innerHTML = (info.chapters || []).map(ch => `
                     <li class="chapter-item">
                         <span>Chương ${ch.chapter_number} ${ch.title ? ' - ' + ch.title : ''}</span>
                         <button class="btn-primary" style="padding:4px 10px; font-size:11px;" onclick="downloadSingleChapter('${ch.id}')">Tải</button>
@@ -691,24 +712,31 @@ WEB_APP_HTML = """<!DOCTYPE html>
 
             if (tasks.length === 0) return;
             
-            container.innerHTML = tasks.reverse().map(t => `
+            container.innerHTML = tasks.reverse().map(t => {
+                const isFailed = t.status === 'failed';
+                const isCompleted = t.status === 'completed';
+                const fillColor = isCompleted ? 'var(--teal)' : (isFailed ? 'var(--red)' : 'var(--lavender)');
+                const errMsg = (t.errors && t.errors[0]) || (t.results && t.results[0] && t.results[0].error) || '';
+                
+                return `
                 <div class="task-card">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong>${t.source?.toUpperCase() || ''} • ${t.manga_id} (${t.format?.toUpperCase() || ''})</strong>
-                        <span style="font-size:12px; color:${t.status==='completed'?'var(--teal)':(t.status==='failed'?'var(--red)':'var(--lavender)')}; font-weight:700;">
+                        <strong>${t.source?.toUpperCase() || ''} • ${t.manga_title || t.manga_id} (${t.format?.toUpperCase() || ''})</strong>
+                        <span style="font-size:12px; color:${fillColor}; font-weight:700;">
                             ${t.status.toUpperCase()}
                         </span>
                     </div>
                     <div class="progress-bar">
-                        <div class="progress-fill" style="width:${t.progress?.percent || 0}%"></div>
+                        <div class="progress-fill" style="width:${t.progress?.percent || 0}%; background:${fillColor};"></div>
                     </div>
                     <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--subtext0);">
                         <span>Chương: ${t.progress?.completed_chapters || 0}/${t.progress?.total_chapters || 0}</span>
                         <span>Trang: ${t.progress?.completed_pages || 0}/${t.progress?.total_pages || 0}</span>
                         <span>${(t.progress?.percent || 0).toFixed(1)}%</span>
                     </div>
+                    ${isFailed && errMsg ? `<div style="font-size:11px; color:var(--red); margin-top:2px;">⚠️ ${errMsg}</div>` : ''}
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Tự động tìm kiếm mẫu khi mở trang

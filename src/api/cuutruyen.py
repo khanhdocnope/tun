@@ -25,6 +25,27 @@ MANGA_URL_PATTERN = re.compile(r"/mangas/(\d+)")
 CHAPTER_URL_PATTERN = re.compile(r"/chapters/(\d+)")
 
 
+def normalize_cuutruyen_cdn(url: Optional[str]) -> Optional[str]:
+    """
+    Chuẩn hóa URL ảnh tĩnh từ Cứu Truyện.
+    Chuyển đổi domain chết storage-ct.lrclib.net hoặc storage-ct-riften.site sang CDN hoạt động
+    https://storage-bravo.cuutruyen.net theo cơ chế chính thức của Cuutruyen Web App.
+    """
+    if not url or not isinstance(url, str):
+        return url
+    url = re.sub(
+        r"^(?:https?:)?//storage-ct\.lrclib\.net(?=/|$)",
+        "https://storage-bravo.cuutruyen.net",
+        url,
+    )
+    url = re.sub(
+        r"^(?:https?:)?//storage-ct-riften\.site(?=/|$)",
+        "https://storage-charlie.cuutruyen.net",
+        url,
+    )
+    return url
+
+
 class CuutruyenSource(BaseMangaSource):
     """
     Manga Source cho cuutruyen.net.
@@ -170,7 +191,9 @@ class CuutruyenSource(BaseMangaSource):
         for item in data:
             manga_id = str(item.get("id"))
             title = item.get("name") or f"Manga #{manga_id}"
-            cover_url = item.get("cover_url") or item.get("cover_mobile_url")
+            cover_url = normalize_cuutruyen_cdn(
+                item.get("cover_url") or item.get("cover_mobile_url")
+            )
             newest_ch = item.get("newest_chapter_number")
             author_name = item.get("author_name")
             authors = [author_name] if author_name else []
@@ -201,7 +224,9 @@ class CuutruyenSource(BaseMangaSource):
         data = resp.json().get("data", {})
 
         title = data.get("name") or f"Manga #{manga_id}"
-        cover_url = data.get("cover_url") or data.get("cover_mobile_url")
+        cover_url = normalize_cuutruyen_cdn(
+            data.get("cover_url") or data.get("cover_mobile_url")
+        )
         description = data.get("full_description") or data.get("description")
 
         # Tác giả
@@ -286,7 +311,12 @@ class CuutruyenSource(BaseMangaSource):
         for p in pages_sorted:
             url = p.get("image_url") or p.get("src")
             if url:
-                image_urls.append(url)
+                norm_url = normalize_cuutruyen_cdn(url)
+                drm_data = p.get("drm_data")
+                if drm_data:
+                    clean_drm = str(drm_data).replace("\n", "").replace("\r", "").strip()
+                    norm_url = f"{norm_url}#drm={clean_drm}"
+                image_urls.append(norm_url)
 
         if not image_urls:
             logger.warning(f"[Cuutruyen] Không tìm thấy ảnh nào trong chapter {chapter_id}")

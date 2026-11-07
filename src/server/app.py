@@ -6,8 +6,10 @@ cho các Frontend client (Flutter Mobile, Desktop GUI, Web).
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import logging
 from pathlib import Path
+import re
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -15,7 +17,8 @@ import uuid
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
+import httpx
 from pydantic import BaseModel, Field
 
 from src.server.web_app import WEB_APP_HTML
@@ -614,3 +617,96 @@ async def get_download_task_status(task_id: str) -> DownloadTaskStatusResponse:
         created_at=task["created_at"],
         updated_at=task["updated_at"],
     )
+
+
+# ==========================================
+# IMAGE PROXY & CACHE (CATPPUCCIN THEMED)
+# ==========================================
+
+NO_COVER_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="200" height="280" viewBox="0 0 200 280">
+  <rect width="200" height="280" fill="#181825" rx="10"/>
+  <rect x="2" y="2" width="196" height="276" fill="none" stroke="#313244" stroke-width="2" rx="8"/>
+  <path d="M70 120 L100 85 L130 120" stroke="#45475A" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="85" cy="90" r="7" fill="#45475A"/>
+  <text x="100" y="160" text-anchor="middle" fill="#A6ADC8" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="13" font-weight="600">No Cover</text>
+</svg>"""
+
+IMAGE_CACHE_DIR = Path("temp/image_cache")
+IMAGE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@app.get("/api/proxy/image", tags=["Media"])
+async def proxy_image(url: str = Query(..., description="URL ảnh cần proxy")):
+    """
+    Image Proxy trung gian tích hợp Smart DNS và Caching đĩa.
+    Giúp Frontend client vượt qua lỗi chặn mạng ISP (như uploads.mangadex.org)
+    và khắc phục vấn đề CORS / Hotlink Referer.
+    """
+    if not url:
+        return Response(content=NO_COVER_SVG, media_type="image/svg+xml")
+
+    # Normalize cuutruyen CDN nếu URL chứa domain cũ
+    clean_url = url.strip()
+    clean_url = re.sub(
+        r"^(?:https?:)?//storage-ct\.lrclib\.net(?=/|$)",
+        "https://storage-bravo.cuutruyen.net",
+        clean_url,
+    )
+    clean_url = re.sub(
+        r"^(?:https?:)?//storage-ct-riften\.site(?=/|$)",
+        "https://storage-charlie.cuutruyen.net",
+        clean_url,
+    )
+
+    cache_hash = hashlib.md5(clean_url.encode("utf-8")).hexdigest()
+    cache_meta = IMAGE_CACHE_DIR / f"{cache_hash}.meta"
+    cache_body = IMAGE_CACHE_DIR / f"{cache_hash}.bin"
+
+    if cache_body.exists() and cache_meta.exists():
+        try:
+            content_type = cache_meta.read_text("utf-8").strip() or "image/jpeg"
+            return Response(
+                content=cache_body.read_bytes(),
+                media_type=content_type,
+                headers={"Cache-Control": "public, max-age=604800"},
+            )
+        except Exception:
+            pass
+
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
+    if "cuutruyen.net" in clean_url:
+        headers["Referer"] = "https://cuutruyen.net/"
+    elif "mangadex.org" in clean_url:
+        headers["Referer"] = "https://mangadex.org/"
+    elif "comix.to" in clean_url:
+        headers["Referer"] = "https://comix.to/"
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(clean_url, headers=headers)
+            if resp.status_code == 200 and resp.content:
+                ct = resp.headers.get("Content-Type", "image/jpeg")
+                if "html" in ct.lower():
+                    return Response(content=NO_COVER_SVG, media_type="image/svg+xml")
+
+                try:
+                    cache_body.write_bytes(resp.content)
+                    cache_meta.write_text(ct, "utf-8")
+                except Exception:
+                    pass
+
+                return Response(
+                    content=resp.content,
+                    media_type=ct,
+                    headers={"Cache-Control": "public, max-age=604800"},
+                )
+    except Exception as e:
+        logger.warning(f"Lỗi fetch image proxy cho '{clean_url}': {e}")
+
+    return Response(content=NO_COVER_SVG, media_type="image/svg+xml")
