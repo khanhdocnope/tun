@@ -17,5 +17,10 @@ ENV/
 temp_app.py
 *.tmp
 
+# IDE & AI Assistant metadata
+.gemini/
+.idea/
+.vscode/
+
 # Test output images (optional, comment out if wanting to track)
 # image-test/*_cleaned.webp
