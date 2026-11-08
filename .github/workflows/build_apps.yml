@@ -19,12 +19,19 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build & Package Windows x64
+    name: Build & Package Windows x64 (Native Rust + Flutter)
     runs-on: windows-latest
 
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
+
+      - name: Setup Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compile Rust Core Engine (Release)
+        working-directory: rust_core
+        run: cargo build --release
 
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
@@ -47,27 +54,39 @@ jobs:
         working-directory: ui_app
         run: flutter build windows --release
 
-      - name: Add Release Instructions
+      - name: Bundle Rust Core with Windows App
         shell: pwsh
         run: |
+          $releaseDir = "ui_app/build/windows/x64/runner/Release"
+          Copy-Item "rust_core/target/release/moeject-core.exe" -Destination "$releaseDir/moeject-core.exe" -Force
+          
+          $launcher = @"
+          @echo off
+          echo Starting MoeJect High-Performance Rust Engine...
+          start "" "%~dp0moeject-core.exe" serve
+          timeout /t 1 /nobreak >nul
+          echo Starting MoeJect UI App...
+          start "" "%~dp0moeject_app.exe"
+          "@
+          $launcher | Out-File -FilePath "$releaseDir/Start-MoeJect.bat" -Encoding ascii
+
           $readme = @"
           ==================================================
           MoeJect - Modern Manga Reader & Downloader (v1.0.0)
+          Native Rust Engine + Flutter Catppuccin UI
           ==================================================
 
-          [Huong Dan Su Dung]:
-          1. Khoi chay ung dung: MoeJect.exe (hoac moeject_app.exe).
-          2. Server Backend (Python FastAPI):
-             - Mac dinh ung dung ket noi toi http://127.0.0.1:8000
-             - Khoi chay server Python tren PC:
-                 python -m src.server.app
-             - Hoac tuy chinh IP / Port may chu tu xa trong man hinh Settings (Bieu tuong banh rang).
+          [Huong Dan Khoi Chay 1-Click]:
+          1. Nhap dup chuot vao file 'Start-MoeJect.bat'.
+             -> Tu dong khoi chay Core Rust Engine sieu toc (Axum)
+             -> Tu dong mo giao dien Flutter tuy dep.
+          2. Khong can cai dat Python hay bat ky moi truong nao!
           3. Tinh nang:
-             - Da nguon truyen: MangaDex, Comick, Hitomi.la...
-             - Tim kiem & Cap nhat moi nhat tu dong khi de trong.
-             - Tai ve tuy chon dinh dang ZIP hoac CBZ tien loi.
+             - Nguon da dang: MangaDex, Comick, Hitomi.la, CuuTruyen...
+             - Tim kiem, cap nhat truyen moi nhat tu dong.
+             - Tai ve ZIP (Raw) va CBZ (ComicInfo.xml) toc do toi da.
           "@
-          $readme | Out-File -FilePath "ui_app/build/windows/x64/runner/Release/README.txt" -Encoding utf8
+          $readme | Out-File -FilePath "$releaseDir/README.txt" -Encoding utf8
 
       - name: Compress Release Artifact
         shell: pwsh
