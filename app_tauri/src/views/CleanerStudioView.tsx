@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wand2, Upload, Loader2, Sparkles, Download, CheckCircle2, Sliders } from 'lucide-react';
+import { Wand2, Upload, Loader2, Sparkles, Download, CheckCircle2, Sliders, Image as ImageIcon } from 'lucide-react';
 import { CleanResponse } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -9,6 +9,9 @@ export const CleanerStudioView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [timeTaken, setTimeTaken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Mobile active preview tab
+  const [mobileTab, setMobileTab] = useState<'original' | 'cleaned'>('original');
 
   // Filter params
   const [detector, setDetector] = useState('default');
@@ -26,6 +29,7 @@ export const CleanerStudioView: React.FC = () => {
       setCleanedImage(null);
       setTimeTaken(null);
       setError(null);
+      setMobileTab('original');
     };
     reader.readAsDataURL(file);
   };
@@ -48,9 +52,10 @@ export const CleanerStudioView: React.FC = () => {
       });
 
       setCleanedImage(res.cleaned_image_base64);
-      setTimeTaken(res.time_taken || null);
+      setTimeTaken(res.time_taken);
+      setMobileTab('cleaned');
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err.message || 'Lỗi khi gọi Hugging Face Space AI');
+      setError(typeof err === 'string' ? err : err.message || 'Lỗi xử lý ảnh với AI Space');
     } finally {
       setLoading(false);
     }
@@ -58,186 +63,190 @@ export const CleanerStudioView: React.FC = () => {
 
   const handleDownloadResult = () => {
     if (!cleanedImage) return;
-    const link = document.createElement('a');
-    link.href = `data:image/webp;base64,${cleanedImage}`;
-    link.download = `cleaned_${Date.now()}.webp`;
-    link.click();
+    const a = document.createElement('a');
+    a.href = `data:image/png;base64,${cleanedImage}`;
+    a.download = `moeject_cleaned_${Date.now()}.png`;
+    a.click();
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e2e] overflow-y-auto p-8">
-      {/* Header */}
-      <div className="max-w-5xl mx-auto w-full mb-6">
-        <h1 className="text-xl font-bold text-[#cdd6f4] flex items-center gap-2">
-          <Wand2 size={24} className="text-[#cba6f7]" />
-          <span>AI Manga Cleaner Studio</span>
-        </h1>
-        <p className="text-xs text-[#a6adc8] mt-1">
-          Tẩy xóa chữ thoại & khôi phục nền tranh chuẩn Studio bằng mô hình LaMa Inpainting trên Hugging Face Space
-        </p>
-      </div>
-
-      <div className="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Config Panel */}
-        <div className="flex flex-col gap-5 bg-[#181825] p-5 rounded-2xl border border-[#313244]/60 h-fit">
-          <h2 className="text-sm font-bold text-[#cdd6f4] flex items-center gap-2">
-            <Sliders size={16} className="text-[#b4befe]" />
-            <span>Cấu hình AI Inpainting</span>
-          </h2>
-
-          {/* Upload Area */}
+    <div className="flex-1 flex flex-col h-full bg-[#1e1e2e] overflow-y-auto select-none p-3 sm:p-6">
+      <div className="max-w-6xl mx-auto w-full space-y-4 sm:space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#313244] pb-4">
           <div>
-            <label className="text-xs text-[#a6adc8] font-semibold mb-2 block">
-              1. Chọn ảnh trang truyện
-            </label>
-            <label className="border-2 border-dashed border-[#313244] hover:border-[#b4befe] rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors bg-[#11111b]/40">
-              <Upload size={28} className="text-[#b4befe] mb-2" />
-              <span className="text-xs font-semibold text-[#cdd6f4]">Bấm để chọn file ảnh</span>
-              <span className="text-[10px] text-[#6c7086] mt-1">PNG, JPG, WebP</span>
-              <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-            </label>
+            <h1 className="text-lg sm:text-2xl font-bold text-[#cdd6f4] flex items-center gap-2">
+              <Wand2 size={24} className="text-[#cba6f7]" />
+              <span>Manga AI Cleaner Studio</span>
+            </h1>
+            <p className="text-xs text-[#a6adc8] mt-0.5">
+              Tẩy xóa text bong bóng thoại và SFX tự động bằng mô hình AI Vision (Hugging Face Space)
+            </p>
+          </div>
+
+          {cleanedImage && (
+            <button
+              onClick={handleDownloadResult}
+              className="px-4 py-2 bg-[#a6e3a1] text-[#11111b] rounded-xl text-xs font-bold hover:bg-[#94e2d5] transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-md"
+            >
+              <Download size={15} />
+              <span>Tải ảnh kết quả</span>
+            </button>
+          )}
+        </div>
+
+        {/* Control Bar & Parameters */}
+        <div className="p-4 rounded-2xl bg-[#181825] border border-[#313244] shadow-md grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Detector */}
+          <div>
+            <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">Mô hình phát hiện chữ</label>
+            <select
+              value={detector}
+              onChange={(e) => setDetector(e.target.value)}
+              className="w-full h-10 px-3 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-medium border border-[#45475a] focus:border-[#cba6f7] focus:outline-none"
+            >
+              <option value="default">ComicTextDetector (Khuyên dùng)</option>
+              <option value="dbnet">DBNet Manga</option>
+            </select>
           </div>
 
           {/* Clean Mode */}
           <div>
-            <label className="text-xs text-[#a6adc8] font-semibold mb-2 block">
-              2. Chế độ xóa chữ
-            </label>
-            <div className="flex bg-[#313244] p-1 rounded-xl text-xs">
-              <button
-                onClick={() => setCleanMode('all')}
-                className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${
-                  cleanMode === 'all' ? 'bg-[#b4befe] text-[#11111b]' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
-                }`}
-              >
-                Xóa tất cả (Cả SFX)
-              </button>
-              <button
-                onClick={() => setCleanMode('bubble_only')}
-                className={`flex-1 py-1.5 rounded-lg font-semibold transition-colors ${
-                  cleanMode === 'bubble_only' ? 'bg-[#b4befe] text-[#11111b]' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
-                }`}
-              >
-                Chỉ bóng thoại
-              </button>
-            </div>
-          </div>
-
-          {/* Detector */}
-          <div>
-            <label className="text-xs text-[#a6adc8] font-semibold mb-2 block">
-              3. Bộ nhận diện chữ (Detector)
-            </label>
+            <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">Phạm vi làm sạch</label>
             <select
-              value={detector}
-              onChange={(e) => setDetector(e.target.value)}
-              className="w-full h-10 px-3 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs border border-transparent focus:border-[#b4befe] focus:outline-none"
+              value={cleanMode}
+              onChange={(e) => setCleanMode(e.target.value)}
+              className="w-full h-10 px-3 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-medium border border-[#45475a] focus:border-[#cba6f7] focus:outline-none"
             >
-              <option value="default">DBNet (Quét sạch cả trong & ngoài bóng thoại)</option>
-              <option value="ctd">ComicTextDetector (Chuyên dụng Manga)</option>
+              <option value="all">Toàn bộ (Text thoại + SFX)</option>
+              <option value="text_only">Chỉ xóa Text thoại</option>
+              <option value="sfx_only">Chỉ xóa hiệu ứng SFX</option>
             </select>
           </div>
 
-          {/* Dilation */}
+          {/* Dilation Offset */}
           <div>
-            <div className="flex justify-between text-xs text-[#a6adc8] mb-1">
-              <span>Độ bù viền nét chữ (Dilation):</span>
-              <span className="font-bold text-[#b4befe]">{dilation}px</span>
+            <div className="flex justify-between items-center mb-1.5 text-xs text-[#a6adc8]">
+              <span className="font-medium">Độ lan viền (Dilation):</span>
+              <span className="font-mono font-bold text-[#b4befe]">{dilation}px</span>
             </div>
             <input
               type="range"
               min={0}
-              max={8}
+              max={10}
               value={dilation}
-              onChange={(e) => setDilation(parseInt(e.target.value))}
-              className="w-full accent-[#b4befe]"
+              onChange={(e) => setDilation(Number(e.target.value))}
+              className="w-full accent-[#cba6f7] cursor-pointer h-1.5 bg-[#313244] rounded-lg mt-2"
             />
-            <p className="text-[10px] text-[#6c7086] mt-1">
-              Dilation 2px giúp nuốt trọn bóng mờ và nét viền chữ mà không lem nét vẽ.
-            </p>
           </div>
-
-          {/* Clean Action Button */}
-          <button
-            onClick={handleClean}
-            disabled={!originalImage || loading}
-            className="w-full py-3 bg-gradient-to-r from-[#cba6f7] to-[#b4befe] text-[#11111b] rounded-xl text-sm font-bold hover:opacity-95 transition-all shadow-md shadow-[#cba6f7]/20 flex items-center justify-center gap-2 disabled:opacity-40"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
-            <span>{loading ? 'Đang tẩy xóa AI...' : 'Bắt đầu làm sạch ảnh'}</span>
-          </button>
-
-          {timeTaken && (
-            <p className="text-xs text-[#a6e3a1] text-center font-semibold">
-              ✓ Hoàn tất xử lý trong {timeTaken}
-            </p>
-          )}
-
-          {error && (
-            <p className="text-xs text-[#f38ba8] bg-[#f38ba8]/10 p-2.5 rounded-xl border border-[#f38ba8]/20">
-              {error}
-            </p>
-          )}
         </div>
 
-        {/* Right Column: Comparison Preview */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#cdd6f4]">Xem trước so sánh</h2>
-            {cleanedImage && (
-              <button
-                onClick={handleDownloadResult}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#a6e3a1] text-[#11111b] rounded-xl text-xs font-bold hover:bg-[#94e2d5] transition-colors"
-              >
-                <Download size={14} />
-                <span>Lưu ảnh sạch</span>
-              </button>
+        {error && (
+          <div className="p-4 rounded-xl bg-[#f38ba8]/10 border border-[#f38ba8]/30 text-[#f38ba8] text-xs">
+            {error}
+          </div>
+        )}
+
+        {/* Mobile View Toggle Pills */}
+        <div className="flex sm:hidden bg-[#181825] p-1 rounded-xl text-xs font-semibold border border-[#313244]">
+          <button
+            onClick={() => setMobileTab('original')}
+            className={`flex-1 py-1.5 rounded-lg transition-all ${
+              mobileTab === 'original' ? 'bg-[#b4befe] text-[#11111b] font-bold' : 'text-[#a6adc8]'
+            }`}
+          >
+            Ảnh gốc (Trước)
+          </button>
+          <button
+            onClick={() => setMobileTab('cleaned')}
+            disabled={!cleanedImage}
+            className={`flex-1 py-1.5 rounded-lg transition-all ${
+              mobileTab === 'cleaned' ? 'bg-[#a6e3a1] text-[#11111b] font-bold' : 'text-[#a6adc8] disabled:opacity-40'
+            }`}
+          >
+            Đã làm sạch (Sau)
+          </button>
+        </div>
+
+        {/* Image Workspace Area */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Before Box */}
+          <div
+            className={`rounded-2xl border border-[#313244] bg-[#181825] p-4 flex flex-col items-center justify-center min-h-[360px] relative overflow-hidden ${
+              mobileTab === 'original' ? 'block' : 'hidden sm:flex'
+            }`}
+          >
+            <span className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#313244] text-[#a6adc8] z-10">
+              ẢNH GỐC
+            </span>
+
+            {originalImage ? (
+              <img
+                src={`data:image/png;base64,${originalImage}`}
+                alt="Original"
+                className="max-h-[500px] w-auto object-contain rounded-xl shadow-lg"
+              />
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-3 cursor-pointer p-8 text-center text-[#6c7086] hover:text-[#cdd6f4] transition-colors">
+                <Upload size={48} className="text-[#a6adc8]" />
+                <span className="text-sm font-semibold">Tải ảnh trang truyện lên</span>
+                <span className="text-xs text-[#6c7086]">Hỗ trợ PNG, JPEG, WebP</span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
-            {/* Original Box */}
-            <div className="flex flex-col rounded-2xl bg-[#181825] border border-[#313244]/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-[#313244] text-xs font-semibold text-[#a6adc8] bg-[#11111b]/40">
-                Ảnh gốc
-              </div>
-              <div className="flex-1 flex items-center justify-center p-4 min-h-[360px] bg-[#11111b]">
-                {originalImage ? (
-                  <img
-                    src={`data:image/webp;base64,${originalImage}`}
-                    alt="Original"
-                    className="max-h-[500px] w-auto object-contain rounded-lg shadow-lg"
-                  />
-                ) : (
-                  <span className="text-xs text-[#6c7086]">Chưa chọn ảnh</span>
-                )}
-              </div>
-            </div>
+          {/* After Box */}
+          <div
+            className={`rounded-2xl border border-[#313244] bg-[#181825] p-4 flex flex-col items-center justify-center min-h-[360px] relative overflow-hidden ${
+              mobileTab === 'cleaned' ? 'block' : 'hidden sm:flex'
+            }`}
+          >
+            <span className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#a6e3a1]/20 text-[#a6e3a1] z-10 border border-[#a6e3a1]/30">
+              ĐÃ LÀM SẠCH (AI)
+            </span>
 
-            {/* Cleaned Box */}
-            <div className="flex flex-col rounded-2xl bg-[#181825] border border-[#313244]/60 overflow-hidden">
-              <div className="px-4 py-2 border-b border-[#313244] text-xs font-semibold text-[#a6adc8] bg-[#11111b]/40 flex justify-between items-center">
-                <span>Ảnh đã làm sạch AI</span>
-                {cleanedImage && <span className="text-[#a6e3a1] text-[10px] font-bold">HOÀN TẤT</span>}
+            {loading ? (
+              <div className="flex flex-col items-center gap-3 text-[#a6adc8]">
+                <Loader2 size={42} className="animate-spin text-[#cba6f7]" />
+                <p className="text-xs font-medium">AI Vision đang phát hiện và tẩy xóa chữ...</p>
               </div>
-              <div className="flex-1 flex items-center justify-center p-4 min-h-[360px] bg-[#11111b]">
-                {cleanedImage ? (
-                  <img
-                    src={`data:image/webp;base64,${cleanedImage}`}
-                    alt="Cleaned"
-                    className="max-h-[500px] w-auto object-contain rounded-lg shadow-lg"
-                  />
-                ) : loading ? (
-                  <div className="flex flex-col items-center gap-2 text-[#a6adc8]">
-                    <Loader2 size={32} className="animate-spin text-[#cba6f7]" />
-                    <span className="text-xs">Đang phục hồi nét vẽ...</span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-[#6c7086]">Kết quả sẽ hiển thị ở đây</span>
-                )}
+            ) : cleanedImage ? (
+              <img
+                src={`data:image/png;base64,${cleanedImage}`}
+                alt="Cleaned"
+                className="max-h-[500px] w-auto object-contain rounded-xl shadow-lg"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-center text-[#6c7086] p-6">
+                <Sparkles size={40} className="opacity-40" />
+                <p className="text-xs">Kết quả sau khi AI xử lý sẽ hiển thị tại đây</p>
               </div>
-            </div>
+            )}
+
+            {timeTaken && (
+              <span className="absolute bottom-3 right-3 text-[10px] font-mono text-[#a6adc8] bg-[#11111b]/80 px-2 py-0.5 rounded">
+                Thời gian xử lý: {timeTaken}
+              </span>
+            )}
           </div>
+        </div>
+
+        {/* Action Button */}
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={handleClean}
+            disabled={!originalImage || loading}
+            className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-[#cba6f7] to-[#b4befe] text-[#11111b] rounded-2xl text-sm font-bold shadow-xl shadow-[#cba6f7]/20 hover:opacity-95 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
+            <span>Tẩy xóa Text với AI Space</span>
+          </button>
         </div>
       </div>
     </div>

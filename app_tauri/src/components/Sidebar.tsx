@@ -19,16 +19,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, downlo
   ];
 
   return (
-    <aside className="w-64 bg-[#181825] border-r border-[#313244] flex flex-col justify-between select-none">
+    <aside className="hidden md:flex w-64 bg-[#181825] border-r border-[#313244] flex-col justify-between select-none shrink-0 h-full">
       <div>
-        {/* Brand Header */}
-        <div className="p-5 flex items-center gap-3 border-b border-[#313244]/60">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#cba6f7] to-[#b4befe] flex items-center justify-center shadow-lg shadow-[#cba6f7]/20">
+        {/* Brand Header & Window Drag Area */}
+        <div
+          data-tauri-drag-region
+          className="p-5 flex items-center gap-3 border-b border-[#313244]/60 cursor-default"
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#cba6f7] to-[#b4befe] flex items-center justify-center shadow-lg shadow-[#cba6f7]/20 shrink-0">
             <span className="font-extrabold text-[#11111b] text-xl">M</span>
           </div>
-          <div>
-            <h1 className="font-bold text-base text-[#cdd6f4] tracking-wide">MoeJect</h1>
-            <p className="text-[11px] text-[#a6adc8]">Omni Manga Ecosystem</p>
+          <div className="overflow-hidden">
+            <h1 className="font-bold text-base text-[#cdd6f4] tracking-wide truncate">MoeJect</h1>
+            <p className="text-[11px] text-[#a6adc8] truncate">Omni Manga Ecosystem</p>
           </div>
         </div>
 
@@ -41,9 +44,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, downlo
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                   isActive
-                    ? 'bg-[#313244] text-[#b4befe] shadow-sm'
+                    ? 'bg-[#313244] text-[#b4befe] shadow-sm font-semibold'
                     : 'text-[#a6adc8] hover:bg-[#313244]/50 hover:text-[#cdd6f4]'
                 }`}
               >
@@ -52,7 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, downlo
                   <span>{item.label}</span>
                 </div>
                 {item.badge !== undefined && item.badge > 0 && (
-                  <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#cba6f7] text-[#11111b]">
+                  <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[#cba6f7] text-[#11111b] shadow-sm">
                     {item.badge}
                   </span>
                 )}
@@ -63,10 +66,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, downlo
       </div>
 
       {/* Footer Info */}
-      <div className="p-4 border-t border-[#313244]/60">
-        <div className="px-3 py-2 rounded-xl bg-[#11111b]/50 text-xs text-[#a6adc8] flex items-center justify-between">
-          <span>Tauri v2 Native</span>
-          <span className="text-[#a6e3a1] font-semibold">Ready</span>
+      <div className="p-4 border-t border-[#313244]/60 bg-[#11111b]/30">
+        <div className="flex items-center justify-between text-xs text-[#6c7086]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#a6e3a1] animate-pulse"></span>
+            <span>Tauri v2 Native</span>
+          </span>
+          <span className="font-mono text-[10px] text-[#a6adc8]">v1.0.0</span>
         </div>
       </div>
     </aside>

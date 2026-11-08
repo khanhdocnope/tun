@@ -20,12 +20,15 @@
   --cat-peach: #fab387;
   --cat-teal: #94e2d5;
   --cat-blue: #89b4fa;
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sat: env(safe-area-inset-top, 0px);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -35,6 +38,7 @@ body {
   user-select: none;
   overflow: hidden;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
 }
 
@@ -55,4 +59,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--cat-lavender);
+}
+
+/* Hide scrollbar for clean chip/badge slider */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
