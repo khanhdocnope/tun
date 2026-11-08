@@ -27,7 +27,10 @@
   - Trích xuất ảnh trực tiếp từ bộ nhớ nén CBZ phục vụ đọc truyện ngay trong ứng dụng mà không cần giải nén.
 
 ### 3. Giao diện Người dùng Đa năng (React + Tailwind v4):
-- **Màn hình Khám phá (Browse):** Tìm kiếm và duyệt truyện từ 6 nguồn tích hợp.
+- **Tối ưu hóa Build & Trải nghiệm:**
+  - Sửa lỗi import `index.css` trong `src/main.tsx` giúp nhận diện trọn vẹn phong cách Catppuccin Mocha Dark và Tailwind CSS v4.
+  - Cập nhật quy trình GitHub Actions CI/CD (`.github/workflows/build_apps.yml`): Tự động biên dịch Windows x64 trên GitHub Runners với Rust Cache và xuất file cài đặt (.exe/.msi) qua Artifacts.
+
 - **Màn hình Chi tiết (Manga Detail):** Xem thông tin tác giả, thể loại, mô tả, danh sách chương, hỗ trợ tải lẻ hoặc tải toàn bộ dạng CBZ/ZIP.
 - **Hàng đợi Tải về (Downloads):** Thanh tiến trình phần trăm (%), số trang tải/tổng số trang cập nhật thời gian thực qua Tauri Event `download-progress`.
 - **Kệ truyện Cá nhân (Library):** Hiển thị các tập truyện đã tải kèm ảnh bìa thumbnail, số trang và định dạng.
