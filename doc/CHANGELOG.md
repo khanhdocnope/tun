@@ -1,5 +1,26 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-08] - Phát triển 100% Native Rust GUI Đa Năng (eframe / egui)
+
+### 1. Tích hợp Giao diện Đồ họa Thuần Rust GPU-Accelerated (`rust_core/src/gui/`):
+- **Kiến trúc 100% Native Rust:**
+  - Ứng dụng GUI viết hoàn toàn bằng Rust sử dụng `eframe` (v0.37) và `wgpu` (DirectX 12 / Vulkan trên Windows).
+  - Không dùng WebView2, không Electron, không bất kỳ runtime ngoài nào. File nhị phân hợp nhất `moeject.exe` chỉ nặng **~24.3 MB**, RAM hoạt động cực thấp (~25–35MB RAM), hiển thị 60/144 FPS mượt mà.
+- **Phong cách Thiết kế Catppuccin Mocha Dark:**
+  - Tông màu đồng bộ toàn diện: Base (`#1e1e2e`), Crust (`#11111b`), Mantle (`#181825`), Surface (`#313244`), Lavender (`#b4befe`), Mauve (`#cba6f7`), Green (`#a6e3a1`).
+- **Các màn hình tính năng hoàn chỉnh:**
+  - **Khám phá (Browse View):** Duyệt và tìm kiếm truyện đa nguồn (MangaDex, Comick, Hitomi.la, Cứu Truyện), tải ảnh thumbnail bất đồng bộ qua `egui_extras`.
+  - **Chi tiết (Detail View):** Xem thông tin truyện, ảnh bìa lớn, lọc danh sách chương, tải lẻ từng chương (CBZ/ZIP) hoặc tải hàng loạt theo dải ("1-5", "all").
+  - **Hàng đợi Tải về (Downloads View):** Thanh tiến trình phần trăm (%) và số trang thực tế cập nhật thời gian thực qua kênh async Tokio `mpsc`, nút mở nhanh thư mục tải về trong Windows Explorer.
+  - **Thư viện truyện (Library Shelf):** Quản lý các tập truyện đã tải (CBZ / ZIP), mở trực tiếp bằng trình đọc comic mặc định của máy tính (`open::that`).
+  - **Tẩy thoại AI (Manga Cleaner):** Tích hợp Native File Picker (`rfd`) chọn trang truyện và gửi yêu cầu tẩy thoại tự động qua API Hugging Face Space GPU inpainting.
+  - **Cài đặt (Settings):** Cấu hình tùy chọn thư mục lưu trữ truyện và thông số kỹ thuật hệ thống.
+- **Cơ chế Nhị phân Hợp nhất (Unified Executable):**
+  - Nhấp đúp chuột vào `moeject.exe` -> Tự động khởi chạy Native Rust GUI.
+  - Chạy kèm tham số dòng lệnh (`moeject serve`, `moeject search`, `moeject download`, `moeject sources`) -> Hoạt động như CLI và Axum REST Server.
+
+---
+
 ## [2026-11-08] - Đại tu Toàn diện Core Engine sang Rust (Native Machine Code)
 
 ### 1. Hiện thực hóa 100% Core Scrapers, Downloader & REST API bằng Rust (`rust_core/`):
