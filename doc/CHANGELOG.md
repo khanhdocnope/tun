@@ -27,9 +27,12 @@
   - Trích xuất ảnh trực tiếp từ bộ nhớ nén CBZ phục vụ đọc truyện ngay trong ứng dụng mà không cần giải nén.
 
 ### 3. Giao diện Người dùng Đa năng (React + Tailwind v4):
-- **Tối ưu hóa Build & Trải nghiệm:**
-  - Sửa lỗi import `index.css` trong `src/main.tsx` giúp nhận diện trọn vẹn phong cách Catppuccin Mocha Dark và Tailwind CSS v4.
-  - Cập nhật quy trình GitHub Actions CI/CD (`.github/workflows/build_apps.yml`): Tự động biên dịch Windows x64 trên GitHub Runners với Rust Cache và xuất file cài đặt (.exe/.msi) qua Artifacts.
+- **Đại tu Toàn diện Giao diện Đa nền tảng (Responsive UI/UX):**
+  - **Tương thích Mobile & Windows:** Tích hợp `BottomNav` đáy màn hình cho mobile kết hợp `Sidebar` thanh lịch cho desktop.
+  - **Source Chips:** Vuốt ngang thanh chọn nguồn truyện (MangaDex, Comick.dev, Cứu Truyện, Hitomi,...) đổi nguồn tức thì 1 chạm.
+  - **Lưới hiển thị co giãn:** Co giãn từ 2 cột trên điện thoại đến 6 cột trên máy tính.
+  - **Trình đọc cảm ứng:** Chạm 25% mép màn hình lật trang, chạm giữa ẩn hiện thanh điều khiển, cuộn dọc Webtoon vô cực.
+  - **Khắc phục triệt để API:** Chuyển Comick sang `api.comick.dev`, Hitomi sang `gold-usergeneratedcontent.net`, Cứu Truyện sang endpoint `mangas/search` và nạp ảnh qua `referrerPolicy="no-referrer"`.
 
 - **Màn hình Chi tiết (Manga Detail):** Xem thông tin tác giả, thể loại, mô tả, danh sách chương, hỗ trợ tải lẻ hoặc tải toàn bộ dạng CBZ/ZIP.
 - **Hàng đợi Tải về (Downloads):** Thanh tiến trình phần trăm (%), số trang tải/tổng số trang cập nhật thời gian thực qua Tauri Event `download-progress`.
