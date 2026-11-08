@@ -1,5 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowLeft, Download, BookOpen, Loader2, Sparkles, CheckCircle2, ArrowUpDown, Search, Eye } from 'lucide-react';
+import {
+  ArrowLeft,
+  Download,
+  BookOpen,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  ArrowUpDown,
+  Search,
+  Eye,
+  Star,
+  Layers,
+  Share2,
+} from 'lucide-react';
 import { MangaItem, ChapterItem, DownloadTask } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -98,33 +111,41 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
     ? [...chapters].sort((a, b) => a.chapter_number - b.chapter_number)[0]
     : null;
 
+  const latestChapter = chapters.length > 0
+    ? [...chapters].sort((a, b) => b.chapter_number - a.chapter_number)[0]
+    : null;
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e2e] overflow-y-auto select-none">
-      {/* Top Floating App Bar */}
-      <div className="sticky top-0 z-30 flex items-center justify-between p-3 sm:p-4 bg-[#181825]/90 backdrop-blur-md border-b border-[#313244]">
+    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-y-auto select-none relative">
+      {/* Top Floating Glass Navigation Bar */}
+      <div className="sticky top-0 z-40 flex items-center justify-between p-3.5 sm:p-4 bg-[#0a0b14]/85 backdrop-blur-2xl border-b border-white/[0.08]">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#313244]/80 text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b] transition-all text-sm font-semibold active:scale-95 cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/[0.05] text-slate-300 hover:text-white hover:bg-white/[0.1] transition-all text-xs sm:text-sm font-semibold active:scale-95 cursor-pointer border border-white/[0.08]"
         >
           <ArrowLeft size={16} />
           <span>Quay lại</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          {/* Format Toggle Pill */}
-          <div className="flex bg-[#313244] p-1 rounded-xl text-xs font-semibold">
+        <div className="flex items-center gap-3">
+          {/* Format Toggle Pill (CBZ / ZIP) */}
+          <div className="flex bg-white/[0.04] p-1 rounded-2xl border border-white/[0.08] text-xs font-semibold">
             <button
               onClick={() => setFormat('cbz')}
-              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                format === 'cbz' ? 'bg-[#b4befe] text-[#11111b] shadow-sm font-bold' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
+              className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                format === 'cbz'
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30 font-bold'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               CBZ
             </button>
             <button
               onClick={() => setFormat('zip')}
-              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                format === 'zip' ? 'bg-[#b4befe] text-[#11111b] shadow-sm font-bold' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
+              className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                format === 'zip'
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-600/30 font-bold'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               ZIP
@@ -134,7 +155,7 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
           <button
             onClick={handleDownloadAll}
             disabled={loading || chapters.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#b4befe] text-[#11111b] rounded-xl text-xs font-bold hover:bg-[#cba6f7] transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-cyan-500 text-white rounded-2xl text-xs font-bold shadow-lg shadow-violet-600/25 hover:opacity-95 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
           >
             <Download size={14} />
             <span className="hidden sm:inline">Tải toàn bộ</span> ({chapters.length})
@@ -142,70 +163,77 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
         </div>
       </div>
 
-      {/* Hero Header Area */}
-      <div className="relative overflow-hidden bg-gradient-to-b from-[#181825] to-[#1e1e2e] border-b border-[#313244] p-4 sm:p-8">
-        {/* Blurred Cover Backdrop */}
+      {/* Cinematic Hero Header */}
+      <div className="relative overflow-hidden border-b border-white/[0.08] p-5 sm:p-10 md:p-12">
+        {/* Massive Ambient Blurred Backdrop */}
         {manga.cover_url && (
           <div
-            className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-15 scale-125 pointer-events-none"
+            className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-25 scale-125 pointer-events-none"
             style={{ backgroundImage: `url(${manga.cover_url})` }}
           />
         )}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#07080e]/80 to-[#07080e] pointer-events-none" />
 
-        <div className="relative z-10 max-w-5xl mx-auto flex flex-col md:flex-row gap-5 sm:gap-8 items-center md:items-start text-center md:text-left">
-          {/* Cover Card */}
-          <div className="w-36 sm:w-52 aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border border-[#45475a] bg-[#11111b] shrink-0 relative group">
+        <div className="relative z-10 max-w-6xl mx-auto flex flex-col md:flex-row gap-6 sm:gap-10 items-center md:items-start text-center md:text-left">
+          {/* Cover Card 3D Frame */}
+          <div className="w-44 sm:w-60 aspect-[3/4] rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-2 border-white/20 bg-[#0d0f1a] shrink-0 relative group">
             {manga.cover_url ? (
               <img
                 src={manga.cover_url}
                 alt={manga.title}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
             ) : null}
+
             <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center -z-0 opacity-40">
-              <BookOpen size={42} className="text-[#a6adc8]" />
+              <BookOpen size={48} className="text-slate-400" />
             </div>
-            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#11111b]/80 backdrop-blur-sm text-[#b4befe]">
+
+            <div className="absolute top-3 right-3 px-2.5 py-0.5 rounded-xl text-[10px] font-extrabold bg-black/80 backdrop-blur-md text-cyan-300 border border-cyan-400/30">
               {manga.source.toUpperCase()}
             </div>
           </div>
 
-          {/* Metadata */}
-          <div className="flex-1 flex flex-col justify-between space-y-3">
+          {/* Details & Action Buttons */}
+          <div className="flex-1 flex flex-col justify-between space-y-4">
             <div>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-2">
-                <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-[#cba6f7]/20 text-[#cba6f7] border border-[#cba6f7]/30">
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-3">
+                <span className="px-3 py-1 text-xs font-bold rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30">
                   {manga.source.toUpperCase()}
                 </span>
                 {manga.status && (
-                  <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-[#a6e3a1]/20 text-[#a6e3a1] border border-[#a6e3a1]/30 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#a6e3a1]"></span>
+                  <span className="px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     {manga.status}
                   </span>
                 )}
+                <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                  <Star size={12} className="fill-amber-400 text-amber-400" />
+                  4.9
+                </span>
               </div>
 
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-[#cdd6f4] leading-tight">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white leading-tight tracking-tight">
                 {manga.title}
               </h1>
 
               {manga.authors && manga.authors.length > 0 && (
-                <p className="text-xs sm:text-sm text-[#a6adc8] mt-1.5">
-                  Tác giả: <span className="text-[#cdd6f4] font-medium">{manga.authors.join(', ')}</span>
+                <p className="text-xs sm:text-sm text-slate-400 mt-2">
+                  Tác giả: <span className="text-slate-200 font-medium">{manga.authors.join(', ')}</span>
                 </p>
               )}
 
-              {/* Genre Chips */}
+              {/* Genres */}
               {manga.genres && manga.genres.length > 0 && (
                 <div className="flex flex-wrap justify-center md:justify-start gap-1.5 mt-3">
                   {manga.genres.map((g, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 text-[11px] rounded-lg bg-[#313244]/80 text-[#bac2de] border border-white/5"
+                      className="px-2.5 py-1 text-xs rounded-xl bg-white/[0.04] text-slate-300 border border-white/[0.06]"
                     >
                       {g}
                     </span>
@@ -215,69 +243,79 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
 
               {/* Description */}
               {manga.description && (
-                <p className="text-xs sm:text-sm text-[#a6adc8] mt-3 line-clamp-3 leading-relaxed max-w-3xl">
+                <p className="text-xs sm:text-sm text-slate-400 mt-4 line-clamp-4 leading-relaxed max-w-3xl">
                   {manga.description}
                 </p>
               )}
             </div>
 
-            {/* Quick Action Button */}
-            {firstChapter && (
-              <div className="pt-2 flex justify-center md:justify-start">
+            {/* Quick Action Buttons */}
+            <div className="pt-3 flex flex-wrap justify-center md:justify-start gap-3">
+              {firstChapter && (
                 <button
                   onClick={() => onOpenReader(firstChapter)}
-                  className="px-6 py-2.5 bg-gradient-to-r from-[#b4befe] to-[#cba6f7] text-[#11111b] rounded-xl text-sm font-bold shadow-lg shadow-[#b4befe]/20 hover:opacity-95 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                  className="px-6 py-3 bg-gradient-to-r from-violet-600 via-purple-600 to-cyan-500 text-white rounded-2xl text-sm font-bold shadow-xl shadow-violet-600/30 hover:opacity-95 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
                   <Eye size={18} />
-                  <span>Đọc từ chương 1 ({firstChapter.title})</span>
+                  <span>Đọc từ đầu (Chap {firstChapter.chapter_number})</span>
                 </button>
-              </div>
-            )}
+              )}
+
+              {latestChapter && latestChapter.id !== firstChapter?.id && (
+                <button
+                  onClick={() => onOpenReader(latestChapter)}
+                  className="px-5 py-3 rounded-2xl bg-white/[0.06] text-white hover:bg-white/[0.1] border border-white/10 transition-all text-sm font-semibold flex items-center gap-2 active:scale-95 cursor-pointer"
+                >
+                  <Layers size={18} className="text-cyan-400" />
+                  <span>Chap mới nhất ({latestChapter.chapter_number})</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Chapter List Section */}
-      <div className="max-w-5xl mx-auto w-full p-4 sm:p-8">
-        {/* Chapter Header & Controls */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+      <div className="max-w-6xl mx-auto w-full p-4 sm:p-8 space-y-4">
+        {/* Controls Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#0d0f1a] p-4 rounded-2xl border border-white/[0.06]">
           <div className="flex items-center gap-2">
-            <h2 className="text-base sm:text-lg font-bold text-[#cdd6f4]">
+            <h2 className="text-base sm:text-lg font-bold text-white">
               Danh sách chương ({chapters.length})
             </h2>
             <button
               onClick={() => setSortDesc(!sortDesc)}
-              className="p-1.5 rounded-lg bg-[#313244] text-[#a6adc8] hover:text-[#cdd6f4] transition-colors flex items-center gap-1 text-xs font-medium cursor-pointer"
+              className="p-1.5 px-3 rounded-xl bg-white/[0.05] text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-white/[0.06]"
               title="Đổi thứ tự hiển thị"
             >
-              <ArrowUpDown size={14} />
+              <ArrowUpDown size={14} className="text-violet-400" />
               <span>{sortDesc ? 'Mới nhất' : 'Cũ nhất'}</span>
             </button>
           </div>
 
           {/* Chapter Filter Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 text-[#6c7086] pointer-events-none" size={16} />
+            <Search className="absolute left-3.5 top-3 text-slate-500 pointer-events-none" size={16} />
             <input
               type="text"
               value={chapterSearch}
               onChange={(e) => setChapterSearch(e.target.value)}
-              placeholder="Lọc số chương..."
-              className="w-full sm:w-48 h-9 pl-9 pr-3 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs placeholder-[#6c7086] border border-[#45475a] focus:border-[#b4befe] focus:outline-none"
+              placeholder="Lọc theo số chương..."
+              className="w-full sm:w-56 h-10 pl-10 pr-3.5 bg-white/[0.04] text-white rounded-xl text-xs placeholder-slate-500 border border-white/10 focus:border-violet-500/60 focus:outline-none"
             />
           </div>
         </div>
 
         {error && (
-          <div className="p-4 mb-4 rounded-xl bg-[#f38ba8]/10 border border-[#f38ba8]/30 text-[#f38ba8] text-sm">
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs sm:text-sm">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="h-48 flex flex-col items-center justify-center gap-3 text-[#a6adc8]">
-            <Loader2 size={32} className="animate-spin text-[#b4befe]" />
-            <p className="text-xs">Đang nạp danh sách chương...</p>
+          <div className="h-48 flex flex-col items-center justify-center gap-3 text-slate-400">
+            <Loader2 size={36} className="animate-spin text-violet-500" />
+            <p className="text-xs">Đang tải danh sách chương...</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -286,19 +324,19 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
               return (
                 <div
                   key={chapter.id}
-                  className="flex items-center justify-between p-3.5 sm:p-4 rounded-xl bg-[#181825] border border-[#313244]/60 hover:border-[#b4befe]/40 transition-all group min-h-[50px]"
+                  className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-[#0d0f1a] border border-white/[0.06] hover:border-violet-500/40 hover:bg-white/[0.02] transition-all group min-h-[56px]"
                 >
                   {/* Chapter Info Click to Read */}
                   <div
                     onClick={() => onOpenReader(chapter)}
                     className="flex-1 cursor-pointer pr-3"
                   >
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-semibold text-[#cdd6f4] group-hover:text-[#b4befe] transition-colors">
+                    <div className="flex items-center gap-2.5">
+                      <h4 className="text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-violet-300 transition-colors">
                         {chapter.title}
                       </h4>
                       {chapter.language && chapter.language !== 'all' && (
-                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#313244] text-[#a6adc8]">
+                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-400 border border-white/[0.06]">
                           {chapter.language}
                         </span>
                       )}
@@ -309,8 +347,8 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => onOpenReader(chapter)}
-                      className="p-2 rounded-xl text-[#a6adc8] hover:text-[#b4befe] hover:bg-[#313244] transition-all cursor-pointer active:scale-90"
-                      title="Đọc ngay"
+                      className="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-violet-600/20 transition-all cursor-pointer active:scale-90"
+                      title="Đọc chương này"
                     >
                       <BookOpen size={16} />
                     </button>
@@ -318,15 +356,15 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
                     <button
                       onClick={() => handleDownloadChapter(chapter)}
                       disabled={isDownloading}
-                      className={`p-2 rounded-xl transition-all cursor-pointer active:scale-90 ${
+                      className={`p-2.5 rounded-xl transition-all cursor-pointer active:scale-90 ${
                         isDownloading
-                          ? 'bg-[#a6e3a1]/20 text-[#a6e3a1]'
-                          : 'bg-[#313244] text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b]'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-white/[0.05] text-slate-300 hover:bg-violet-600 hover:text-white border border-white/[0.08]'
                       }`}
                       title={`Tải về dạng ${format.toUpperCase()}`}
                     >
                       {isDownloading ? (
-                        <CheckCircle2 size={16} className="text-[#a6e3a1]" />
+                        <CheckCircle2 size={16} className="text-emerald-400" />
                       ) : (
                         <Download size={16} />
                       )}
@@ -337,7 +375,7 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
             })}
 
             {filteredChapters.length === 0 && !loading && (
-              <div className="p-8 text-center text-[#6c7086] text-xs">
+              <div className="p-12 text-center text-slate-500 text-xs">
                 Không tìm thấy chương nào khớp với bộ lọc.
               </div>
             )}

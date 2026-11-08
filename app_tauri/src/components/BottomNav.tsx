@@ -17,45 +17,58 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'browse' as NavTab, label: 'Khám phá', icon: Compass },
     { id: 'downloads' as NavTab, label: 'Tải về', icon: Download, badge: downloadCount },
     { id: 'library' as NavTab, label: 'Kệ truyện', icon: BookOpen },
-    { id: 'cleaner' as NavTab, label: 'AI Cleaner', icon: Wand2 },
+    { id: 'cleaner' as NavTab, label: 'AI Clean', icon: Wand2 },
     { id: 'settings' as NavTab, label: 'Cài đặt', icon: SettingsIcon },
   ];
 
   return (
-    <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#181825]/95 backdrop-blur-xl border-t border-[#313244]/80 z-40 flex items-center justify-around px-2 pb-[env(safe-area-inset-bottom)] select-none shadow-2xl"
-    >
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = activeTab === item.id;
-        return (
-          <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all relative active:scale-95 cursor-pointer ${
-              isActive ? 'text-[#b4befe]' : 'text-[#6c7086] hover:text-[#a6adc8]'
-            }`}
-          >
-            {/* Active Pill Highlight */}
-            {isActive && (
-              <span className="absolute top-1.5 w-8 h-1 rounded-full bg-[#b4befe] shadow-sm shadow-[#b4befe]/50 transition-all" />
-            )}
-
-            <div className="relative mt-1">
-              <Icon size={20} className={isActive ? 'text-[#b4befe]' : 'currentColor'} />
-              {item.badge !== undefined && item.badge > 0 && (
-                <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#cba6f7] text-[#11111b] text-[10px] font-extrabold flex items-center justify-center shadow-md">
-                  {item.badge > 99 ? '99+' : item.badge}
-                </span>
+    <nav className="md:hidden fixed bottom-3 left-3 right-3 z-40 select-none pb-[env(safe-area-inset-bottom)] pointer-events-none">
+      <div className="h-16 bg-[#0c0d18]/90 backdrop-blur-2xl border border-white/[0.1] rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] flex items-center justify-around px-2 pointer-events-auto">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onTabChange(item.id)}
+              className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-all duration-200 relative active:scale-90 cursor-pointer ${
+                isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {/* Active Glow Pill Indicator */}
+              {isActive && (
+                <span className="absolute top-1 w-8 h-1 rounded-full bg-gradient-to-r from-violet-400 to-fuchsia-400 shadow-[0_0_10px_rgba(168,85,247,0.7)]" />
               )}
-            </div>
 
-            <span className={`text-[10px] mt-0.5 font-medium tracking-tight ${isActive ? 'text-[#cdd6f4] font-semibold' : ''}`}>
-              {item.label}
-            </span>
-          </button>
-        );
-      })}
+              <div className="relative mt-1">
+                <div
+                  className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-tr from-violet-600 to-purple-500 text-white shadow-md shadow-violet-500/30'
+                      : ''
+                  }`}
+                >
+                  <Icon size={19} className={isActive ? 'text-white' : 'currentColor'} />
+                </div>
+
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-fuchsia-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow-md shadow-fuchsia-500/40">
+                    {item.badge > 99 ? '99+' : item.badge}
+                  </span>
+                )}
+              </div>
+
+              <span
+                className={`text-[10px] mt-0.5 tracking-tight ${
+                  isActive ? 'text-white font-bold' : 'text-slate-400 font-medium'
+                }`}
+              >
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </nav>
   );
 };

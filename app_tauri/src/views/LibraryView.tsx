@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RefreshCw, FolderOpen, Loader2, FileArchive } from 'lucide-react';
+import { BookOpen, RefreshCw, FolderOpen, Loader2, FileArchive, Library, Sparkles } from 'lucide-react';
 import { LibraryBook } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -27,93 +27,104 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenBook }) => {
     fetchLibrary();
   }, []);
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e2e] overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-hidden select-none relative">
+      {/* Background ambient glow */}
+      <div className="absolute top-10 left-10 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
+
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-[#313244] bg-[#181825]/80 backdrop-blur-md shrink-0 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-bold text-[#cdd6f4] flex items-center gap-2">
-            <BookOpen size={22} className="text-[#b4befe]" />
-            <span>Kệ truyện cá nhân</span>
-          </h1>
-          <p className="text-xs text-[#a6adc8] mt-0.5">
-            Đọc ngoại tuyến các tập truyện (CBZ/ZIP) đã tải về mà không cần giải nén
-          </p>
+      <div className="p-4 sm:p-6 border-b border-white/[0.08] bg-[#0c0d18]/85 backdrop-blur-2xl shrink-0 flex items-center justify-between z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-violet-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white">
+            <Library size={20} />
+          </div>
+          <div>
+            <h1 className="text-base sm:text-xl font-bold text-white tracking-wide">
+              Kệ truyện cá nhân (Offline)
+            </h1>
+            <p className="text-xs text-slate-400">
+              Đọc trực tiếp các tệp CBZ & ZIP không cần giải nén với zero-latency
+            </p>
+          </div>
         </div>
 
         <button
           onClick={fetchLibrary}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#313244] text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b] transition-all cursor-pointer active:scale-95 shrink-0"
+          className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold bg-white/[0.05] text-slate-300 hover:text-white hover:bg-white/[0.1] border border-white/[0.08] transition-all cursor-pointer active:scale-95 shrink-0"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loading ? 'animate-spin text-cyan-400' : ''} />
           <span className="hidden sm:inline">Quét lại</span>
         </button>
       </div>
 
-      {/* Book Grid */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+      {/* Main Grid */}
+      <div className="flex-1 overflow-y-auto p-3 sm:p-6 md:p-8 z-10">
         {loading ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-3 text-[#a6adc8]">
-            <Loader2 size={36} className="animate-spin text-[#b4befe]" />
-            <p className="text-xs">Đang quét thư mục truyện tải về...</p>
+          <div className="h-80 flex flex-col items-center justify-center gap-3.5 text-slate-400">
+            <Loader2 size={40} className="animate-spin text-cyan-400" />
+            <p className="text-xs font-medium">Đang quét nhanh kho lưu trữ CBZ/ZIP...</p>
           </div>
         ) : books.length === 0 ? (
-          <div className="h-64 flex flex-col items-center justify-center gap-3 text-[#6c7086] text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#313244]/40 flex items-center justify-center text-[#6c7086]">
-              <FileArchive size={32} />
+          <div className="h-80 flex flex-col items-center justify-center gap-3.5 text-slate-500 text-center">
+            <div className="w-20 h-20 rounded-3xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-slate-400 shadow-inner">
+              <FileArchive size={36} className="text-slate-400 opacity-60" />
             </div>
-            <p className="text-sm font-medium text-[#a6adc8]">Chưa có tập truyện nào được tải về</p>
-            <p className="text-xs text-[#6c7086]">
-              Các file tải về dạng CBZ hoặc ZIP sẽ tự động xuất hiện tại đây
-            </p>
+            <div>
+              <p className="text-sm font-semibold text-slate-300">Chưa có tập truyện nào được tải về</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs">
+                Tải các chương từ tab Khám phá, các file CBZ sẽ tự động được lập chỉ mục tại đây
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5 max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-5 max-w-7xl mx-auto">
             {books.map((book) => (
               <div
-                key={book.id}
+                key={book.file_path}
                 onClick={() => onOpenBook(book)}
-                className="group flex flex-col bg-[#181825] rounded-2xl overflow-hidden border border-[#313244]/60 hover:border-[#b4befe]/60 hover:shadow-xl transition-all cursor-pointer transform active:scale-95 sm:hover:-translate-y-1"
+                className="group flex flex-col bg-[#0d0f1a] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/[0.07] hover:border-cyan-500/50 hover:shadow-[0_12px_35px_rgba(56,189,248,0.25)] transition-all duration-300 cursor-pointer transform active:scale-95 sm:hover:-translate-y-1.5 relative"
               >
                 {/* Book Cover Container */}
-                <div className="aspect-[3/4] relative overflow-hidden bg-gradient-to-br from-[#1e1e2e] to-[#11111b] flex items-center justify-center">
+                <div className="aspect-[3/4] relative overflow-hidden bg-gradient-to-br from-[#121422] to-[#07080e] flex items-center justify-center">
                   {book.cover_base64 ? (
                     <img
                       src={`data:image/webp;base64,${book.cover_base64}`}
-                      alt={book.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 relative z-10"
+                      alt={book.manga_title}
+                      className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-500 relative z-10"
                     />
                   ) : null}
 
                   {/* Fallback Graphic */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center z-0 opacity-40">
-                    <BookOpen size={36} className="text-[#a6adc8] mb-1.5" />
-                    <span className="text-[10px] font-medium text-[#bac2de] line-clamp-2">{book.title}</span>
+                    <BookOpen size={36} className="text-slate-400 mb-1" />
+                    <span className="text-[10px] font-medium text-slate-300 line-clamp-2">
+                      {book.manga_title}
+                    </span>
                   </div>
 
                   {/* Format Badge */}
-                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[9px] font-bold bg-[#11111b]/80 backdrop-blur-sm text-[#cba6f7] z-20 border border-white/5 uppercase">
+                  <div className="absolute top-2 right-2 px-2 py-0.5 rounded-lg text-[9px] font-black bg-black/60 backdrop-blur-md text-cyan-300 border border-white/10 z-20 uppercase tracking-wider">
                     {book.file_format}
                   </div>
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] via-transparent to-transparent opacity-80 z-10" />
                 </div>
 
                 {/* Details */}
-                <div className="p-2.5 sm:p-3 flex-1 flex flex-col justify-between">
-                  <h3 className="font-semibold text-xs sm:text-sm text-[#cdd6f4] line-clamp-2 group-hover:text-[#b4befe] transition-colors leading-snug">
-                    {book.title}
-                  </h3>
-                  <div className="flex items-center justify-between text-[10px] text-[#a6adc8] mt-2 font-mono">
-                    <span>{book.total_pages} trang</span>
-                    <span>{formatFileSize(book.file_size)}</span>
+                <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between bg-[#0d0f1a] relative z-20">
+                  <div>
+                    <h3 className="font-bold text-xs sm:text-sm text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
+                      {book.manga_title}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                      {book.chapter_title}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 font-mono">
+                    <span className="font-semibold text-slate-300">{book.total_pages} trang</span>
+                    <span className="text-cyan-400 text-[10px] font-bold">Mở đọc →</span>
                   </div>
                 </div>
               </div>

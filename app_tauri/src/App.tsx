@@ -19,11 +19,13 @@ export function App() {
   const [readerOfflineBook, setReaderOfflineBook] = useState<LibraryBook | null>(null);
   const [downloadCount, setDownloadCount] = useState<number>(0);
 
-  // Sync active download count
+  // Sync active download count in real-time
   useEffect(() => {
     invoke<DownloadTask[]>('get_download_queue')
       .then((q) => {
-        const active = q.filter((t) => t.status === 'downloading' || t.status === 'queued' || t.status === 'packaging').length;
+        const active = q.filter(
+          (t) => t.status === 'downloading' || t.status === 'queued' || t.status === 'packaging'
+        ).length;
         setDownloadCount(active);
       })
       .catch(() => {});
@@ -31,7 +33,9 @@ export function App() {
     const unlisten = listen<DownloadTask>('download-progress', () => {
       invoke<DownloadTask[]>('get_download_queue')
         .then((q) => {
-          const active = q.filter((t) => t.status === 'downloading' || t.status === 'queued' || t.status === 'packaging').length;
+          const active = q.filter(
+            (t) => t.status === 'downloading' || t.status === 'queued' || t.status === 'packaging'
+          ).length;
           setDownloadCount(active);
         })
         .catch(() => {});
@@ -66,8 +70,8 @@ export function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#1e1e2e] text-[#cdd6f4] overflow-hidden font-sans">
-      {/* Desktop Left Sidebar (>= 768px) */}
+    <div className="flex h-screen w-screen bg-[#07080e] text-slate-100 overflow-hidden font-sans relative selection:bg-violet-500 selection:text-white">
+      {/* Desktop Left Sidebar (Floating Glass Dock) */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -77,10 +81,10 @@ export function App() {
         downloadCount={downloadCount}
       />
 
-      {/* Main View Area with Mobile Bottom Padding */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative pb-16 md:pb-0">
-        {activeTab === 'browse' && (
-          selectedManga ? (
+      {/* Main Viewport */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative pb-20 md:pb-0">
+        {activeTab === 'browse' &&
+          (selectedManga ? (
             <MangaDetailView
               manga={selectedManga}
               onBack={handleBackToBrowse}
@@ -88,8 +92,7 @@ export function App() {
             />
           ) : (
             <BrowseView onSelectManga={handleSelectManga} />
-          )
-        )}
+          ))}
 
         {activeTab === 'downloads' && <DownloadsView />}
 
@@ -102,7 +105,7 @@ export function App() {
         {activeTab === 'settings' && <SettingsView />}
       </main>
 
-      {/* Mobile Bottom Navigation Bar (< 768px) */}
+      {/* Mobile Floating Bottom Navigation */}
       <BottomNav
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -112,7 +115,7 @@ export function App() {
         downloadCount={downloadCount}
       />
 
-      {/* Fullscreen In-App Reader Modal */}
+      {/* Fullscreen Cinematic Reader Modal */}
       {(readerOnlineChapter || readerOfflineBook) && (
         <ReaderView
           onlineChapter={readerOnlineChapter || undefined}
@@ -123,4 +126,5 @@ export function App() {
     </div>
   );
 }
+
 export default App;

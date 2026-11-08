@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Settings as SettingsIcon, Save, Folder, CheckCircle2, Shield, Cloud, HardDrive, Cpu, Sliders } from 'lucide-react';
+import {
+  Settings as SettingsIcon,
+  Save,
+  Folder,
+  CheckCircle2,
+  Shield,
+  Cloud,
+  HardDrive,
+  Cpu,
+  Sliders,
+  Sparkles,
+} from 'lucide-react';
 import { AppSettings } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -33,62 +44,67 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e2e] overflow-y-auto select-none p-4 sm:p-8">
-      <div className="max-w-3xl mx-auto w-full space-y-6">
+    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-y-auto select-none p-4 sm:p-8 relative">
+      {/* Background glow */}
+      <div className="absolute top-10 left-1/4 w-96 h-96 bg-violet-600/10 rounded-full blur-[140px] pointer-events-none" />
+
+      <div className="max-w-4xl mx-auto w-full space-y-6 z-10">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#313244] pb-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#cdd6f4] flex items-center gap-2">
-              <SettingsIcon size={24} className="text-[#b4befe]" />
-              <span>Cài đặt hệ thống</span>
-            </h1>
-            <p className="text-xs text-[#a6adc8] mt-0.5">
-              Cấu hình thư mục lưu trữ, giới hạn luồng tải và kết nối AI Cleaner
-            </p>
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-600/25 text-white">
+              <SettingsIcon size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+                Cài đặt MoeJect Ecosystem
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Tùy chỉnh thư mục tải về, cơ chế đa luồng và thiết lập kết nối AI Cleaner
+              </p>
+            </div>
           </div>
 
           {saved && (
-            <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#a6e3a1]/20 text-[#a6e3a1] text-xs font-semibold border border-[#a6e3a1]/30 animate-fade-in">
-              <CheckCircle2 size={14} />
+            <span className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+              <CheckCircle2 size={16} />
               Đã lưu cài đặt
             </span>
           )}
         </div>
 
         <form onSubmit={handleSave} className="space-y-5">
-          {/* Section 1: Storage & Format */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#181825] border border-[#313244] shadow-md space-y-4">
-            <h2 className="text-sm font-bold text-[#cdd6f4] flex items-center gap-2">
-              <HardDrive size={18} className="text-[#b4befe]" />
-              <span>Lưu trữ & Định dạng</span>
+          {/* Section 1: Storage & Packing Format */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#0d0f1a] border border-white/[0.08] shadow-xl space-y-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <HardDrive size={18} className="text-violet-400" />
+              <span>Lưu trữ & Định dạng đóng gói</span>
             </h2>
 
             <div>
-              <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
                 Thư mục tải về
               </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={settings.download_dir}
-                  onChange={(e) => setSettings({ ...settings, download_dir: e.target.value })}
-                  className="flex-1 h-11 px-3.5 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-mono border border-[#45475a] focus:border-[#b4befe] focus:outline-none"
-                />
-              </div>
+              <input
+                type="text"
+                value={settings.download_dir}
+                onChange={(e) => setSettings({ ...settings, download_dir: e.target.value })}
+                className="w-full h-12 px-4 bg-white/[0.04] text-white rounded-2xl text-xs font-mono border border-white/10 focus:border-violet-500 focus:outline-none"
+              />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
                 Định dạng đóng gói mặc định
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3.5">
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, preferred_format: 'cbz' })}
-                  className={`py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                  className={`py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer border ${
                     settings.preferred_format === 'cbz'
-                      ? 'bg-[#b4befe] text-[#11111b] border-[#b4befe] font-bold shadow-md'
-                      : 'bg-[#313244] text-[#a6adc8] border-transparent hover:text-[#cdd6f4]'
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white border-violet-400/50 shadow-lg shadow-violet-600/30'
+                      : 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:text-white'
                   }`}
                 >
                   CBZ (Chuẩn ComicInfo.xml)
@@ -96,29 +112,29 @@ export const SettingsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, preferred_format: 'zip' })}
-                  className={`py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                  className={`py-3 rounded-2xl text-xs font-bold transition-all cursor-pointer border ${
                     settings.preferred_format === 'zip'
-                      ? 'bg-[#b4befe] text-[#11111b] border-[#b4befe] font-bold shadow-md'
-                      : 'bg-[#313244] text-[#a6adc8] border-transparent hover:text-[#cdd6f4]'
+                      ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white border-violet-400/50 shadow-lg shadow-violet-600/30'
+                      : 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:text-white'
                   }`}
                 >
-                  ZIP (Ảnh thô nguyên bản)
+                  ZIP (File nén nguyên bản)
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Concurrency & Downloader */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#181825] border border-[#313244] shadow-md space-y-4">
-            <h2 className="text-sm font-bold text-[#cdd6f4] flex items-center gap-2">
-              <Cpu size={18} className="text-[#cba6f7]" />
-              <span>Hiệu năng Tải Đa luồng (Two-Tier Gated)</span>
+          {/* Section 2: Two-tier Concurrency Performance */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#0d0f1a] border border-white/[0.08] shadow-xl space-y-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Cpu size={18} className="text-cyan-400" />
+              <span>Hiệu năng Tải Đa Luồng (Two-Tier Gated)</span>
             </h2>
 
             <div>
-              <div className="flex justify-between items-center text-xs mb-1.5">
-                <span className="text-[#a6adc8]">Số chương tải song song:</span>
-                <span className="font-mono font-bold text-[#b4befe]">{settings.max_concurrent_chapters}</span>
+              <div className="flex justify-between items-center text-xs mb-2">
+                <span className="font-semibold text-slate-300">Số chương tải song song:</span>
+                <span className="font-mono font-bold text-violet-400">{settings.max_concurrent_chapters}</span>
               </div>
               <input
                 type="range"
@@ -128,14 +144,14 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) =>
                   setSettings({ ...settings, max_concurrent_chapters: Number(e.target.value) })
                 }
-                className="w-full accent-[#b4befe] cursor-pointer h-1.5 bg-[#313244] rounded-lg"
+                className="w-full accent-violet-500 cursor-pointer h-1.5 bg-white/10 rounded-lg"
               />
             </div>
 
             <div>
-              <div className="flex justify-between items-center text-xs mb-1.5">
-                <span className="text-[#a6adc8]">Kết nối tối đa trên mỗi máy chủ (Tránh bị chặn IP):</span>
-                <span className="font-mono font-bold text-[#b4befe]">{settings.max_connections_per_host}</span>
+              <div className="flex justify-between items-center text-xs mb-2">
+                <span className="font-semibold text-slate-300">Kết nối tối đa trên mỗi máy chủ (Anti-Ban):</span>
+                <span className="font-mono font-bold text-cyan-400">{settings.max_connections_per_host}</span>
               </div>
               <input
                 type="range"
@@ -145,52 +161,52 @@ export const SettingsView: React.FC = () => {
                 onChange={(e) =>
                   setSettings({ ...settings, max_connections_per_host: Number(e.target.value) })
                 }
-                className="w-full accent-[#b4befe] cursor-pointer h-1.5 bg-[#313244] rounded-lg"
+                className="w-full accent-cyan-500 cursor-pointer h-1.5 bg-white/10 rounded-lg"
               />
             </div>
           </div>
 
-          {/* Section 3: AI Cleaner API */}
-          <div className="p-4 sm:p-5 rounded-2xl bg-[#181825] border border-[#313244] shadow-md space-y-4">
-            <h2 className="text-sm font-bold text-[#cdd6f4] flex items-center gap-2">
-              <Cloud size={18} className="text-[#a6e3a1]" />
+          {/* Section 3: AI Cleaner API Config */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-[#0d0f1a] border border-white/[0.08] shadow-xl space-y-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Cloud size={18} className="text-emerald-400" />
               <span>Manga AI Cleaner (Hugging Face)</span>
             </h2>
 
             <div>
-              <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">
-                Hugging Face Space URL
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
+                Hugging Face Space Endpoint
               </label>
               <input
                 type="text"
                 value={settings.hf_space_url}
                 onChange={(e) => setSettings({ ...settings, hf_space_url: e.target.value })}
-                className="w-full h-11 px-3.5 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-mono border border-[#45475a] focus:border-[#a6e3a1] focus:outline-none"
+                className="w-full h-12 px-4 bg-white/[0.04] text-white rounded-2xl text-xs font-mono border border-white/10 focus:border-emerald-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-[#a6adc8] block mb-1.5">
-                HF User Access Token (Tùy chọn cho Private Space)
+              <label className="text-xs font-semibold text-slate-300 block mb-2">
+                HF User Access Token (Tùy chọn)
               </label>
               <input
                 type="password"
-                value={settings.hf_token}
+                value={settings.hf_token || ''}
                 onChange={(e) => setSettings({ ...settings, hf_token: e.target.value })}
                 placeholder="hf_..."
-                className="w-full h-11 px-3.5 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-mono border border-[#45475a] focus:border-[#a6e3a1] focus:outline-none"
+                className="w-full h-12 px-4 bg-white/[0.04] text-white rounded-2xl text-xs font-mono border border-white/10 focus:border-emerald-500 focus:outline-none"
               />
             </div>
           </div>
 
-          {/* Submit */}
-          <div className="flex justify-end pt-2">
+          {/* Submit Action */}
+          <div className="flex justify-end pt-3">
             <button
               type="submit"
-              className="w-full sm:w-auto px-8 py-3 bg-[#b4befe] text-[#11111b] rounded-xl text-sm font-bold hover:bg-[#cba6f7] transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer shadow-lg shadow-[#b4befe]/20"
+              className="w-full sm:w-auto px-10 py-3.5 bg-gradient-to-r from-violet-600 via-purple-600 to-cyan-500 text-white rounded-2xl text-sm font-bold shadow-xl shadow-violet-600/30 hover:opacity-95 transition-all flex items-center justify-center gap-2.5 active:scale-95 cursor-pointer"
             >
               <Save size={18} />
-              <span>Lưu cài đặt</span>
+              <span>Lưu cấu hình</span>
             </button>
           </div>
         </form>

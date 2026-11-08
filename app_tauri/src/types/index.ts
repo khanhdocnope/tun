@@ -58,6 +58,15 @@ export interface AppSettings {
   reader_mode: 'webtoon' | 'manga';
 }
 
+export interface CleanRequest {
+  image_base64: string;
+  detector: string;
+  inpainter: string;
+  dilation_offset: number;
+  clean_mode: string;
+  max_dim?: number | null;
+}
+
 export interface CleanResponse {
   cleaned_image_base64: string;
   time_taken?: string;

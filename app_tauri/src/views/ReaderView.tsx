@@ -1,5 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, Maximize, Minimize, Settings, Loader2, BookOpen, Layers } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Maximize,
+  Minimize,
+  Settings,
+  Loader2,
+  BookOpen,
+  Layers,
+  Sparkles,
+} from 'lucide-react';
 import { ChapterItem, LibraryBook, PageItem } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -27,6 +38,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [offlinePageData, setOfflinePageData] = useState<string | null>(null);
   const totalPages = offlineBook ? offlineBook.total_pages : pages.length;
 
+  const hideTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (onlineChapter) {
       loadOnlinePages();
@@ -35,7 +48,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   }, [onlineChapter, offlineBook]);
 
-  // Keyboard navigation
+  // Auto-hide controls after 4 seconds of inactivity
+  useEffect(() => {
+    if (showControls) {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = window.setTimeout(() => {
+        setShowControls(false);
+      }, 4000);
+    }
+    return () => {
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    };
+  }, [showControls]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -46,11 +72,13 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         handlePrevPage();
       } else if (e.key === 'f' || e.key === 'F') {
         toggleFullscreen();
+      } else if (e.key === 'm' || e.key === 'M') {
+        setMode((prev) => (prev === 'webtoon' ? 'manga' : 'webtoon'));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentPage, totalPages, isFullscreen]);
+  }, [currentPage, totalPages, isFullscreen, mode]);
 
   const loadOnlinePages = async () => {
     if (!onlineChapter) return;
@@ -116,8 +144,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   };
 
-  // Center tap zone toggle
-  const handleScreenClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleCenterClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const width = rect.width;
@@ -131,52 +158,59 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setShowControls((prev) => !prev);
       }
     } else {
-      // In webtoon mode, tap toggles controls
       setShowControls((prev) => !prev);
     }
   };
 
-  const title = onlineChapter ? onlineChapter.title : offlineBook ? offlineBook.title : 'Đang đọc';
+  const title = onlineChapter
+    ? onlineChapter.title
+    : offlineBook
+    ? `${offlineBook.manga_title} - ${offlineBook.chapter_title}`
+    : 'Đang đọc';
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#11111b] flex flex-col overflow-hidden select-none">
-      {/* Top Floating App Bar */}
+    <div className="fixed inset-0 z-50 bg-[#000000] flex flex-col overflow-hidden select-none">
+      {/* Top Floating Glassmorphic App Bar */}
       <div
-        className={`absolute top-0 left-0 right-0 z-40 bg-[#181825]/95 backdrop-blur-md border-b border-[#313244] p-3 sm:p-4 flex items-center justify-between transition-transform duration-300 ${
+        className={`absolute top-0 left-0 right-0 z-40 bg-[#0a0b12]/90 backdrop-blur-2xl border-b border-white/[0.08] p-3 sm:p-4 flex items-center justify-between transition-transform duration-300 ${
           showControls ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <button
             onClick={onClose}
-            className="p-2 rounded-xl bg-[#313244] text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b] transition-all cursor-pointer active:scale-95 shrink-0"
+            className="p-2.5 rounded-2xl bg-white/[0.06] text-white hover:bg-white/[0.12] transition-all cursor-pointer active:scale-95 shrink-0 border border-white/[0.08]"
             title="Đóng trình đọc (Esc)"
           >
             <ArrowLeft size={18} />
           </button>
           <div className="overflow-hidden">
-            <h2 className="text-sm sm:text-base font-bold text-[#cdd6f4] truncate">{title}</h2>
-            <p className="text-[11px] text-[#a6adc8]">
+            <h2 className="text-xs sm:text-sm font-bold text-white truncate">{title}</h2>
+            <p className="text-[11px] text-slate-400">
               {mode === 'webtoon' ? 'Cuộn dọc Webtoon' : 'Lật trang Manga'} • {totalPages} trang
             </p>
           </div>
         </div>
 
         {/* View Mode & Fullscreen Controls */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex bg-[#313244] p-1 rounded-xl text-xs font-semibold">
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex bg-white/[0.05] p-1 rounded-2xl border border-white/[0.08] text-xs font-semibold">
             <button
               onClick={() => setMode('webtoon')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                mode === 'webtoon' ? 'bg-[#b4befe] text-[#11111b] font-bold shadow-sm' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
+              className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                mode === 'webtoon'
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-bold shadow-md shadow-violet-600/30'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Webtoon
             </button>
             <button
               onClick={() => setMode('manga')}
-              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                mode === 'manga' ? 'bg-[#b4befe] text-[#11111b] font-bold shadow-sm' : 'text-[#a6adc8] hover:text-[#cdd6f4]'
+              className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
+                mode === 'manga'
+                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-bold shadow-md shadow-violet-600/30'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               Manga
@@ -185,7 +219,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-xl bg-[#313244] text-[#a6adc8] hover:text-[#cdd6f4] transition-all cursor-pointer hidden sm:flex"
+            className="p-2.5 rounded-2xl bg-white/[0.06] text-slate-300 hover:text-white transition-all cursor-pointer hidden sm:flex border border-white/[0.08]"
             title="Toàn màn hình (F)"
           >
             {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
@@ -193,36 +227,36 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </div>
       </div>
 
-      {/* Reader Display Area */}
+      {/* Main Reader Viewport */}
       <div
-        onClick={handleScreenClick}
-        className="flex-1 w-full h-full overflow-y-auto flex items-center justify-center relative"
+        onClick={handleCenterClick}
+        className="flex-1 w-full h-full overflow-y-auto flex items-center justify-center relative cursor-default"
       >
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#11111b]/80 z-20 text-[#a6adc8]">
-            <Loader2 size={36} className="animate-spin text-[#b4befe]" />
-            <p className="text-xs">Đang nạp ảnh...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/85 z-20 text-slate-400">
+            <Loader2 size={40} className="animate-spin text-violet-500" />
+            <p className="text-xs font-medium">Đang nạp ảnh sắc nét...</p>
           </div>
         )}
 
         {error && (
-          <div className="p-6 text-center text-[#f38ba8] text-sm max-w-md">
-            <p>{error}</p>
+          <div className="p-8 text-center text-rose-400 text-sm max-w-md z-30">
+            <p className="mb-4">{error}</p>
             <button
               onClick={onlineChapter ? loadOnlinePages : () => loadOfflinePage(currentPage)}
-              className="mt-4 px-4 py-2 bg-[#313244] text-[#cdd6f4] rounded-xl text-xs font-semibold cursor-pointer"
+              className="px-5 py-2.5 bg-violet-600 text-white rounded-2xl text-xs font-bold cursor-pointer hover:bg-violet-500 transition-colors shadow-lg shadow-violet-600/30"
             >
-              Thử lại
+              Thử tải lại
             </button>
           </div>
         )}
 
-        {/* WEBTOON MODE (Vertical Continuous Scroll) */}
+        {/* WEBTOON MODE (Continuous Vertical Scroll) */}
         {!loading && !error && mode === 'webtoon' && (
-          <div className="w-full h-full overflow-y-auto flex flex-col items-center py-16 px-1 sm:px-4">
+          <div className="w-full h-full overflow-y-auto flex flex-col items-center py-16 px-0 sm:px-4">
             {onlineChapter &&
               pages.map((p, idx) => (
-                <div key={idx} className="w-full max-w-3xl my-0.5 relative">
+                <div key={idx} className="w-full max-w-3xl my-0 relative">
                   <img
                     src={p.url}
                     alt={`Trang ${idx + 1}`}
@@ -237,7 +271,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               ))}
 
             {offlineBook && offlinePageData && (
-              <div className="w-full max-w-3xl my-0.5">
+              <div className="w-full max-w-3xl my-0">
                 <img
                   src={`data:image/webp;base64,${offlinePageData}`}
                   alt={`Trang ${currentPage + 1}`}
@@ -248,10 +282,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           </div>
         )}
 
-        {/* MANGA MODE (Single / Flip Page) */}
+        {/* MANGA MODE (Single Page Flip) */}
         {!loading && !error && mode === 'manga' && (
           <div className="relative w-full h-full flex items-center justify-center p-2 sm:p-6">
-            {/* Visual Tap Zone Indicators (subtle) */}
+            {/* Visual Tap Zone Indicators */}
             <div className="absolute left-0 top-0 bottom-0 w-1/4 z-10 cursor-w-resize" title="Chạm để lùi trang" />
             <div className="absolute right-0 top-0 bottom-0 w-1/4 z-10 cursor-e-resize" title="Chạm để sang trang" />
 
@@ -275,23 +309,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         )}
       </div>
 
-      {/* Bottom Floating Scrubber & Page Indicator */}
+      {/* Bottom Floating Scrubber */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-40 bg-[#181825]/95 backdrop-blur-md border-t border-[#313244] p-3 sm:p-4 flex items-center justify-between gap-4 transition-transform duration-300 ${
+        className={`absolute bottom-0 left-0 right-0 z-40 bg-[#0a0b12]/90 backdrop-blur-2xl border-t border-white/[0.08] p-3 sm:p-4 flex items-center justify-between gap-4 transition-transform duration-300 ${
           showControls ? 'translate-y-0' : 'translate-y-full'
         }`}
       >
         <button
           onClick={handlePrevPage}
           disabled={currentPage === 0}
-          className="p-2 rounded-xl bg-[#313244] text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b] transition-all disabled:opacity-30 cursor-pointer active:scale-95"
+          className="p-2.5 rounded-2xl bg-white/[0.05] text-white hover:bg-violet-600 transition-all disabled:opacity-20 cursor-pointer active:scale-95 border border-white/[0.08]"
           title="Trang trước"
         >
           <ChevronLeft size={20} />
         </button>
 
-        {/* Slider & Page Indicator */}
-        <div className="flex-1 max-w-md flex items-center gap-3">
+        {/* Scrubber slider & Page Counter */}
+        <div className="flex-1 max-w-lg flex items-center gap-3">
           <input
             type="range"
             min={0}
@@ -305,9 +339,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 setCurrentPage(val);
               }
             }}
-            className="w-full accent-[#b4befe] cursor-pointer h-1.5 bg-[#313244] rounded-lg"
+            className="w-full accent-violet-500 cursor-pointer h-1.5 bg-white/10 rounded-lg"
           />
-          <span className="text-xs font-mono font-bold text-[#b4befe] shrink-0 min-w-[60px] text-center">
+          <span className="text-xs font-mono font-bold text-violet-400 shrink-0 min-w-[70px] text-center">
             {totalPages > 0 ? `${currentPage + 1} / ${totalPages}` : '0 / 0'}
           </span>
         </div>
@@ -315,7 +349,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         <button
           onClick={handleNextPage}
           disabled={currentPage >= totalPages - 1}
-          className="p-2 rounded-xl bg-[#313244] text-[#cdd6f4] hover:bg-[#b4befe] hover:text-[#11111b] transition-all disabled:opacity-30 cursor-pointer active:scale-95"
+          className="p-2.5 rounded-2xl bg-white/[0.05] text-white hover:bg-violet-600 transition-all disabled:opacity-20 cursor-pointer active:scale-95 border border-white/[0.08]"
           title="Trang tiếp theo"
         >
           <ChevronRight size={20} />
