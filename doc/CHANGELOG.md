@@ -1,5 +1,44 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-08] - Đại tu Toàn diện sang Ứng dụng Hợp nhất Đa Nền tảng Tauri v2 (Windows & Mobile)
+
+### 1. Kiến trúc Hợp nhất Tauri v2 (`app_tauri/`):
+- **Thay thế hoàn toàn cấu trúc cũ:**
+  - Hợp nhất toàn bộ logic cào dữ liệu, tải đa luồng, giải mã DRM và đóng gói file vào Rust Core Backend (`src-tauri/`).
+  - Giao diện Web hiện đại viết bằng **React 19 + TypeScript + Vite 8 + Tailwind CSS v4 + Lucide Icons** theo phong cách chủ đề **Catppuccin Mocha Dark**.
+  - Biên dịch thành một ứng dụng Native duy nhất chạy mượt mà trên cả **Windows (.exe)** và **Mobile Android (.apk)**.
+  - Lưu trữ thư mục Flutter cũ (`ui_app/`) làm kho tham khảo.
+
+### 2. Rust Core Backend Hiệu năng cao (`app_tauri/src-tauri/`):
+- **Đa nguồn truyện Native:**
+  - **MangaDex:** API REST v5, bóc tách cover và chapter feed, định tuyến User-Agent `MoeJect/1.0` bypass cơ chế chặn POWBlock của CDN.
+  - **Comick.io:** API REST và CDN phân giải cao.
+  - **Hitomi.la:** HTTP Range request trên binary index `.nozomi` (4-byte big-endian) và giải mã sharding động `gg.js` phân giải subdomain WebP (`w1`, `w2`, `atn`, `btn`).
+  - **Cứu Truyện:** Giải mã DRM slices bằng thuật toán Base64 decode + XOR Cipher với 16 số Pi (`3141592653589793`) và tái tạo ảnh bằng crate `image`.
+  - **Template Parser:** Tích hợp bộ khung parser cho theme Madara và MangaStream (WordPress) mở rộng hàng trăm trang truyện.
+- **Two-Tier Gated Downloader:**
+  - Tải song song có kiểm soát kết nối theo host để chống chặn IP, xác thực Magic Bytes (PNG, JPEG, WebP, GIF) chống ảnh hỏng, cơ chế retry với exponential backoff.
+- **Đóng gói chuẩn Quốc tế:**
+  - Hỗ trợ đóng gói `.cbz` tích hợp file đặc tả `ComicInfo.xml` và `.zip` ảnh thô.
+- **AI Manga Cleaner (Hybrid):**
+  - Kết nối trực tiếp Gradio SSE API của Hugging Face Space (`dobietdc/manga-text-cleaner`), hỗ trợ các bộ lọc `DBNet` / `ComicTextDetector`, dilation offset, và cấu hình tùy chỉnh Custom URL/Token.
+- **Quản lý Kệ truyện & In-App Reader:**
+  - Quét tự động các tập truyện tải về trong thư mục đĩa.
+  - Trích xuất ảnh trực tiếp từ bộ nhớ nén CBZ phục vụ đọc truyện ngay trong ứng dụng mà không cần giải nén.
+
+### 3. Giao diện Người dùng Đa năng (React + Tailwind v4):
+- **Màn hình Khám phá (Browse):** Tìm kiếm và duyệt truyện từ 6 nguồn tích hợp.
+- **Màn hình Chi tiết (Manga Detail):** Xem thông tin tác giả, thể loại, mô tả, danh sách chương, hỗ trợ tải lẻ hoặc tải toàn bộ dạng CBZ/ZIP.
+- **Hàng đợi Tải về (Downloads):** Thanh tiến trình phần trăm (%), số trang tải/tổng số trang cập nhật thời gian thực qua Tauri Event `download-progress`.
+- **Kệ truyện Cá nhân (Library):** Hiển thị các tập truyện đã tải kèm ảnh bìa thumbnail, số trang và định dạng.
+- **Trình đọc Tích hợp (In-App Reader):** Hỗ trợ cả 2 chế độ:
+  - **Webtoon:** Cuộn dọc liên tục mượt mà.
+  - **Manga:** Lật trang đơn kèm điều hướng phím/chuột và cử chỉ chạm.
+- **AI Cleaner Studio:** Kéo thả ảnh, tùy chỉnh thông số xóa chữ, xem trước so sánh Trước/Sau và tải ảnh sạch về máy.
+- **Cài đặt Hệ thống (Settings):** Cấu hình đường dẫn lưu truyện, số luồng tải, URL Space AI và Token.
+
+---
+
 ## [2026-11-08] - Phát triển 100% Native Rust GUI Đa Năng (eframe / egui)
 
 ### 1. Tích hợp Giao diện Đồ họa Thuần Rust GPU-Accelerated (`rust_core/src/gui/`):

@@ -29,3 +29,9 @@ rust_core/target/
 
 # Test output images
 image-test/
+
+# Tauri
+app_tauri/node_modules/
+app_tauri/dist/
+app_tauri/src-tauri/target/
+app_tauri/src-tauri/gen/

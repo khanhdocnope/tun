@@ -1,4 +1,4 @@
-name: Build MoeJect Apps (Windows & Android)
+name: Build MoeJect Apps (Tauri v2 Unified)
 
 on:
   push:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build & Package Windows x64 (Native Rust + Flutter)
+    name: Build & Package Windows x64 (Tauri v2)
     runs-on: windows-latest
 
     steps:
@@ -29,152 +29,25 @@ jobs:
       - name: Setup Rust Stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Compile Rust Core Engine (Release)
-        working-directory: rust_core
-        run: cargo build --release
-
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          channel: 'stable'
-          cache: true
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: app_tauri/package.json
 
-      - name: Verify Environment & Tools
-        run: flutter doctor -v
+      - name: Install Frontend Dependencies
+        working-directory: app_tauri
+        run: npm install
 
-      - name: Fetch Flutter Dependencies
-        working-directory: ui_app
-        run: flutter pub get
-
-      - name: Run Flutter Unit Tests
-        working-directory: ui_app
-        run: flutter test
-
-      - name: Compile Windows Release
-        working-directory: ui_app
-        run: flutter build windows --release
-
-      - name: Bundle Rust Core with Windows App
-        shell: pwsh
-        run: |
-          $releaseDir = "ui_app/build/windows/x64/runner/Release"
-          Copy-Item "rust_core/target/release/moeject.exe" -Destination "$releaseDir/moeject.exe" -Force
-          
-          $launcher = @"
-          @echo off
-          echo Starting MoeJect High-Performance Rust Engine...
-          start "" "%~dp0moeject.exe" serve
-          timeout /t 1 /nobreak >nul
-          echo Starting MoeJect UI App...
-          start "" "%~dp0moeject_app.exe"
-          "@
-          $launcher | Out-File -FilePath "$releaseDir/Start-MoeJect.bat" -Encoding ascii
-
-          $readme = @"
-          ==================================================
-          MoeJect - Modern Manga Reader & Downloader (v1.0.0)
-          100% Native Rust GUI + Flutter Client Bundle
-          ==================================================
-
-          [Huong Dan Khoi Chay 1-Click]:
-          1. Cach 1 (Khuyen dung - Sieu nhe & sieu toc):
-             -> Nhap dup chuot truc tiep vao 'moeject.exe'
-             -> Khoi chay ngay giao dien Native Rust GUI (wgpu/egui) cuc muot, RAM chi ~25MB!
-
-          2. Cach 2 (Giao dien Flutter Catppuccin):
-             -> Nhap dup chuot vao file 'Start-MoeJect.bat'
-             -> Tu dong khoi chay backend Rust va mo giao dien Flutter.
-
-          3. Tinh nang:
-             - Nguon da dang: MangaDex, Comick, Hitomi.la, CuuTruyen...
-             - Tim kiem, xem chi tiet truyen, cap nhat chuong moi nhat.
-             - Tai ve ZIP (Raw) va CBZ (ComicInfo.xml) toc do toi da.
-             - Thu vien truyen offline tich hop san.
-             - Tay thoai tu dong bang AI (Hugging Face Spaces Inpainting).
-          "@
-          $readme | Out-File -FilePath "$releaseDir/README.txt" -Encoding utf8
-
-      - name: Compress Release Artifact
-        shell: pwsh
-        run: |
-          $releaseDir = "ui_app/build/windows/x64/runner/Release"
-          $zipOutput = "MoeJect-Windows-x64.zip"
-          if (Test-Path $releaseDir) {
-            Compress-Archive -Path "$releaseDir\*" -DestinationPath $zipOutput -Force
-            Write-Host "Created $zipOutput successfully! Size: $((Get-Item $zipOutput).Length / 1MB) MB"
-          } else {
-            Write-Error "Release build folder was not found at $releaseDir"
-            exit 1
-          }
-
-      - name: Upload Windows Artifact to Actions
-        uses: actions/upload-artifact@v4
-        with:
-          name: MoeJect-Windows-x64
-          path: MoeJect-Windows-x64.zip
-          retention-days: 14
-
-      - name: Create Release & Publish Asset (Windows)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: MoeJect-Windows-x64.zip
-          generate_release_notes: true
+      - name: Build Tauri v2 Windows Release
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  build-android:
-    name: Build & Package Android APK
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Setup Flutter SDK
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
-      - name: Verify Environment & Tools
-        run: flutter doctor -v
-
-      - name: Fetch Flutter Dependencies
-        working-directory: ui_app
-        run: flutter pub get
-
-      - name: Run Flutter Unit Tests
-        working-directory: ui_app
-        run: flutter test
-
-      - name: Compile Android APK (Release)
-        working-directory: ui_app
-        run: flutter build apk --release
-
-      - name: Prepare Android APK Artifact
-        run: |
-          cp ui_app/build/app/outputs/flutter-apk/app-release.apk MoeJect-Android.apk
-          ls -lh MoeJect-Android.apk
-
-      - name: Upload Android APK to Actions
-        uses: actions/upload-artifact@v4
-        with:
-          name: MoeJect-Android-APK
-          path: MoeJect-Android.apk
-          retention-days: 14
-
-      - name: Publish Android APK to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: MoeJect-Android.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          projectPath: app_tauri
+          tagName: v__VERSION__
+          releaseName: 'MoeJect v__VERSION__'
+          releaseBody: 'Phiên bản hợp nhất MoeJect (Tauri v2: Rust Core + React Frontend)'
+          releaseDraft: false
+          prerelease: false

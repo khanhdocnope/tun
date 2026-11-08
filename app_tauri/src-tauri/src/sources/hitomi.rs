@@ -1,0 +1,156 @@
+use crate::models::{MangaItem, ChapterItem, PageItem};
+use crate::sources::MangaSource;
+use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
+
+pub struct HitomiSource {
+    client: reqwest::Client,
+}
+
+impl HitomiSource {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+            .unwrap_or_default();
+        Self { client }
+    }
+
+    pub fn resolve_image_url(hash: &str) -> String {
+        if hash.len() < 3 {
+            return String::new();
+        }
+        let last3 = &hash[hash.len() - 3..];
+        let sub = if last3.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false) {
+            "b"
+        } else {
+            "a"
+        };
+        let p1 = &hash[hash.len() - 1..];
+        let p2 = &hash[hash.len() - 3..hash.len() - 1];
+        format!("https://{}a.hitomi.la/webp/{}/{}/{}.webp", sub, p1, p2, hash)
+    }
+}
+
+impl MangaSource for HitomiSource {
+    fn source_id(&self) -> &'static str {
+        "hitomi"
+    }
+
+    fn source_name(&self) -> &'static str {
+        "Hitomi.la"
+    }
+
+    fn search<'a>(&'a self, _query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
+        Box::pin(async move {
+            // Read first 24 gallery IDs from Nozomi index (each id is 4 bytes big endian)
+            let bytes_to_read = 24 * 4;
+            let range_header = format!("bytes=0-{}", bytes_to_read - 1);
+
+            let resp = self.client.get("https://ltn.hitomi.la/index-all.nozomi")
+                .header(reqwest::header::RANGE, range_header)
+                .header(reqwest::header::REFERER, "https://hitomi.la/")
+                .send()
+                .await
+                .map_err(|e| format!("Hitomi nozomi fetch failed: {}", e))?;
+
+            let bytes = resp.bytes().await.map_err(|e| format!("Read nozomi bytes failed: {}", e))?;
+            let mut gallery_ids = Vec::new();
+
+            for chunk in bytes.chunks_exact(4) {
+                let id = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                gallery_ids.push(id);
+            }
+
+            let mut results = Vec::new();
+            for id in gallery_ids.iter().take(12) {
+                let gal_url = format!("https://ltn.hitomi.la/galleries/{}.js", id);
+                if let Ok(gal_resp) = self.client.get(&gal_url).header(reqwest::header::REFERER, "https://hitomi.la/").send().await {
+                    if let Ok(text) = gal_resp.text().await {
+                        if let Some(json_str) = text.strip_prefix("var galleryinfo = ") {
+                            if let Ok(info) = serde_json::from_str::<Value>(json_str) {
+                                let title = info["title"].as_str().unwrap_or("Untitled").to_string();
+                                let first_file_hash = info["files"].as_array()
+                                    .and_then(|arr| arr.first())
+                                    .and_then(|f| f["hash"].as_str())
+                                    .unwrap_or("");
+                                
+                                let cover_url = if !first_file_hash.is_empty() {
+                                    Self::resolve_image_url(first_file_hash)
+                                } else {
+                                    "https://placehold.co/256x360?text=No+Cover".to_string()
+                                };
+
+                                let mut tags = Vec::new();
+                                if let Some(tag_arr) = info["tags"].as_array() {
+                                    for t in tag_arr {
+                                        if let Some(tag_name) = t["tag"].as_str() {
+                                            tags.push(tag_name.to_string());
+                                        }
+                                    }
+                                }
+
+                                results.push(MangaItem {
+                                    id: id.to_string(),
+                                    title,
+                                    cover_url,
+                                    source: "hitomi".to_string(),
+                                    description: None,
+                                    authors: vec![],
+                                    status: None,
+                                    genres: tags,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(results)
+        })
+    }
+
+    fn get_chapters<'a>(&'a self, manga_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<ChapterItem>, String>> + Send + 'a>> {
+        Box::pin(async move {
+            // In Hitomi, each gallery is a single chapter / book
+            Ok(vec![ChapterItem {
+                id: manga_id.to_string(),
+                manga_id: manga_id.to_string(),
+                chapter_number: 1.0,
+                title: format!("Complete Gallery #{}", manga_id),
+                source: "hitomi".to_string(),
+                language: "all".to_string(),
+            }])
+        })
+    }
+
+    fn get_pages<'a>(&'a self, chapter_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<PageItem>, String>> + Send + 'a>> {
+        Box::pin(async move {
+            let gal_url = format!("https://ltn.hitomi.la/galleries/{}.js", chapter_id);
+            let resp = self.client.get(&gal_url)
+                .header(reqwest::header::REFERER, "https://hitomi.la/")
+                .send()
+                .await
+                .map_err(|e| format!("Hitomi gallery fetch failed: {}", e))?;
+
+            let text = resp.text().await.map_err(|e| format!("Read text failed: {}", e))?;
+            let json_str = text.strip_prefix("var galleryinfo = ").unwrap_or(&text);
+            let info: Value = serde_json::from_str(json_str).map_err(|e| format!("Parse galleryinfo failed: {}", e))?;
+
+            let mut pages = Vec::new();
+            if let Some(files) = info["files"].as_array() {
+                for (idx, file) in files.iter().enumerate() {
+                    if let Some(hash) = file["hash"].as_str() {
+                        pages.push(PageItem {
+                            page_number: idx + 1,
+                            url: Self::resolve_image_url(hash),
+                        });
+                    }
+                }
+            }
+
+            Ok(pages)
+        })
+    }
+}

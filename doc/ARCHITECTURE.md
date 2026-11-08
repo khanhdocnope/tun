@@ -6,39 +6,48 @@
 
 ---
 
-### 1. KIẾN TRÚC ĐA NỀN TẢNG (DESKTOP & MOBILE DECOUPLED ARCHITECTURE)
+### 1. KIẾN TRÚC ĐA NỀN TẢNG HỢP NHẤT (TAURI v2 UNIFIED ARCHITECTURE)
 
-Để giải quyết triệt để bài toán hiệu năng, dung lượng ứng dụng và thời lượng pin trên thiết bị di động, hệ thống được thiết kế phân tách rõ rệt thành 2 tầng:
+Hệ thống được thiết kế hợp nhất trên nền tảng **Tauri v2** (`app_tauri/`), cho phép biên dịch mã nguồn duy nhất thành ứng dụng Native mượt mà trên cả **Windows (.exe)** và **Mobile Android (.apk)**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   FRONTEND CLIENTS (DESKTOP & MOBILE)                  │
-│  - Desktop App (Windows / macOS / Linux)                               │
-│  - Mobile App (Android / iOS) - Flutter / Native                       │
-│  * Nhiệm vụ: Đọc truyện mượt mà 60-120 FPS, RAM siêu nhẹ (~30-50MB),   │
-│    quản lý thư viện, điều khiển tìm kiếm & tải truyện                  │
+│             TAURI v2 WEB FRONTEND (REACT + TS + TAILWIND)              │
+│  - Catppuccin Mocha Dark UI (Desktop & Mobile Touch Responsive)        │
+│  - Views: Browse, Manga Detail, Downloads Queue, Library Shelf,        │
+│           In-App Reader (Webtoon/Manga), AI Cleaner Studio, Settings   │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ (REST API / WebSocket / Local IPC)
+                                    │ Tauri IPC (invoke / emit / listen)
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│               HEADLESS CORE ENGINE (PYTHON FASTAPI SERVICE)            │
-│  - Module Ingestion & Scraper (Bypass WAF, Gated Downloader)           │
-│  - Module Computer Vision & AI Cleaner (LaMa Inpainting, RapidOCR)     │
-│  - Module Packaging (CBZ + ComicInfo.xml metadata)                     │
-│  * Nhiệm vụ: Xử lý toàn bộ logic nặng về mạng, WAF, nén file và AI     │
-│  * Vận hành: Local Service trên PC, hoặc Self-hosted / Cloud Server    │
+│                     TAURI v2 RUST CORE (app_tauri/src-tauri)           │
+│  ├── sources/                                                          │
+│  │   ├── mangadex.rs    (REST v5, bypass POWBlock qua User-Agent)      │
+│  │   ├── comick.rs      (REST API & CDN)                               │
+│  │   ├── hitomi.rs      (Binary .nozomi index + gg.js dynamic sharding)│
+│  │   ├── cuutruyen.rs   (API + Base64/Pi-XOR DRM slice descramble)     │
+│  │   └── templates/     (Madara & MangaStream generic HTML parser)     │
+│  ├── downloader/                                                       │
+│  │   ├── pool.rs        (Two-tier async pool + Domain Semaphore Gate)  │
+│  │   └── validator.rs   (Magic bytes verification: PNG/JPG/WebP/GIF)   │
+│  ├── packager/                                                         │
+│  │   ├── cbz.rs         (CBZ zip file + ComicInfo.xml metadata)        │
+│  │   └── zip.rs         (Raw image archive)                            │
+│  ├── cleaner/                                                          │
+│  │   └── client.rs      (Hugging Face Space SSE Gradio API client)     │
+│  └── library/                                                          │
+│      ├── scanner.rs     (Auto-scan downloaded CBZ/ZIP collections)     │
+│      └── reader.rs      (Direct in-memory CBZ image streamer)          │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 #### Đảm bảo về Hiệu năng & Bộ nhớ (RAM & Performance Guarantees):
-1. **Kiểm soát RAM tuyệt đối (< 80MB cho Ingestion):**
-   - Áp dụng cơ chế **Chunk Streaming & Disk Flush**: Trang ảnh sau khi tải và kiểm tra magic bytes sẽ được ghi trực tiếp vào file đệm hoặc nén tức thì vào file `.cbz`. 
-   - Bộ nhớ đệm trong RAM chỉ duy trì từ 3–5 trang ảnh đang xử lý đồng thời, tuyệt đối không gom toàn bộ cả chapter vào RAM.
-2. **Vòng đời Trình duyệt Ngắn hạn (Ephemeral Browser Lifecycle):**
-   - Trình duyệt `nodriver` (Chromium) **chỉ được khởi động khi gặp Cloudflare Challenge mới** hoặc khi cookie hết hạn.
-   - Ngay sau khi giải mã và trích xuất cookie thành công vào `cf_cookies.dat`, toàn bộ tiến trình Chromium sẽ được đóng và giải phóng $100\%$ khỏi RAM. Quá trình tải ảnh hàng loạt sau đó chạy thuần túy bằng `requests.Session` nhẹ nhàng.
-3. **Phân tách Native cho Mobile:**
-   - Ứng dụng điện thoại không cần phải nhúng Python runtime cồng kềnh, tránh được việc bị hệ điều hành tắt ngầm (*kill background task*) hay app bị phình to hàng trăm MB.
+1. **Kiểm soát RAM tuyệt đối (< 35MB khi vận hành):**
+   - Lõi Rust không có garbage collector runtime, giải phóng bộ nhớ ngay tức thì sau khi tải và ghi từng trang ảnh xuống đĩa.
+2. **Không cần Server rời:**
+   - Giao thức Tauri IPC gọi trực tiếp các hàm Native C/Rust trong cùng một tiến trình, độ trễ bằng 0, không mở cổng mạng cục bộ tránh bị phần mềm diệt virus chặn.
+3. **Ứng dụng duy nhất cho Windows và Mobile:**
+   - Giao diện React responsive tự động co giãn giữa màn hình PC và điện thoại cảm ứng, hỗ trợ đầy đủ cử chỉ vuốt lật trang và cuộn dọc Webtoon.
 
 ---
 
