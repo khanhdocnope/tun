@@ -48,7 +48,7 @@ impl MangaSource for HitomiSource {
             let bytes_to_read = 24 * 4;
             let range_header = format!("bytes=0-{}", bytes_to_read - 1);
 
-            let resp = self.client.get("https://ltn.hitomi.la/index-all.nozomi")
+            let resp = self.client.get("https://ltn.gold-usergeneratedcontent.net/index-all.nozomi")
                 .header(reqwest::header::RANGE, range_header)
                 .header(reqwest::header::REFERER, "https://hitomi.la/")
                 .send()
@@ -65,7 +65,7 @@ impl MangaSource for HitomiSource {
 
             let mut results = Vec::new();
             for id in gallery_ids.iter().take(12) {
-                let gal_url = format!("https://ltn.hitomi.la/galleries/{}.js", id);
+                let gal_url = format!("https://ltn.gold-usergeneratedcontent.net/galleries/{}.js", id);
                 if let Ok(gal_resp) = self.client.get(&gal_url).header(reqwest::header::REFERER, "https://hitomi.la/").send().await {
                     if let Ok(text) = gal_resp.text().await {
                         if let Some(json_str) = text.strip_prefix("var galleryinfo = ") {
@@ -79,7 +79,7 @@ impl MangaSource for HitomiSource {
                                 let cover_url = if !first_file_hash.is_empty() {
                                     Self::resolve_image_url(first_file_hash)
                                 } else {
-                                    "https://placehold.co/256x360?text=No+Cover".to_string()
+                                    "".to_string()
                                 };
 
                                 let mut tags = Vec::new();
@@ -127,7 +127,7 @@ impl MangaSource for HitomiSource {
 
     fn get_pages<'a>(&'a self, chapter_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<PageItem>, String>> + Send + 'a>> {
         Box::pin(async move {
-            let gal_url = format!("https://ltn.hitomi.la/galleries/{}.js", chapter_id);
+            let gal_url = format!("https://ltn.gold-usergeneratedcontent.net/galleries/{}.js", chapter_id);
             let resp = self.client.get(&gal_url)
                 .header(reqwest::header::REFERER, "https://hitomi.la/")
                 .send()

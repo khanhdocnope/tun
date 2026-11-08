@@ -121,6 +121,7 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
           <img
             src={manga.cover_url}
             alt={manga.title}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
             onError={(e) => {
               (e.target as HTMLImageElement).src = 'https://placehold.co/256x360?text=No+Cover';

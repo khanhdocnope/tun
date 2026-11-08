@@ -30,7 +30,7 @@ impl MangaSource for ComickSource {
     fn search<'a>(&'a self, query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
         Box::pin(async move {
             let url = format!(
-                "https://api.comick.fun/v1.0/search?q={}&limit=24",
+                "https://api.comick.dev/v1.0/search?q={}&limit=24",
                 urlencoding::encode(query)
             );
 
@@ -48,12 +48,12 @@ impl MangaSource for ComickSource {
                     let title = item["title"].as_str().unwrap_or("Untitled").to_string();
                     let desc = item["desc"].as_str().map(|s| s.to_string());
                     
-                    let cover_url = if let Some(bkey) = item["md_covers"].as_array().and_then(|a| a.first()).and_then(|c| c["bkey"].as_str()) {
+                    let cover_url = if let Some(bkey) = item["md_covers"].as_array().and_then(|a| a.first()).and_then(|c| c["b2key"].as_str().or_else(|| c["bkey"].as_str())) {
                         format!("https://meo.comick.pictures/{}", bkey)
-                    } else if let Some(bkey) = item["bkey"].as_str() {
+                    } else if let Some(bkey) = item["b2key"].as_str().or_else(|| item["bkey"].as_str()) {
                         format!("https://meo.comick.pictures/{}", bkey)
                     } else {
-                        "https://placehold.co/256x360?text=No+Cover".to_string()
+                        "".to_string()
                     };
 
                     let status = item["status"].as_i64().map(|s| if s == 1 { "Ongoing" } else { "Completed" }.to_string());
@@ -86,7 +86,7 @@ impl MangaSource for ComickSource {
     fn get_chapters<'a>(&'a self, manga_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<ChapterItem>, String>> + Send + 'a>> {
         Box::pin(async move {
             let url = format!(
-                "https://api.comick.fun/comic/{}/chapters?limit=300",
+                "https://api.comick.dev/comic/{}/chapters?limit=300",
                 manga_id
             );
 
@@ -129,7 +129,7 @@ impl MangaSource for ComickSource {
 
     fn get_pages<'a>(&'a self, chapter_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<PageItem>, String>> + Send + 'a>> {
         Box::pin(async move {
-            let url = format!("https://api.comick.fun/chapter/{}", chapter_id);
+            let url = format!("https://api.comick.dev/chapter/{}", chapter_id);
             let resp = self.client.get(&url)
                 .send()
                 .await

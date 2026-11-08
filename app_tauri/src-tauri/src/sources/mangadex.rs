@@ -30,7 +30,7 @@ impl MangaSource for MangaDexSource {
     fn search<'a>(&'a self, query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
         Box::pin(async move {
             let url = format!(
-                "https://api.mangadex.org/manga?title={}&limit=24&includes[]=cover_art&order[relevance]=desc",
+                "https://api.mangadex.org/manga?title={}&limit=24&includes%5B%5D=cover_art&order%5Brelevance%5D=desc",
                 urlencoding::encode(query)
             );
 
@@ -72,7 +72,7 @@ impl MangaSource for MangaDexSource {
                     let cover_url = if !cover_file.is_empty() {
                         format!("https://uploads.mangadex.org/covers/{}/{}.256.jpg", id, cover_file)
                     } else {
-                        "https://placehold.co/256x360?text=No+Cover".to_string()
+                        "".to_string()
                     };
 
                     let status = item["attributes"]["status"].as_str().map(|s| s.to_string());

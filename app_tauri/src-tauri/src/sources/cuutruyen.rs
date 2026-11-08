@@ -78,10 +78,14 @@ impl MangaSource for CuutruyenSource {
 
     fn search<'a>(&'a self, query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
         Box::pin(async move {
-            let url = format!(
-                "https://cuutruyen.net/api/v2/mangas?filter[name]={}&page=1&per_page=24",
-                urlencoding::encode(query)
-            );
+            let url = if query.trim().is_empty() {
+                "https://cuutruyen.net/api/v2/mangas/recently_updated?page=1&per_page=24".to_string()
+            } else {
+                format!(
+                    "https://cuutruyen.net/api/v2/mangas/search?q={}&page=1&per_page=24",
+                    urlencoding::encode(query)
+                )
+            };
 
             let resp = self.client.get(&url)
                 .send()
@@ -101,7 +105,7 @@ impl MangaSource for CuutruyenSource {
                     results.push(MangaItem {
                         id,
                         title,
-                        cover_url: if cover_url.is_empty() { "https://placehold.co/256x360?text=No+Cover".to_string() } else { cover_url },
+                        cover_url,
                         source: "cuutruyen".to_string(),
                         description: desc,
                         authors: vec![],
@@ -166,7 +170,10 @@ impl MangaSource for CuutruyenSource {
 
             if let Some(arr) = json["data"]["pages"].as_array() {
                 for (idx, p) in arr.iter().enumerate() {
-                    let src = p["src"].as_str().unwrap_or("").to_string();
+                    let src = p["image_url"].as_str()
+                        .or_else(|| p["src"].as_str())
+                        .unwrap_or("")
+                        .to_string();
                     if !src.is_empty() {
                         pages.push(PageItem {
                             page_number: idx + 1,
