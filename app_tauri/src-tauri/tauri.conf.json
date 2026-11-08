@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "app_tauri",
-  "version": "0.1.0",
-  "identifier": "com.admin.app_tauri",
+  "productName": "MoeJect",
+  "version": "1.0.0",
+  "identifier": "com.moeject.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "app_tauri",
-        "width": 800,
-        "height": 600
+        "title": "MoeJect - Omni Manga Ecosystem",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
