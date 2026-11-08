@@ -43,11 +43,12 @@ uuid = { version = "1.13.1", features = ["v4", "serde"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-log = "0.2"
 anyhow = "1.0.95"
 thiserror = "2.0.11"
 
 # GUI Framework (100% Pure Rust)
-eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "wgpu"] }
+eframe = { version = "0.37.0", default-features = false, features = ["default_fonts", "wgpu", "clipboard", "links", "system_fonts"] }
 egui_extras = { version = "0.37.0", features = ["all_loaders", "image"] }
 rfd = "0.18"
 open = "5.4"

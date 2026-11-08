@@ -18,6 +18,7 @@ temp/
 downloads/
 temp_app.py
 *.tmp
+*.exe
 space_repo/
 rust_core/target/
 

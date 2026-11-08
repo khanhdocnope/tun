@@ -87,6 +87,8 @@ enum Commands {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_log::LogTracer::init();
+
     // Setup tracing logger
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
@@ -113,7 +115,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _guard = rt.enter();
 
             info!("🚀 Launching MoeJect Native Rust GUI...");
-            gui::run_gui(registry, out_dir)?;
+            let res = gui::run_gui(registry, out_dir);
+            if let Err(e) = res {
+                tracing::error!("❌ GUI exited with error: {:?}", e);
+                eprintln!("❌ Lỗi khởi chạy GUI: {:?}", e);
+            }
         }
         Commands::Serve { host, port, downloads_dir } => {
             rt.block_on(async {
