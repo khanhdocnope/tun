@@ -28,9 +28,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, downlo
     >
       {/* Wordmark — vùng kéo cửa sổ */}
       <div data-tauri-drag-region className={`h-16 flex items-center gap-3 px-4 ${collapsed ? 'justify-center' : ''}`}>
-        <span className="w-8 h-8 rounded-[3px] bg-son-600 text-white grid place-items-center font-display font-black text-lg shrink-0">
-          M
-        </span>
+        <img
+          src="/app-icon.png"
+          alt="MoeJect"
+          className="w-8 h-8 rounded-lg object-cover shrink-0 shadow-sm ring-1 ring-white/10"
+          onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
+        />
         {!collapsed && (
           <span className="font-display font-extrabold text-2xl text-paper leading-none" style={{ fontStretch: '75%' }}>
             MoeJect
