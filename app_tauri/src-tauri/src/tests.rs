@@ -25,4 +25,37 @@ mod tests {
         assert!(url.contains("hitomi.la/webp"));
         assert!(url.ends_with(".webp"));
     }
+
+    #[test]
+    fn test_sources_catalog_loading_and_counts() {
+        use crate::sources::catalog::{get_catalog, is_template_supported, search_catalog_sources};
+
+        let cat = get_catalog();
+        assert!(cat.total >= 1300, "Catalog should have at least 1300 sources, got {}", cat.total);
+
+        // Check template coverage
+        let madara_count = cat.sources.iter().filter(|s| s.template == "WordPressMadara").count();
+        let mangastream_count = cat.sources.iter().filter(|s| s.template == "WordPressMangastream").count();
+        let mojoportal_count = cat.sources.iter().filter(|s| s.template == "MojoPortalComic").count();
+
+        assert!(madara_count >= 400, "Madara count: {}", madara_count);
+        assert!(mangastream_count >= 190, "MangaStream count: {}", mangastream_count);
+        assert!(mojoportal_count >= 10, "MojoPortal count: {}", mojoportal_count);
+
+        // Verify supported template checker
+        assert!(is_template_supported("WordPressMadara"));
+        assert!(is_template_supported("WordPressMangastream"));
+        assert!(is_template_supported("MojoPortalComic"));
+        assert!(!is_template_supported("Connector"));
+
+        // Search test
+        let net_results = search_catalog_sources("nettruyen", None);
+        assert!(!net_results.is_empty(), "Should find NetTruyen in catalog");
+        assert_eq!(net_results[0].id, "nettruyen");
+
+        // Language filter test
+        let vi_results = search_catalog_sources("", Some("vi"));
+        assert!(!vi_results.is_empty(), "Should find Vietnamese sources");
+        assert!(vi_results.iter().all(|s| s.languages.contains(&"vi".to_string())));
+    }
 }

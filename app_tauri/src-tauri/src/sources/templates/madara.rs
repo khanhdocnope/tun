@@ -5,34 +5,34 @@ use std::future::Future;
 use std::pin::Pin;
 
 pub struct MadaraTemplate {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub base_url: &'static str,
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
     client: reqwest::Client,
 }
 
 impl MadaraTemplate {
-    pub fn new(id: &'static str, name: &'static str, base_url: &'static str) -> Self {
+    pub fn new(id: impl Into<String>, name: impl Into<String>, base_url: impl Into<String>) -> Self {
         let client = reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
             .unwrap_or_default();
-        Self { id, name, base_url, client }
+        Self { id: id.into(), name: name.into(), base_url: base_url.into(), client }
     }
 }
 
 impl MangaSource for MadaraTemplate {
-    fn source_id(&self) -> &'static str {
-        self.id
+    fn source_id(&self) -> &str {
+        &self.id
     }
 
-    fn source_name(&self) -> &'static str {
-        self.name
+    fn source_name(&self) -> &str {
+        &self.name
     }
 
     fn search<'a>(&'a self, query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
-        let base_url = self.base_url;
-        let id_str = self.id;
+        let base_url = self.base_url.clone();
+        let id_str = self.id.clone();
         Box::pin(async move {
             let url = format!("{}/?s={}&post_type=wp-manga", base_url, query);
             let resp = self.client.get(&url).send().await.map_err(|e| e.to_string())?;
@@ -71,7 +71,7 @@ impl MangaSource for MadaraTemplate {
     }
 
     fn get_chapters<'a>(&'a self, manga_url: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<ChapterItem>, String>> + Send + 'a>> {
-        let id_str = self.id;
+        let id_str = self.id.clone();
         Box::pin(async move {
             let resp = self.client.get(manga_url).send().await.map_err(|e| e.to_string())?;
             let html_text = resp.text().await.map_err(|e| e.to_string())?;

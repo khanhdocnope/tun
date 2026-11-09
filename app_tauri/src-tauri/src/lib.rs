@@ -28,6 +28,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_available_sources,
+            list_catalog_sources,
             search_manga,
             get_manga_chapters,
             get_chapter_pages,

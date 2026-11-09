@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Loader2, RefreshCw, BookOpen } from 'lucide-react';
+import { Search, X, Loader2, RefreshCw, BookOpen, Plus, Globe } from 'lucide-react';
 import { MangaItem } from '../types';
 import { invoke } from '@tauri-apps/api/core';
+import { SourceCatalogModal } from '../components/SourceCatalogModal';
 
 interface BrowseViewProps {
   onSelectManga: (manga: MangaItem) => void;
@@ -41,24 +42,37 @@ const SHOWCASE_FALLBACKS: MangaItem[] = [
   },
 ];
 
-const SOURCES = [
+const DEFAULT_SOURCES = [
   { id: 'mangadex', name: 'MangaDex' },
-  { id: 'comick', name: 'Comick' },
+  { id: 'comick', name: 'ComicK' },
   { id: 'cuutruyen', name: 'Cứu Truyện' },
-  { id: 'hitomi', name: 'Hitomi' },
-  { id: 'asura', name: 'Asura Scans' },
+  { id: 'nettruyen', name: 'NetTruyen' },
+  { id: 'asurascans', name: 'Asura Scans' },
   { id: 'manganato', name: 'MangaNato' },
+  { id: 'hitomi', name: 'Hitomi' },
 ];
 
 const GENRES = ['Tất cả', 'Solo', 'Action', 'Manhwa', 'Isekai', 'Romance', 'Fantasy', 'Horror'];
 
 export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
+  const [sourcesList, setSourcesList] = useState<{ id: string; name: string }[]>(() => {
+    try {
+      const saved = localStorage.getItem('moeject_pinned_sources');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return DEFAULT_SOURCES;
+  });
+
   const [source, setSource] = useState('mangadex');
   const [query, setQuery] = useState('');
   const [genre, setGenre] = useState('Tất cả');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<MangaItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   useEffect(() => {
     load('mangadex', 'Solo');
@@ -88,13 +102,25 @@ export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
     load(id, query.trim() || (id === 'cuutruyen' ? '' : 'Solo'));
   };
 
+  const handleSelectCatalogSource = (newSource: { id: string; name: string }) => {
+    setSourcesList((prev) => {
+      const exists = prev.some((s) => s.id === newSource.id);
+      const updated = exists ? prev : [...prev, newSource];
+      try {
+        localStorage.setItem('moeject_pinned_sources', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    pickSource(newSource.id);
+  };
+
   const pickGenre = (g: string) => {
     setGenre(g);
     setQuery(g === 'Tất cả' ? '' : g);
     load(source, g === 'Tất cả' ? 'Solo' : g);
   };
 
-  const sourceName = SOURCES.find((s) => s.id === source)?.name;
+  const sourceName = sourcesList.find((s) => s.id === source)?.name || source;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -124,9 +150,9 @@ export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
             </form>
           </div>
 
-          {/* Nguồn truyện: tab chữ, gạch chân son cho nguồn đang chọn */}
-          <div className="flex gap-6 overflow-x-auto no-scrollbar mt-4">
-            {SOURCES.map((s) => (
+          {/* Nguồn truyện: tab chữ, gạch chân son cho nguồn đang chọn + nút mở catalog */}
+          <div className="flex items-center gap-6 overflow-x-auto no-scrollbar mt-4">
+            {sourcesList.map((s) => (
               <button
                 key={s.id}
                 onClick={() => pickSource(s.id)}
@@ -137,6 +163,16 @@ export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
                 {s.name}
               </button>
             ))}
+
+            <button
+              onClick={() => setIsCatalogOpen(true)}
+              className="shrink-0 pb-3 text-sm text-son-400 hover:text-son-300 font-semibold flex items-center gap-1.5 cursor-pointer border-b-2 border-transparent transition-colors ml-auto"
+              title="Khám phá kho hơn 1,300 nguồn truyện HakuNeko"
+            >
+              <Globe size={15} />
+              <span>Kho 1,300+ nguồn</span>
+              <Plus size={14} className="opacity-80" />
+            </button>
           </div>
         </div>
       </header>
@@ -197,6 +233,15 @@ export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
           </div>
         </div>
       </div>
+
+      {/* Modal kho nguồn HakuNeko 1,300+ nguồn */}
+      <SourceCatalogModal
+        isOpen={isCatalogOpen}
+        onClose={() => setIsCatalogOpen(false)}
+        onSelectSource={handleSelectCatalogSource}
+        currentSourceId={source}
+      />
     </div>
   );
 };
+

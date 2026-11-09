@@ -12,11 +12,23 @@ use crate::sources::hitomi::HitomiSource;
 use crate::sources::mangadex::MangaDexSource;
 use crate::sources::templates::madara::MadaraTemplate;
 use crate::sources::templates::mangastream::MangaStreamTemplate;
+use crate::sources::templates::mojoportal::MojoPortalTemplate;
+use crate::sources::catalog::{find_source_by_id, is_template_supported, search_catalog_sources, SourceCatalogEntry};
 use crate::sources::MangaSource;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceInfo {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub language: String,
+    pub is_custom: bool,
+}
 
 pub struct AppState {
     pub settings: Arc<Mutex<AppSettings>>,
@@ -29,6 +41,7 @@ pub struct AppState {
     pub cuutruyen: CuutruyenSource,
     pub asurascans: MangaStreamTemplate,
     pub manganato: MadaraTemplate,
+    pub nettruyen: MojoPortalTemplate,
 }
 
 impl AppState {
@@ -46,8 +59,187 @@ impl AppState {
             cuutruyen: CuutruyenSource::new(),
             asurascans: MangaStreamTemplate::new("asurascans", "Asura Scans", "https://asuracomic.net"),
             manganato: MadaraTemplate::new("manganato", "MangaNato", "https://manganato.com"),
+            nettruyen: MojoPortalTemplate::new("nettruyen", "NetTruyen", "https://nettruyenx.com"),
         }
     }
+}
+
+async fn dispatch_search(source: &str, query: &str, state: &AppState) -> Result<Vec<MangaItem>, String> {
+    match source {
+        "mangadex" => state.mangadex.search(query).await,
+        "comick" => state.comick.search(query).await,
+        "hitomi" => state.hitomi.search(query).await,
+        "cuutruyen" => state.cuutruyen.search(query).await,
+        "asura" | "asurascans" => state.asurascans.search(query).await,
+        "manganato" => state.manganato.search(query).await,
+        "nettruyen" => state.nettruyen.search(query).await,
+        other => {
+            if let Some(entry) = find_source_by_id(other) {
+                match entry.template.as_str() {
+                    "WordPressMadara" => {
+                        let inst = MadaraTemplate::new(entry.id, entry.name, entry.url);
+                        inst.search(query).await
+                    }
+                    "WordPressMangastream" => {
+                        let inst = MangaStreamTemplate::new(entry.id, entry.name, entry.url);
+                        inst.search(query).await
+                    }
+                    "MojoPortalComic" => {
+                        let inst = MojoPortalTemplate::new(entry.id, entry.name, entry.url);
+                        inst.search(query).await
+                    }
+                    tmpl => Err(format!(
+                        "Nguồn '{}' sử dụng template '{}' chưa được hỗ trợ scraper tự động.",
+                        entry.name, tmpl
+                    )),
+                }
+            } else {
+                Err(format!("Không tìm thấy nguồn: {}", other))
+            }
+        }
+    }
+}
+
+async fn dispatch_chapters(source: &str, manga_id: &str, state: &AppState) -> Result<Vec<ChapterItem>, String> {
+    match source {
+        "mangadex" => state.mangadex.get_chapters(manga_id).await,
+        "comick" => state.comick.get_chapters(manga_id).await,
+        "hitomi" => state.hitomi.get_chapters(manga_id).await,
+        "cuutruyen" => state.cuutruyen.get_chapters(manga_id).await,
+        "asura" | "asurascans" => state.asurascans.get_chapters(manga_id).await,
+        "manganato" => state.manganato.get_chapters(manga_id).await,
+        "nettruyen" => state.nettruyen.get_chapters(manga_id).await,
+        other => {
+            if let Some(entry) = find_source_by_id(other) {
+                match entry.template.as_str() {
+                    "WordPressMadara" => {
+                        let inst = MadaraTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_chapters(manga_id).await
+                    }
+                    "WordPressMangastream" => {
+                        let inst = MangaStreamTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_chapters(manga_id).await
+                    }
+                    "MojoPortalComic" => {
+                        let inst = MojoPortalTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_chapters(manga_id).await
+                    }
+                    tmpl => Err(format!(
+                        "Nguồn '{}' sử dụng template '{}' chưa được hỗ trợ scraper tự động.",
+                        entry.name, tmpl
+                    )),
+                }
+            } else {
+                Err(format!("Không tìm thấy nguồn: {}", other))
+            }
+        }
+    }
+}
+
+async fn dispatch_pages(source: &str, chapter_id: &str, state: &AppState) -> Result<Vec<PageItem>, String> {
+    match source {
+        "mangadex" => state.mangadex.get_pages(chapter_id).await,
+        "comick" => state.comick.get_pages(chapter_id).await,
+        "hitomi" => state.hitomi.get_pages(chapter_id).await,
+        "cuutruyen" => state.cuutruyen.get_pages(chapter_id).await,
+        "asura" | "asurascans" => state.asurascans.get_pages(chapter_id).await,
+        "manganato" => state.manganato.get_pages(chapter_id).await,
+        "nettruyen" => state.nettruyen.get_pages(chapter_id).await,
+        other => {
+            if let Some(entry) = find_source_by_id(other) {
+                match entry.template.as_str() {
+                    "WordPressMadara" => {
+                        let inst = MadaraTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_pages(chapter_id).await
+                    }
+                    "WordPressMangastream" => {
+                        let inst = MangaStreamTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_pages(chapter_id).await
+                    }
+                    "MojoPortalComic" => {
+                        let inst = MojoPortalTemplate::new(entry.id, entry.name, entry.url);
+                        inst.get_pages(chapter_id).await
+                    }
+                    tmpl => Err(format!(
+                        "Nguồn '{}' sử dụng template '{}' chưa được hỗ trợ scraper tự động.",
+                        entry.name, tmpl
+                    )),
+                }
+            } else {
+                Err(format!("Không tìm thấy nguồn: {}", other))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_available_sources() -> Result<Vec<SourceInfo>, String> {
+    Ok(vec![
+        SourceInfo {
+            id: "mangadex".into(),
+            name: "MangaDex".into(),
+            url: "https://mangadex.org".into(),
+            language: "Multi".into(),
+            is_custom: true,
+        },
+        SourceInfo {
+            id: "comick".into(),
+            name: "ComicK".into(),
+            url: "https://comick.io".into(),
+            language: "Multi".into(),
+            is_custom: true,
+        },
+        SourceInfo {
+            id: "cuutruyen".into(),
+            name: "Cứu Truyện".into(),
+            url: "https://cuutruyen.net".into(),
+            language: "vi".into(),
+            is_custom: true,
+        },
+        SourceInfo {
+            id: "nettruyen".into(),
+            name: "NetTruyen".into(),
+            url: "https://nettruyenx.com".into(),
+            language: "vi".into(),
+            is_custom: false,
+        },
+        SourceInfo {
+            id: "asurascans".into(),
+            name: "Asura Scans".into(),
+            url: "https://asuracomic.net".into(),
+            language: "en".into(),
+            is_custom: false,
+        },
+        SourceInfo {
+            id: "manganato".into(),
+            name: "MangaNato".into(),
+            url: "https://manganato.com".into(),
+            language: "en".into(),
+            is_custom: false,
+        },
+        SourceInfo {
+            id: "hitomi".into(),
+            name: "Hitomi.la".into(),
+            url: "https://hitomi.la".into(),
+            language: "Multi".into(),
+            is_custom: true,
+        },
+    ])
+}
+
+#[tauri::command]
+pub async fn list_catalog_sources(
+    query: Option<String>,
+    lang: Option<String>,
+    only_supported: Option<bool>,
+) -> Result<Vec<SourceCatalogEntry>, String> {
+    let q = query.unwrap_or_default();
+    let l = lang.as_deref();
+    let mut results = search_catalog_sources(&q, l);
+    if only_supported.unwrap_or(false) {
+        results.retain(|s| is_template_supported(&s.template));
+    }
+    Ok(results)
 }
 
 #[tauri::command]
@@ -56,15 +248,7 @@ pub async fn search_manga(
     query: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<MangaItem>, String> {
-    match source.as_str() {
-        "mangadex" => state.mangadex.search(&query).await,
-        "comick" => state.comick.search(&query).await,
-        "hitomi" => state.hitomi.search(&query).await,
-        "cuutruyen" => state.cuutruyen.search(&query).await,
-        "asurascans" => state.asurascans.search(&query).await,
-        "manganato" => state.manganato.search(&query).await,
-        _ => Err(format!("Unsupported source: {}", source)),
-    }
+    dispatch_search(&source, &query, &state).await
 }
 
 #[tauri::command]
@@ -73,15 +257,7 @@ pub async fn get_manga_chapters(
     manga_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ChapterItem>, String> {
-    match source.as_str() {
-        "mangadex" => state.mangadex.get_chapters(&manga_id).await,
-        "comick" => state.comick.get_chapters(&manga_id).await,
-        "hitomi" => state.hitomi.get_chapters(&manga_id).await,
-        "cuutruyen" => state.cuutruyen.get_chapters(&manga_id).await,
-        "asurascans" => state.asurascans.get_chapters(&manga_id).await,
-        "manganato" => state.manganato.get_chapters(&manga_id).await,
-        _ => Err(format!("Unsupported source: {}", source)),
-    }
+    dispatch_chapters(&source, &manga_id, &state).await
 }
 
 #[tauri::command]
@@ -90,15 +266,7 @@ pub async fn get_chapter_pages(
     chapter_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<PageItem>, String> {
-    match source.as_str() {
-        "mangadex" => state.mangadex.get_pages(&chapter_id).await,
-        "comick" => state.comick.get_pages(&chapter_id).await,
-        "hitomi" => state.hitomi.get_pages(&chapter_id).await,
-        "cuutruyen" => state.cuutruyen.get_pages(&chapter_id).await,
-        "asurascans" => state.asurascans.get_pages(&chapter_id).await,
-        "manganato" => state.manganato.get_pages(&chapter_id).await,
-        _ => Err(format!("Unsupported source: {}", source)),
-    }
+    dispatch_pages(&source, &chapter_id, &state).await
 }
 
 #[tauri::command]
@@ -108,16 +276,8 @@ pub async fn start_download(
     source: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    // 1. Get pages
-    let pages = match source.as_str() {
-        "mangadex" => state.mangadex.get_pages(&task.chapter_id).await?,
-        "comick" => state.comick.get_pages(&task.chapter_id).await?,
-        "hitomi" => state.hitomi.get_pages(&task.chapter_id).await?,
-        "cuutruyen" => state.cuutruyen.get_pages(&task.chapter_id).await?,
-        "asurascans" => state.asurascans.get_pages(&task.chapter_id).await?,
-        "manganato" => state.manganato.get_pages(&task.chapter_id).await?,
-        _ => return Err(format!("Unknown source: {}", source)),
-    };
+    // 1. Get pages via dynamic dispatcher
+    let pages = dispatch_pages(&source, &task.chapter_id, &state).await?;
 
     let download_dir = {
         let s = state.settings.lock().await;

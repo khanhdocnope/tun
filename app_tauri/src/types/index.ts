@@ -85,3 +85,21 @@ export interface CleanResponse {
   backend?: 'cloud' | 'local' | null;
   mime?: string | null;
 }
+
+export interface SourceInfo {
+  id: string;
+  name: string;
+  url: string;
+  language: string;
+  is_custom: boolean;
+}
+
+export interface SourceCatalogEntry {
+  id: string;
+  name: string;
+  url: string;
+  template: string;
+  languages: string[];
+  tags: string[];
+}
+
