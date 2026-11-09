@@ -1,69 +1,3 @@
-name: Build MoeJect Apps (Tauri v2 Unified)
-
-on:
-  push:
-    branches:
-      - main
-      - master
-      - 'feature/**'
-    tags:
-      - 'v*'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  build-windows:
-    name: Build & Package Windows x64 (Tauri v2)
-    runs-on: windows-latest
-
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust Stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust Cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: app_tauri/src-tauri
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install Frontend Dependencies
-        working-directory: app_tauri
-        run: npm install
-
-      - name: Build Frontend
-        working-directory: app_tauri
-        run: npm run build
-
-      - name: Build Tauri App
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: app_tauri
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && format('MoeJect {0}', github.ref_name) || '' }}
-          releaseDraft: false
-          prerelease: false
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: MoeJect-Windows-x64
-          path: |
-            app_tauri/src-tauri/target/release/app_tauri.exe
-            app_tauri/src-tauri/target/release/bundle/msi/*.msi
-            app_tauri/src-tauri/target/release/bundle/nsis/*.exe
-          if-no-files-found: warn
-
   build-android:
     name: Build & Package Android APK (Tauri v2)
     runs-on: ubuntu-latest
@@ -83,11 +17,9 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           NDK_PATH=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 2>/dev/null | sort -V | tail -n 1)
           if [ -z "$NDK_PATH" ]; then
-            echo "Installing NDK via sdkmanager..."
             sdkmanager --install "ndk;26.3.11579264"
             NDK_PATH="$ANDROID_HOME/ndk/26.3.11579264"
           fi
-          echo "NDK Path found: $NDK_PATH"
           echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
           echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
 
@@ -120,10 +52,50 @@ jobs:
           npx tauri android init --ci
           npx tauri android build --apk --target aarch64 --ci
 
-      - name: Upload Android APK Artifacts
+      - name: Prepare Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using keystore from GitHub Secrets"
+            echo "$KEYSTORE_BASE64" | base64 -d > $RUNNER_TEMP/release.jks
+            echo "KS_PASS=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
+            echo "KS_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+          else
+            echo "No secrets found -> generating a temporary keystore"
+            keytool -genkey -v -keystore $RUNNER_TEMP/release.jks \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias moeject -storepass android123 -keypass android123 \
+              -dname "CN=MoeJect, OU=Dev, O=MoeJect, C=VN"
+            echo "KS_PASS=android123" >> $GITHUB_ENV
+            echo "KS_ALIAS=moeject" >> $GITHUB_ENV
+          fi
+          echo "KS_FILE=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+
+      - name: Align & Sign APK
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          OUT=app_tauri/src-tauri/gen/android/app/build/outputs/apk
+          UNSIGNED=$(find $OUT -name "*-unsigned.apk" | head -n 1)
+          echo "Unsigned APK: $UNSIGNED"
+
+          mkdir -p signed
+          $BT/zipalign -p -f 4 "$UNSIGNED" signed/aligned.apk
+          $BT/apksigner sign \
+            --ks "$KS_FILE" \
+            --ks-key-alias "$KS_ALIAS" \
+            --ks-pass pass:"$KS_PASS" \
+            --key-pass pass:"$KS_PASS" \
+            --out signed/MoeJect-signed.apk \
+            signed/aligned.apk
+          $BT/apksigner verify --verbose signed/MoeJect-signed.apk
+          rm signed/aligned.apk
+
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: MoeJect-Android-APK
-          path: |
-            app_tauri/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-          if-no-files-found: warn
+          name: MoeJect-Android-APK-signed
+          path: signed/MoeJect-signed.apk
+          if-no-files-found: error
