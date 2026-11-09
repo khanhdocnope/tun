@@ -56,6 +56,18 @@ export interface AppSettings {
   hf_space_url: string;
   hf_token?: string;
   reader_mode: 'webtoon' | 'manga';
+  cleaner_mode: CleanerMode;
+  auto_prefer_local: boolean;
+  local_model_dir?: string | null;
+  cloud_timeout_secs: number;
+}
+
+export type CleanerMode = 'auto' | 'cloud' | 'local';
+
+export interface CleanerStatus {
+  mode: CleanerMode;
+  cloud_available: boolean;
+  local_available: boolean;
 }
 
 export interface CleanRequest {
@@ -70,4 +82,6 @@ export interface CleanRequest {
 export interface CleanResponse {
   cleaned_image_base64: string;
   time_taken?: string;
+  backend?: 'cloud' | 'local' | null;
+  mime?: string | null;
 }

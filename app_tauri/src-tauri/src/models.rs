@@ -26,6 +26,21 @@ pub struct ChapterItem {
 pub struct PageItem {
     pub page_number: usize,
     pub url: String,
+    #[serde(default)]
+    pub drm_data: Option<String>,
+    #[serde(default)]
+    pub fallback_urls: Vec<String>,
+}
+
+impl PageItem {
+    pub fn new(page_number: usize, url: String) -> Self {
+        Self {
+            page_number,
+            url,
+            drm_data: None,
+            fallback_urls: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,7 +68,17 @@ pub struct DownloadTask {
     pub error_message: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CleanerMode {
+    #[default]
+    Auto,
+    Cloud,
+    Local,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)] // file settings.json cũ thiếu field mới vẫn nạp được
 pub struct AppSettings {
     pub download_dir: String,
     pub max_concurrent_chapters: usize,
@@ -62,6 +87,11 @@ pub struct AppSettings {
     pub hf_space_url: String,
     pub hf_token: Option<String>,
     pub reader_mode: String, // "webtoon" or "manga"
+    pub cleaner_mode: CleanerMode,
+    /// Chỉ dùng ở chế độ Auto: true = thử local trước, false = thử cloud trước.
+    pub auto_prefer_local: bool,
+    pub local_model_dir: Option<String>,
+    pub cloud_timeout_secs: u64,
 }
 
 impl Default for AppSettings {
@@ -74,6 +104,10 @@ impl Default for AppSettings {
             hf_space_url: "https://dobietdc-manga-text-cleaner.hf.space".to_string(),
             hf_token: None,
             reader_mode: "webtoon".to_string(),
+            cleaner_mode: CleanerMode::Auto,
+            auto_prefer_local: true,
+            local_model_dir: None,
+            cloud_timeout_secs: 120,
         }
     }
 }
@@ -92,6 +126,18 @@ pub struct CleanRequest {
 pub struct CleanResponse {
     pub cleaned_image_base64: String,
     pub time_taken: Option<String>,
+    /// "cloud" | "local" - backend thực sự đã xử lý ảnh.
+    #[serde(default)]
+    pub backend: Option<String>,
+    #[serde(default)]
+    pub mime: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanerStatus {
+    pub mode: CleanerMode,
+    pub cloud_available: bool,
+    pub local_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

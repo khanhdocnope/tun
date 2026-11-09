@@ -141,10 +141,10 @@ impl MangaSource for ComickSource {
             if let Some(arr) = json["chapter"]["images"].as_array() {
                 for (idx, img) in arr.iter().enumerate() {
                     if let Some(bkey) = img["bkey"].as_str() {
-                        pages.push(PageItem {
-                            page_number: idx + 1,
-                            url: format!("https://meo.comick.pictures/{}", bkey),
-                        });
+                        pages.push(PageItem::new(
+                            idx + 1,
+                            format!("https://meo.comick.pictures/{}", bkey),
+                        ));
                     }
                 }
             }

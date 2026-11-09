@@ -172,7 +172,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     <div className="fixed inset-0 z-50 bg-[#000000] flex flex-col overflow-hidden select-none">
       {/* Top Floating Glassmorphic App Bar */}
       <div
-        className={`absolute top-0 left-0 right-0 z-40 bg-[#0a0b12]/90 backdrop-blur-2xl border-b border-white/[0.08] p-3 sm:p-4 flex items-center justify-between transition-transform duration-300 ${
+        className={`absolute top-0 left-0 right-0 z-40 bg-[#0f1524]/90 backdrop-blur-2xl border-b border-white/[0.08] p-3 sm:p-4 flex items-center justify-between transition-transform duration-300 ${
           showControls ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
@@ -199,7 +199,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               onClick={() => setMode('webtoon')}
               className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                 mode === 'webtoon'
-                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-bold shadow-md shadow-violet-600/30'
+                  ? 'bg-violet-600 text-white font-bold shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -209,7 +209,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               onClick={() => setMode('manga')}
               className={`px-3 py-1 rounded-xl transition-all cursor-pointer ${
                 mode === 'manga'
-                  ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white font-bold shadow-md shadow-violet-600/30'
+                  ? 'bg-violet-600 text-white font-bold shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -244,7 +244,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <p className="mb-4">{error}</p>
             <button
               onClick={onlineChapter ? loadOnlinePages : () => loadOfflinePage(currentPage)}
-              className="px-5 py-2.5 bg-violet-600 text-white rounded-2xl text-xs font-bold cursor-pointer hover:bg-violet-500 transition-colors shadow-lg shadow-violet-600/30"
+              className="px-5 py-2.5 bg-violet-600 text-white rounded-2xl text-xs font-bold cursor-pointer hover:bg-violet-500 transition-colors shadow-lg"
             >
               Thử tải lại
             </button>
@@ -311,7 +311,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
       {/* Bottom Floating Scrubber */}
       <div
-        className={`absolute bottom-0 left-0 right-0 z-40 bg-[#0a0b12]/90 backdrop-blur-2xl border-t border-white/[0.08] p-3 sm:p-4 flex items-center justify-between gap-4 transition-transform duration-300 ${
+        className={`absolute bottom-0 left-0 right-0 z-40 bg-[#0f1524]/90 backdrop-blur-2xl border-t border-white/[0.08] p-3 sm:p-4 flex items-center justify-between gap-4 transition-transform duration-300 ${
           showControls ? 'translate-y-0' : 'translate-y-full'
         }`}
       >

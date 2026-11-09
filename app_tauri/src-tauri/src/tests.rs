@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::downloader::pool::is_valid_image;
+    use crate::downloader::is_valid_image;
     use crate::sources::hitomi::HitomiSource;
 
     #[test]

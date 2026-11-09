@@ -162,10 +162,10 @@ impl MangaSource for MangaDexSource {
             if let Some(data) = json["chapter"]["data"].as_array() {
                 for (idx, file) in data.iter().enumerate() {
                     if let Some(file_name) = file.as_str() {
-                        pages.push(PageItem {
-                            page_number: idx + 1,
-                            url: format!("{}/data/{}/{}", base_url, hash, file_name),
-                        });
+                        pages.push(PageItem::new(
+                            idx + 1,
+                            format!("{}/data/{}/{}", base_url, hash, file_name),
+                        ));
                     }
                 }
             }

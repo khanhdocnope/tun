@@ -121,6 +121,17 @@ Dự án được xây dựng dựa trên 2 trụ cột cốt lõi:
 
 ---
 
+### 3b. CLEANER HYBRID (CLOUD / LOCAL)
+
+`clean_image` -> `cleaner::clean_with_mode` chọn backend theo `cleaner_mode` (auto/cloud/local).
+
+- **Cloud** (`cleaner/cloud.rs`): `POST /v1/clean` multipart lên HF Space (rơi về Gradio SSE cũ nếu Space chưa có endpoint).
+- **Local** (`cleaner/local.rs` -> `local/engine.rs`, cần `--features local-ort`):
+  detector DB (`local/detector.rs`) -> tách nét Otsu (`vision/stroke.rs`) -> gộp dòng (`local/textline.rs`)
+  -> classify bubble/sfx + lọc `bubble_only` + refine mask (`vision/pipeline.rs`, `classify.rs`, `mask.rs`)
+  -> LaMa theo cửa sổ (`local/lama.rs`). Mọi model đi qua trait `TensorRunner`; chỉ `local/ort_runner.rs` dùng crate `ort`.
+- Golden test: `tools/gen_golden.py`; model: `tools/fetch_models.py`.
+
 ### 4. CƠ CẤU TỔ CHỨC MÃ NGUỒN (PROJECT DIRECTORY STRUCTURE)
 
 ```text

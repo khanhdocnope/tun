@@ -113,10 +113,10 @@ impl MangaSource for MangaStreamTemplate {
 
             for (idx, elem) in document.select(&page_sel).enumerate() {
                 if let Some(src) = elem.value().attr("src").or_else(|| elem.value().attr("data-src")) {
-                    pages.push(PageItem {
-                        page_number: idx + 1,
-                        url: src.trim().to_string(),
-                    });
+                    pages.push(PageItem::new(
+                        idx + 1,
+                        src.trim().to_string(),
+                    ));
                 }
             }
 

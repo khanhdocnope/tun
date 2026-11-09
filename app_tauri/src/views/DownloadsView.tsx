@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Download, FolderOpen, CheckCircle2, AlertCircle, Loader2, Sparkles, Clock, ArrowDownToLine } from 'lucide-react';
+import { Download, FolderOpen, CheckCircle2, AlertCircle, Loader2, Sparkles, Clock, ArrowDownToLine, X, Ban } from 'lucide-react';
 import { DownloadTask } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 export const DownloadsView: React.FC = () => {
   const [tasks, setTasks] = useState<DownloadTask[]>([]);
+
+  const handleCancel = (taskId: string) => {
+    invoke('cancel_download', { taskId }).catch((e) => console.error(e));
+  };
 
   useEffect(() => {
     invoke<DownloadTask[]>('get_download_queue')
@@ -42,7 +46,7 @@ export const DownloadsView: React.FC = () => {
         );
       case 'packaging':
         return (
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30 animate-pulse">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/30">
             <Sparkles size={13} />
             Đang đóng gói
           </span>
@@ -61,6 +65,13 @@ export const DownloadsView: React.FC = () => {
             Thất bại
           </span>
         );
+      case 'cancelled':
+        return (
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-500/15 text-slate-400 border border-slate-500/30">
+            <Ban size={13} />
+            Đã hủy
+          </span>
+        );
       default:
         return (
           <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/[0.06] text-slate-400 border border-white/[0.08]">
@@ -72,22 +83,21 @@ export const DownloadsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-hidden select-none relative">
+    <div className="flex-1 flex flex-col h-full bg-[#0f1524] overflow-hidden select-none relative">
       {/* Background glow orbs */}
-      <div className="absolute top-10 right-20 w-80 h-80 bg-violet-600/10 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-white/[0.08] bg-[#0c0d18]/85 backdrop-blur-2xl shrink-0 flex items-center justify-between z-10">
+      <div className="p-4 sm:p-6 border-b border-white/[0.08] bg-[#131a2c]/85 backdrop-blur-2xl shrink-0 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-600/20 text-white">
+          <div className="w-10 h-10 rounded-2xl bg-violet-600 flex items-center justify-center shadow-lg text-white">
             <ArrowDownToLine size={20} />
           </div>
           <div>
             <h1 className="text-base sm:text-xl font-bold text-white tracking-wide">
-              Tiến trình tải về đa luồng
+              Tải về
             </h1>
             <p className="text-xs text-slate-400">
-              Hệ thống Two-Tier Concurrency tải ảnh siêu tốc & tự động đóng gói CBZ
+              Các chương được tải song song rồi tự đóng gói
             </p>
           </div>
         </div>
@@ -121,7 +131,7 @@ export const DownloadsView: React.FC = () => {
             return (
               <div
                 key={task.id}
-                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-[#0d0f1a] border border-white/[0.07] hover:border-violet-500/30 transition-all shadow-xl flex flex-col gap-3.5"
+                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-[#182036] border border-white/[0.07] hover:border-violet-500/30 transition-all shadow-xl flex flex-col gap-3.5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="overflow-hidden">
@@ -135,14 +145,25 @@ export const DownloadsView: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="shrink-0">{getStatusBadge(task.status)}</div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    {getStatusBadge(task.status)}
+                    {(task.status === 'downloading' || task.status === 'queued') && (
+                      <button
+                        onClick={() => handleCancel(task.id)}
+                        title="Hủy tải"
+                        className="p-1.5 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-white/[0.06] transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Progress Bar */}
                 <div className="space-y-1.5">
                   <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-violet-600 via-purple-500 to-cyan-400 transition-all duration-300 rounded-full shadow-[0_0_12px_rgba(168,85,247,0.5)]"
+                      className="h-full tone-bar transition-all duration-300 rounded-full"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

@@ -31,9 +31,9 @@ except Exception as e:
 import numpy as np
 from PIL import Image
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 try:
@@ -891,6 +891,62 @@ def process_page_api(payload: ProcessPageRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Process page error: {e}")
+
+
+@fastapi_app.post("/v1/clean")
+def clean_v1(
+    image: UploadFile = File(...),
+    mask: Optional[UploadFile] = File(None),
+    detector: str = Form("default"),
+    inpainter: str = Form("lama_large"),
+    dilation_offset: int = Form(2),
+    clean_mode: str = Form("all"),
+    output_format: str = Form("webp"),
+):
+    """Multipart: ảnh vào, ảnh nhị phân ra (không base64). Dùng bởi CloudCleaner (Rust)."""
+    try:
+        with Image.open(io.BytesIO(image.file.read())) as pil_img:
+            img_rgb = np.array(pil_img.convert("RGB"))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}")
+
+    t0 = time.perf_counter()
+    try:
+        if mask is not None:
+            with Image.open(io.BytesIO(mask.file.read())) as pil_mask:
+                mask_arr = np.array(pil_mask.convert("RGBA") if pil_mask.mode in ("RGBA", "LA", "P") else pil_mask.convert("RGB"))
+            cleaned_rgb, _ = _process_mask_inpaint_gpu(
+                img_rgb, mask_arr, inpainter_name=inpainter, dilation_offset=dilation_offset
+            )
+        else:
+            cleaned_rgb, _, _ = _process_inpaint_gpu(
+                img_rgb,
+                detector_name=detector,
+                inpainter_name=inpainter,
+                dilation_offset=dilation_offset,
+                clean_mode=clean_mode,
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inpainting error: {e}")
+
+    fmt = output_format.lower()
+    buf = io.BytesIO()
+    pil_out = Image.fromarray(cleaned_rgb)
+    if fmt in ("jpg", "jpeg"):
+        pil_out.save(buf, format="JPEG", quality=95)
+        media = "image/jpeg"
+    elif fmt == "png":
+        pil_out.save(buf, format="PNG")
+        media = "image/png"
+    else:
+        pil_out.save(buf, format="WEBP", quality=95)
+        media = "image/webp"
+
+    return Response(
+        content=buf.getvalue(),
+        media_type=media,
+        headers={"X-Process-Time": f"{time.perf_counter() - t0:.3f}"},
+    )
 
 
 # Create Gradio UI and attach REST API routes

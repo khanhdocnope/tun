@@ -28,22 +28,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenBook }) => {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-hidden select-none relative">
+    <div className="flex-1 flex flex-col h-full bg-[#0f1524] overflow-hidden select-none relative">
       {/* Background ambient glow */}
-      <div className="absolute top-10 left-10 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-white/[0.08] bg-[#0c0d18]/85 backdrop-blur-2xl shrink-0 flex items-center justify-between z-10">
+      <div className="p-4 sm:p-6 border-b border-white/[0.08] bg-[#131a2c]/85 backdrop-blur-2xl shrink-0 flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500 to-violet-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white">
+          <div className="w-10 h-10 rounded-2xl bg-cyan-500 flex items-center justify-center shadow-lg text-white">
             <Library size={20} />
           </div>
           <div>
             <h1 className="text-base sm:text-xl font-bold text-white tracking-wide">
-              Kệ truyện cá nhân (Offline)
+              Kệ truyện
             </h1>
             <p className="text-xs text-slate-400">
-              Đọc trực tiếp các tệp CBZ & ZIP không cần giải nén với zero-latency
+              Đọc trực tiếp các tệp CBZ và ZIP đã tải, không cần giải nén
             </p>
           </div>
         </div>
@@ -83,10 +82,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenBook }) => {
               <div
                 key={book.file_path}
                 onClick={() => onOpenBook(book)}
-                className="group flex flex-col bg-[#0d0f1a] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/[0.07] hover:border-cyan-500/50 hover:shadow-[0_12px_35px_rgba(56,189,248,0.25)] transition-all duration-300 cursor-pointer transform active:scale-95 sm:hover:-translate-y-1.5 relative"
+                className="group flex flex-col bg-[#182036] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/[0.07] hover:border-cyan-500/50 hover:shadow-[0_12px_35px_rgba(56,189,248,0.25)] transition-all duration-300 cursor-pointer transform active:scale-95 sm:hover:-translate-y-1.5 relative"
               >
                 {/* Book Cover Container */}
-                <div className="aspect-[3/4] relative overflow-hidden bg-gradient-to-br from-[#121422] to-[#07080e] flex items-center justify-center">
+                <div className="cover aspect-[3/4] overflow-hidden bg-[#182036] flex items-center justify-center">
                   {book.cover_base64 ? (
                     <img
                       src={`data:image/webp;base64,${book.cover_base64}`}
@@ -108,11 +107,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ onOpenBook }) => {
                     {book.file_format}
                   </div>
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] via-transparent to-transparent opacity-80 z-10" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#182036] via-transparent to-transparent opacity-80 z-10" />
                 </div>
 
                 {/* Details */}
-                <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between bg-[#0d0f1a] relative z-20">
+                <div className="p-3 sm:p-3.5 flex-1 flex flex-col justify-between bg-[#182036] relative z-20">
                   <div>
                     <h3 className="font-bold text-xs sm:text-sm text-white line-clamp-1 group-hover:text-cyan-300 transition-colors">
                       {book.manga_title}

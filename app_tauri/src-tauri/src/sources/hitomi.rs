@@ -1,11 +1,38 @@
-use crate::models::{MangaItem, ChapterItem, PageItem};
+use crate::models::{ChapterItem, MangaItem, PageItem};
 use crate::sources::MangaSource;
+use regex::Regex;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
+
+#[derive(Debug, Clone)]
+pub struct GgParams {
+    pub gg_b: String,
+    pub default_o: i32,
+    pub case_o: i32,
+    pub cases: HashSet<i64>,
+    pub fetched_at: Instant,
+}
+
+impl Default for GgParams {
+    fn default() -> Self {
+        Self {
+            gg_b: "1794056401/".to_string(),
+            default_o: 0,
+            case_o: 1,
+            cases: HashSet::new(),
+            fetched_at: Instant::now() - Duration::from_secs(7200),
+        }
+    }
+}
 
 pub struct HitomiSource {
     client: reqwest::Client,
+    gg_cache: Arc<RwLock<GgParams>>,
 }
 
 impl HitomiSource {
@@ -14,7 +41,107 @@ impl HitomiSource {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
             .unwrap_or_default();
-        Self { client }
+        Self {
+            client,
+            gg_cache: Arc::new(RwLock::new(GgParams::default())),
+        }
+    }
+
+    pub async fn ensure_gg(&self) -> GgParams {
+        {
+            let r = self.gg_cache.read().await;
+            if r.fetched_at.elapsed() < Duration::from_secs(1800) && !r.cases.is_empty() {
+                return r.clone();
+            }
+        }
+
+        let mut params = GgParams::default();
+        let url = "https://ltn.gold-usergeneratedcontent.net/gg.js";
+        if let Ok(resp) = self.client.get(url).header("Referer", "https://hitomi.la/").send().await {
+            if resp.status().is_success() {
+                if let Ok(text) = resp.text().await {
+                    if let Ok(re_b) = Regex::new(r"b:\s*'([^']+)'") {
+                        if let Some(caps) = re_b.captures(&text) {
+                            if let Some(m) = caps.get(1) {
+                                params.gg_b = m.as_str().to_string();
+                            }
+                        }
+                    }
+
+                    if let Ok(re_o) = Regex::new(r"var o = (\d+);") {
+                        if let Some(caps) = re_o.captures(&text) {
+                            if let Some(m) = caps.get(1) {
+                                params.default_o = m.as_str().parse().unwrap_or(0);
+                            }
+                        }
+                    }
+
+                    if let Ok(re_case_o) = Regex::new(r"o = (\d+);\s*break;") {
+                        if let Some(caps) = re_case_o.captures(&text) {
+                            if let Some(m) = caps.get(1) {
+                                params.case_o = m.as_str().parse().unwrap_or(1);
+                            }
+                        }
+                    }
+
+                    if let Ok(re_case) = Regex::new(r"case\s+(\d+):") {
+                        for caps in re_case.captures_iter(&text) {
+                            if let Some(m) = caps.get(1) {
+                                if let Ok(val) = m.as_str().parse::<i64>() {
+                                    params.cases.insert(val);
+                                }
+                            }
+                        }
+                    }
+                    params.fetched_at = Instant::now();
+                }
+            }
+        }
+
+        let mut w = self.gg_cache.write().await;
+        *w = params.clone();
+        params
+    }
+
+    pub fn resolve_image_candidates_with_params(hash: &str, gg: &GgParams) -> Vec<String> {
+        if hash.len() < 3 {
+            return Vec::new();
+        }
+        let last1 = &hash[hash.len() - 1..];
+        let last2 = &hash[hash.len() - 3..hash.len() - 1];
+
+        let g = i64::from_str_radix(&format!("{}{}", last1, last2), 16).unwrap_or(0);
+        let s_val = g.to_string();
+
+        let m_val = if gg.cases.contains(&g) { gg.case_o } else { gg.default_o };
+        let primary_sub = format!("w{}", 1 + m_val);
+        let alt_gold_sub = format!("w{}", 1 + (1 - m_val));
+
+        let sub_direct = if last2.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false) {
+            "b"
+        } else {
+            "a"
+        };
+        let alt_sub_direct = if sub_direct == "a" { "b" } else { "a" };
+
+        let primary_url = format!(
+            "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
+            primary_sub, gg.gg_b, s_val, hash
+        );
+        let alt_gold_url = format!(
+            "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
+            alt_gold_sub, gg.gg_b, s_val, hash
+        );
+        let direct_url = format!(
+            "https://{}a.hitomi.la/webp/{}/{}/{}.webp",
+            sub_direct, last1, last2, hash
+        );
+        let alt_direct_url = format!(
+            "https://{}a.hitomi.la/webp/{}/{}/{}.webp",
+            alt_sub_direct, last1, last2, hash
+        );
+
+        vec![primary_url, alt_gold_url, direct_url, alt_direct_url]
     }
 
     pub fn resolve_image_url(hash: &str) -> String {
@@ -98,7 +225,7 @@ impl MangaSource for HitomiSource {
                                     source: "hitomi".to_string(),
                                     description: None,
                                     authors: vec![],
-                                    status: None,
+                                    status: Some("Completed".to_string()),
                                     genres: tags,
                                 });
                             }
@@ -113,7 +240,6 @@ impl MangaSource for HitomiSource {
 
     fn get_chapters<'a>(&'a self, manga_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<ChapterItem>, String>> + Send + 'a>> {
         Box::pin(async move {
-            // In Hitomi, each gallery is a single chapter / book
             Ok(vec![ChapterItem {
                 id: manga_id.to_string(),
                 manga_id: manga_id.to_string(),
@@ -127,6 +253,7 @@ impl MangaSource for HitomiSource {
 
     fn get_pages<'a>(&'a self, chapter_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<PageItem>, String>> + Send + 'a>> {
         Box::pin(async move {
+            let gg = self.ensure_gg().await;
             let gal_url = format!("https://ltn.gold-usergeneratedcontent.net/galleries/{}.js", chapter_id);
             let resp = self.client.get(&gal_url)
                 .header(reqwest::header::REFERER, "https://hitomi.la/")
@@ -142,9 +269,14 @@ impl MangaSource for HitomiSource {
             if let Some(files) = info["files"].as_array() {
                 for (idx, file) in files.iter().enumerate() {
                     if let Some(hash) = file["hash"].as_str() {
+                        let candidates = Self::resolve_image_candidates_with_params(hash, &gg);
+                        let primary = candidates.first().cloned().unwrap_or_default();
+                        let fallbacks = if candidates.len() > 1 { candidates[1..].to_vec() } else { vec![] };
                         pages.push(PageItem {
                             page_number: idx + 1,
-                            url: Self::resolve_image_url(hash),
+                            url: primary,
+                            drm_data: None,
+                            fallback_urls: fallbacks,
                         });
                     }
                 }

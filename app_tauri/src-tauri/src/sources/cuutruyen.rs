@@ -31,28 +31,48 @@ impl CuutruyenSource {
             xor_bytes.push(b ^ pi_key[i % pi_key.len()]);
         }
 
-        // xor_bytes contains integers in JSON format or raw coordinates
+        // xor_bytes contains integers in JSON format or raw coordinates (#v4|dy-height|...)
         let coords_str = String::from_utf8(xor_bytes).map_err(|e| format!("UTF-8 decode failed: {}", e))?;
-        let coords: Vec<u32> = serde_json::from_str(&coords_str).map_err(|e| format!("JSON parse coords failed: {}", e))?;
 
         let src_img = image::load_from_memory(raw_bytes).map_err(|e| format!("Load image failed: {}", e))?;
         let (width, height) = src_img.dimensions();
 
-        let slice_count = coords.len() as u32;
-        if slice_count == 0 {
-            return Ok(raw_bytes.to_vec());
-        }
-
-        let slice_height = height / slice_count;
         let mut dest_img = image::RgbaImage::new(width, height);
 
-        for (i, &dy) in coords.iter().enumerate() {
-            let sy = (i as u32) * slice_height;
-            for x in 0..width {
-                for y in 0..slice_height {
-                    if sy + y < height && dy + y < height {
-                        let pixel = src_img.get_pixel(x, sy + y);
-                        dest_img.put_pixel(x, dy + y, pixel);
+        if coords_str.starts_with("#v4|") {
+            let mut sy = 0u32;
+            for part in coords_str.split('|').skip(1) {
+                let segs: Vec<&str> = part.split('-').collect();
+                if segs.len() == 2 {
+                    if let (Ok(dy), Ok(sh)) = (segs[0].parse::<u32>(), segs[1].parse::<u32>()) {
+                        for y in 0..sh {
+                            if sy + y < height && dy + y < height {
+                                for x in 0..width {
+                                    let pixel = src_img.get_pixel(x, sy + y);
+                                    dest_img.put_pixel(x, dy + y, pixel);
+                                }
+                            }
+                        }
+                        sy += sh;
+                    }
+                }
+            }
+        } else {
+            let coords: Vec<u32> = serde_json::from_str(&coords_str).map_err(|e| format!("JSON parse coords failed: {}", e))?;
+            let slice_count = coords.len() as u32;
+            if slice_count == 0 {
+                return Ok(raw_bytes.to_vec());
+            }
+
+            let slice_height = height / slice_count;
+            for (i, &dy) in coords.iter().enumerate() {
+                let sy = (i as u32) * slice_height;
+                for x in 0..width {
+                    for y in 0..slice_height {
+                        if sy + y < height && dy + y < height {
+                            let pixel = src_img.get_pixel(x, sy + y);
+                            dest_img.put_pixel(x, dy + y, pixel);
+                        }
                     }
                 }
             }
@@ -174,10 +194,13 @@ impl MangaSource for CuutruyenSource {
                         .or_else(|| p["src"].as_str())
                         .unwrap_or("")
                         .to_string();
+                    let drm_data = p["drm_data"].as_str().map(|s| s.to_string());
                     if !src.is_empty() {
                         pages.push(PageItem {
                             page_number: idx + 1,
                             url: src,
+                            drm_data,
+                            fallback_urls: vec![],
                         });
                     }
                 }

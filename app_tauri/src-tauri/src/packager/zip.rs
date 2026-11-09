@@ -33,3 +33,33 @@ pub fn create_zip(
     zip.finish().map_err(|e| format!("Finish ZIP failed: {}", e))?;
     Ok(())
 }
+
+pub fn create_zip_from_files(
+    output_path: &Path,
+    file_paths: &[std::path::PathBuf],
+) -> Result<(), String> {
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    let file = File::create(output_path).map_err(|e| format!("Create ZIP file failed: {}", e))?;
+    let mut zip = ZipWriter::new(file);
+    let options = SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+
+    for (idx, path) in file_paths.iter().enumerate() {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("webp");
+        let entry_name = format!("{:03}.{}", idx + 1, ext);
+
+        zip.start_file(&entry_name, options).map_err(|e| e.to_string())?;
+        let mut f = File::open(path).map_err(|e| format!("Open page file {:?} failed: {}", path, e))?;
+        std::io::copy(&mut f, &mut zip).map_err(|e| format!("Write page to ZIP failed: {}", e))?;
+    }
+
+    zip.finish().map_err(|e| format!("Finish ZIP failed: {}", e))?;
+    Ok(())
+}

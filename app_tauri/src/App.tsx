@@ -70,7 +70,7 @@ export function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#07080e] text-slate-100 overflow-hidden font-sans relative selection:bg-violet-500 selection:text-white">
+    <div className="flex h-screen w-screen bg-[#0f1524] text-slate-100 overflow-hidden font-sans relative selection:bg-son-500 selection:text-white">
       {/* Desktop Left Sidebar (Floating Glass Dock) */}
       <Sidebar
         activeTab={activeTab}

@@ -145,6 +145,8 @@ impl HfSpaceCleanerClient {
         Ok(CleanResponse {
             cleaned_image_base64: cleaned_b64,
             time_taken: Some(elapsed),
+            backend: None,
+            mime: None,
         })
     }
 }

@@ -1,5 +1,58 @@
 # NHẬT KÝ PHÁT TRIỂN DỰ ÁN (PROJECT CHANGELOG)
 
+## [2026-11-09] - P3 Downloader Đúng Như Thiết Kế & Triển Khai Code Mới
+
+- **Triển khai code mới từ archive:**
+  - Đồng bộ toàn bộ mô-đun Vision thuần Rust (`src/vision/`), Hybrid Cleaner (`src/cleaner/`), ONNX local skeleton (`src/local/`), và hệ màu "Mực chàm & Son" của frontend.
+  - Sửa lỗi hình học `geom.rs` khi bounding box bao trùm kích thước ảnh, vượt qua toàn bộ 56 unit test.
+- **P3 – Downloader hoàn chỉnh:**
+  - **Tải song song có Semaphore theo Host (`HostGate`):** Giới hạn số lượng kết nối đồng thời trên từng domain CDN (`max_connections_per_host`, mặc định 5 permits).
+  - **Ghi từng trang xuống file tạm & Resume:** Lưu ảnh tạm thời theo cấu trúc `.tmp/<manga>/<chapter>/page_{:04}.part` -> `page_{:04}.{ext}`. Khi tải lại, tự động kiểm tra magic bytes của các trang đã tải hợp lệ trên đĩa và bỏ qua (resume), không tải lại từ đầu.
+  - **Xử lý 429 theo Retry-After & Jitter:** Đọc header `Retry-After` khi gặp HTTP 429, cộng thêm jitter ngẫu nhiên (100ms - 1000ms), log chi tiết và tạm dừng trước khi thử lại.
+  - **Kiểm tra Magic Bytes thật & Đặt đuôi file thực:** Xác định chính xác định dạng ảnh (`png`, `jpg`, `webp`, `gif`) theo byte thực tế thay vì URL; từ chối và ghi log lỗi nếu trả về HTML hoặc trang chặn WAF.
+  - **Hàng đợi có trạng thái & Hủy được (`TaskManager`):** Quản lý trạng thái qua atomic flag, tích hợp lệnh IPC `cancel_download`, tự dọn dẹp file `.part` dở dang khi bị hủy; UI DownloadsView có nút hủy trực tiếp.
+  - **Tích hợp `descramble_image` Cứu Truyện:** Giải mã Base64 + Pi XOR cho cả định dạng lát cắt `#v4|dy-height|...` và JSON coordinates, chuyển đổi trực tiếp trong luồng tải ảnh.
+  - **Hitomi Dynamic Sharding `gg.js` & Multi-Source Fallback:** Nạp động tham số từ `gg.js`, tính toán hàm băm `gg.m(g)` và cung cấp 4 candidate URLs dự phòng (primary gold CDN, alternate gold shard, direct hitomi, alternate direct hitomi).
+  - **Cơ chế thử lại ít nhất 3 lần & Báo mã lỗi cụ thể:** Mỗi trang được thử lại tối thiểu 3 lần, phân loại lỗi chi tiết (`ERR_HTTP_429`, `ERR_HTTP_403_FORBIDDEN`, `ERR_HTTP_5XX_SERVER`, `ERR_TIMEOUT`, `ERR_NETWORK`, `ERR_INVALID_MAGIC_BYTES`, `ERR_DESCRAMBLE_FAILED`), không tự ý bypass sang website truyện khác.
+  - **Đóng gói CBZ/ZIP streaming từ đĩa:** `create_cbz_from_files` và `create_zip_from_files` đọc trực tiếp từ file đĩa, giải phóng RAM ngay lập tức và tự dọn dẹp thư mục tạm.
+  - **Kiểm thử Mock Server:** Viết bộ integration test kiểm thử qua server mock TCP cục bộ (`downloader/tests.rs`), kiểm tra magic bytes, semaphore gate, resume, 429 backoff và 3 lần retry khi gặp lỗi 500. Toàn bộ 56 tests pass 100%.
+
+---
+
+## [2026-11-08] - Cleaner hybrid (Cloud / Local) - skeleton
+
+- **Lý do:** chuyển dần từ Python (HF) sang Rust; cho người dùng chọn xóa chữ trên cloud hoặc trên máy.
+- **Rust (`app_tauri/src-tauri/src/cleaner/`):** `trait Cleaner` + `CloudCleaner` (`POST /v1/clean` multipart, tự rơi về client Gradio cũ nếu Space chưa có endpoint) + `LocalCleaner` (skeleton, `ENGINE_READY = false`, chưa chạy được). `clean_with_mode` chọn backend theo `cleaner_mode`: `auto` (thử backend ưu tiên, lỗi mạng/quota/model thì chuyển sang backend kia; ảnh hỏng thì dừng), `cloud`, `local`.
+- **Settings:** thêm `cleaner_mode`, `auto_prefer_local`, `local_model_dir`, `cloud_timeout_secs`; lưu ra `settings.json` trong app data dir (trước đây mất khi tắt app). Token HF vẫn plaintext, cần chuyển sang keyring.
+- **Command mới:** `get_cleaner_status` (cloud/local có khả dụng không). `clean_image` trả thêm `backend` và `mime`.
+- **Python:** thêm `POST /v1/clean` (multipart, trả ảnh nhị phân) vào `hf_spaces_manga_cleaner/app.py`.
+- **UI:** mục "Nơi xóa chữ" trong Cài đặt; Cleaner Studio hiển thị backend đã xử lý.
+- **Chưa làm:** engine ONNX local (`ort`), hàng đợi batch dùng chung, Dockerfile/requirements của Space vẫn lệch với `app.py`.
+
+- **LocalCleaner hoàn chỉnh (sau feature `local-ort`):** `src/local/` gồm `TensorRunner` (trait, test bằng runner giả), detector DB (tiền xử lý BGR/mean-std, hậu xử lý kiểu PaddleOCR: threshold, convex hull, minAreaRect, unclip, điểm hộp), gộp dòng thành vùng, LaMa theo cửa sổ (gộp cửa sổ chồng, thu nhỏ với mask max-pooling, đệm bội số 8, hoặc đúng cỡ nếu model cố định), `LocalEngine`, adapter `ort` (`ort_runner.rs`). Tách nét chữ bằng Otsu trong từng hộp (`vision/stroke.rs`). `LocalCleaner` chạy suy luận trong `spawn_blocking`, giữ engine đã nạp, trả webp lossless.
+- **Script:** `tools/fetch_models.py` chuẩn bị `detector.onnx` (từ gói rapidocr) và `lama.onnx` (g-ronimo/lama).
+- **Chưa kiểm chứng:** biên dịch Rust, adapter `ort` (API rc.10), chất lượng detector PP-OCR trên manga (không phải CTD), tên input/output thật của `lama_fp16.onnx`.
+- **Vision thuần Rust (`src/vision/`):** `classify_text_region` (khớp 100% bản Python trên 70 ca golden), mask refine kiểu fit_text, dilate ellipse/rect và connected components tự viết (không dùng OpenCV; khớp OpenCV trên golden), `pipeline::select_and_refine` nối classify -> lọc `bubble_only` -> refine.
+- **Golden test:** `tools/gen_golden.py` sinh `src-tauri/tests/golden/*.json` từ đúng hàm trong `app.py` và từ OpenCV. Sinh lại khi đổi logic Python.
+- **Lưu ý độ khớp:** mask refine là bản tái hiện theo mô tả (không có mã `manga_translator` trong repo): gán cc bằng bỏ phiếu pixel thay vì giao đa giác, dilate không bị cắt ở mép hộp. Cần so sánh với Python trên ảnh thật (IoU mask) trước khi coi là tương đương.
+
+---
+
+## [2026-11-08] - Thiết kế lại giao diện "Mực chàm & Son" (app_tauri)
+
+- **Lỗi gốc đã sửa:** `* { margin: 0; padding: 0 }` trong `index.css` nằm ngoài `@layer`, đè toàn bộ class `p-*`, `m-*`, `gap` của Tailwind v4 nên nội dung dính sát mép. Đã xóa; Tailwind preflight đã reset sẵn.
+- **Hệ màu mới** (khai báo bằng `@theme` trong `index.css`): nền chàm `ink-*`, điểm nhấn son `son-*`, xanh bút chì `pencil-*`, chữ `paper`. Các lớp `violet/purple/fuchsia/cyan` cũ được trỏ về hệ màu này để mọi màn hình đồng bộ.
+- **Chữ:** Archivo (hẹp, đậm) cho tiêu đề `h1`, Be Vietnam Pro cho nội dung. Cả hai được đóng gói qua `@fontsource` nên chạy offline.
+- **Điểm nhận diện:** họa tiết screentone (`.halftone`, `.tone-bar`, `.skeleton-shimmer`) và mép gáy sách trên bìa (`.cover`).
+- **Bỏ:** kính mờ, quầng sáng, gradient, bóng đổ màu, hiệu ứng nhấp nháy, điểm đánh giá giả (9.8 / 4.9), huy hiệu "PRO", dòng trạng thái "Tauri Engine v2.0".
+- **Màn Khám phá:** viết lại; bỏ banner "Tiêu điểm", nguồn truyện là tab chữ, lưới bìa có tên và tác giả bên dưới.
+- **Sidebar / BottomNav:** viết lại, dùng chung `NAV_ITEMS`; thanh dưới trên mobile dính đáy thay vì nổi.
+- **Chi tiết truyện:** sửa phần đầu trang bị co lại; Việt hóa trạng thái (Đang ra / Hoàn thành).
+- **Câu chữ:** thay các thuật ngữ nội bộ (Two-Tier, zero-latency, Anti-Ban...) bằng tiếng Việt dễ hiểu.
+- **Chưa làm:** viết lại sâu Trình đọc, Xóa chữ AI (thanh kéo so sánh trước/sau, kéo thả ảnh) và Cài đặt; hiện các màn này chỉ được đồng bộ màu và chữ.
+
+---
+
 ## [2026-11-08] - Đại tu Toàn diện sang Ứng dụng Hợp nhất Đa Nền tảng Tauri v2 (Windows & Mobile)
 
 ### 1. Kiến trúc Hợp nhất Tauri v2 (`app_tauri/`):

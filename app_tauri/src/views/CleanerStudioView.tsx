@@ -62,8 +62,10 @@ export const CleanerStudioView: React.FC = () => {
         },
       });
 
-      setCleanedImage(res.cleaned_image_base64);
-      setTimeTaken(res.time_taken || null);
+      setCleanedImage(`data:${res.mime || 'image/png'};base64,${res.cleaned_image_base64}`);
+      setTimeTaken(
+        res.time_taken ? `${res.time_taken}${res.backend ? ' · ' + res.backend : ''}` : null
+      );
       setMobileTab('cleaned');
     } catch (err: any) {
       setError(typeof err === 'string' ? err : err.message || 'Lỗi xử lý ảnh với Hugging Face AI Space');
@@ -75,29 +77,29 @@ export const CleanerStudioView: React.FC = () => {
   const handleDownloadResult = () => {
     if (!cleanedImage) return;
     const a = document.createElement('a');
-    a.href = `data:image/png;base64,${cleanedImage}`;
-    a.download = `moeject_cleaned_${Date.now()}.png`;
+    a.href = cleanedImage;
+    const ext = cleanedImage.startsWith('data:image/webp') ? 'webp' : cleanedImage.startsWith('data:image/jpeg') ? 'jpg' : 'png';
+    a.download = `moeject_cleaned_${Date.now()}.${ext}`;
     a.click();
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#07080e] overflow-y-auto select-none p-4 sm:p-8 relative">
+    <div className="flex-1 flex flex-col h-full bg-[#0f1524] overflow-y-auto select-none p-4 sm:p-8 relative">
       {/* Background glow orb */}
-      <div className="absolute top-20 right-1/4 w-96 h-96 bg-fuchsia-600/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-6xl mx-auto w-full space-y-5 sm:space-y-6 z-10">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-fuchsia-600 via-purple-600 to-violet-500 flex items-center justify-center shadow-lg shadow-fuchsia-600/25 text-white">
+            <div className="w-12 h-12 rounded-2xl bg-fuchsia-600 flex items-center justify-center shadow-lg text-white">
               <Wand2 size={24} />
             </div>
             <div>
               <h1 className="text-lg sm:text-2xl font-black text-white tracking-wide">
-                Manga AI Cleaner Studio
+                Xóa chữ AI
               </h1>
               <p className="text-xs text-slate-400 mt-0.5">
-                Tự động phát hiện và tẩy xóa lời thoại, hiệu ứng SFX với mô hình ComicTextDetector & LaMa Inpainting
+                Tự động xóa lời thoại và chữ hiệu ứng (SFX) khỏi trang truyện
               </p>
             </div>
           </div>
@@ -105,7 +107,7 @@ export const CleanerStudioView: React.FC = () => {
           {cleanedImage && (
             <button
               onClick={handleDownloadResult}
-              className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl text-xs font-bold hover:opacity-95 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer shadow-lg shadow-emerald-500/25 shrink-0"
+              className="px-5 py-2.5 bg-emerald-500 text-white rounded-2xl text-xs font-bold hover:opacity-95 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer shadow-lg shrink-0"
             >
               <Download size={15} />
               <span>Tải ảnh đã xóa chữ</span>
@@ -114,7 +116,7 @@ export const CleanerStudioView: React.FC = () => {
         </div>
 
         {/* Studio Controls Bar */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-[#0d0f1a] border border-white/[0.08] shadow-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 sm:p-5 rounded-3xl bg-[#182036] border border-white/[0.08] shadow-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Detector */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-2">
@@ -125,8 +127,8 @@ export const CleanerStudioView: React.FC = () => {
               onChange={(e) => setDetector(e.target.value)}
               className="w-full h-11 px-3.5 bg-white/[0.04] text-white rounded-2xl text-xs font-semibold border border-white/10 focus:border-violet-500 focus:outline-none appearance-none cursor-pointer"
             >
-              <option value="default" className="bg-[#10121f]">ComicTextDetector (Khuyên dùng)</option>
-              <option value="dbnet" className="bg-[#10121f]">DBNet Manga AI</option>
+              <option value="default" className="bg-[#182036]">ComicTextDetector (Khuyên dùng)</option>
+              <option value="dbnet" className="bg-[#182036]">DBNet Manga AI</option>
             </select>
           </div>
 
@@ -140,16 +142,16 @@ export const CleanerStudioView: React.FC = () => {
               onChange={(e) => setCleanMode(e.target.value)}
               className="w-full h-11 px-3.5 bg-white/[0.04] text-white rounded-2xl text-xs font-semibold border border-white/10 focus:border-violet-500 focus:outline-none appearance-none cursor-pointer"
             >
-              <option value="all" className="bg-[#10121f]">Toàn bộ (Text thoại + SFX)</option>
-              <option value="text_only" className="bg-[#10121f]">Chỉ xóa Text bóng thoại</option>
-              <option value="sfx_only" className="bg-[#10121f]">Chỉ xóa âm thanh tượng thanh SFX</option>
+              <option value="all" className="bg-[#182036]">Toàn bộ (Text thoại + SFX)</option>
+              <option value="text_only" className="bg-[#182036]">Chỉ xóa Text bóng thoại</option>
+              <option value="sfx_only" className="bg-[#182036]">Chỉ xóa âm thanh tượng thanh SFX</option>
             </select>
           </div>
 
           {/* Dilation Offset */}
           <div>
             <div className="flex justify-between items-center mb-2 text-xs">
-              <span className="font-bold text-slate-300">Độ lan viền (Dilation):</span>
+              <span className="font-bold text-slate-300">Độ mở rộng vùng xóa:</span>
               <span className="font-mono font-bold text-violet-400">{dilation}px</span>
             </div>
             <input
@@ -175,7 +177,7 @@ export const CleanerStudioView: React.FC = () => {
             onClick={() => setMobileTab('original')}
             className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
               mobileTab === 'original'
-                ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white'
+                ? 'bg-violet-600 text-white'
                 : 'text-slate-400'
             }`}
           >
@@ -186,7 +188,7 @@ export const CleanerStudioView: React.FC = () => {
             disabled={!cleanedImage}
             className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
               mobileTab === 'cleaned'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                ? 'bg-emerald-500 text-white'
                 : 'text-slate-400 disabled:opacity-40'
             }`}
           >
@@ -198,7 +200,7 @@ export const CleanerStudioView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {/* Left: Original */}
           <div
-            className={`rounded-3xl border border-white/[0.08] bg-[#0d0f1a] p-4 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden ${
+            className={`rounded-3xl border border-white/[0.08] bg-[#182036] p-4 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden ${
               mobileTab === 'original' ? 'block' : 'hidden sm:flex'
             }`}
           >
@@ -233,22 +235,22 @@ export const CleanerStudioView: React.FC = () => {
 
           {/* Right: AI Cleaned */}
           <div
-            className={`rounded-3xl border border-white/[0.08] bg-[#0d0f1a] p-4 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden ${
+            className={`rounded-3xl border border-white/[0.08] bg-[#182036] p-4 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden ${
               mobileTab === 'cleaned' ? 'block' : 'hidden sm:flex'
             }`}
           >
             <span className="absolute top-4 left-4 px-3 py-1 rounded-xl text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 z-10">
-              KẾT QUẢ AI CLEANER
+              KẾT QUẢ
             </span>
 
             {loading ? (
               <div className="flex flex-col items-center gap-3.5 text-slate-400">
                 <Loader2 size={44} className="animate-spin text-fuchsia-500" />
-                <p className="text-xs font-semibold">AI Vision đang nhận diện và tẩy xóa text...</p>
+                <p className="text-xs font-semibold">Đang nhận diện và xóa chữ…</p>
               </div>
             ) : cleanedImage ? (
               <img
-                src={`data:image/png;base64,${cleanedImage}`}
+                src={cleanedImage}
                 alt="Cleaned"
                 className="max-h-[520px] w-auto object-contain rounded-2xl shadow-2xl"
               />
@@ -272,10 +274,10 @@ export const CleanerStudioView: React.FC = () => {
           <button
             onClick={handleClean}
             disabled={!originalImage || loading}
-            className="w-full sm:w-auto px-10 py-3.5 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-violet-600 text-white rounded-2xl text-sm font-bold shadow-xl shadow-fuchsia-600/30 hover:opacity-95 transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 disabled:opacity-40"
+            className="w-full sm:w-auto px-10 py-3.5 bg-fuchsia-600 text-white rounded-2xl text-sm font-bold shadow-xl hover:opacity-95 transition-all flex items-center justify-center gap-2.5 cursor-pointer active:scale-95 disabled:opacity-40"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Wand2 size={18} />}
-            <span>Tẩy xóa Text với Hugging Face AI</span>
+            <span>Xóa chữ</span>
           </button>
         </div>
       </div>
