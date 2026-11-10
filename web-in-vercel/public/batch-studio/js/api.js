@@ -177,18 +177,29 @@ export function getBatchWebLama() {
 
   // Thêm từng ảnh đơn lẻ vào state và IndexedDB (hỗ trợ giải phóng bộ nhớ ngay sau khi nén)
   export async function addSingleFileItem(file) {
-    const fileName = (file.name || '').trim();
+    let fileName = (file.name || '').trim();
     const existingNames = new Set((state.images || []).map((img) => (img.name || '').trim().toLowerCase()));
+
+    // Nếu tên file đã có trong danh sách, tự động đánh số để không bị trùng lặp
     if (fileName && existingNames.has(fileName.toLowerCase())) {
-      console.warn([BatchStudio] Bỏ qua ảnh trùng lặp: );
-      return null;
+      const lastDot = fileName.lastIndexOf('.');
+      const base = lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
+      const ext = lastDot > 0 ? fileName.slice(lastDot) : '';
+      let counter = 2;
+      let newName = `${base} (${counter})${ext}`;
+      while (existingNames.has(newName.toLowerCase())) {
+        counter++;
+        newName = `${base} (${counter})${ext}`;
+      }
+      console.warn('[BatchStudio] File trùng tên, tự động đổi thành: ' + newName);
+      fileName = newName;
     }
 
     const { base64, sizeStr, compressed } = await compressAndLoadFile(file);
 
     const item = {
       id: 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-      name: file.name || `image_${state.images.length + 1}.jpg`,
+      name: fileName || `image_${state.images.length + 1}.jpg`,
       sizeStr: sizeStr,
       base64: base64,
       status: 'idle',
