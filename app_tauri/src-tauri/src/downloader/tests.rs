@@ -88,15 +88,13 @@ fn test_hitomi_gg_dynamic_sharding_and_fallbacks() {
     let hash = "a1b2c3d4e5f60000000000000000000000000000000000000000000000001234";
     let candidates = HitomiSource::resolve_image_candidates_with_params(hash, &params);
 
-    assert_eq!(candidates.len(), 4);
+    assert_eq!(candidates.len(), 3);
     // Primary gold CDN shard
     assert!(candidates[0].contains("gold-usergeneratedcontent.net"));
     // Alternate gold shard
     assert!(candidates[1].contains("gold-usergeneratedcontent.net"));
-    // Direct Hitomi CDN
-    assert!(candidates[2].contains("hitomi.la/webp"));
-    // Alternate direct Hitomi CDN
-    assert!(candidates[3].contains("hitomi.la/webp"));
+    // Fallback gold shard
+    assert!(candidates[2].contains("gold-usergeneratedcontent.net"));
 }
 
 #[test]

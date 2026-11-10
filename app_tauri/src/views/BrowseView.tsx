@@ -3,6 +3,7 @@ import { Search, X, Loader2, RefreshCw, BookOpen, Plus, Globe } from 'lucide-rea
 import { MangaItem } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { SourceCatalogModal } from '../components/SourceCatalogModal';
+import { SmartCover } from '../components/SmartCover';
 
 interface BrowseViewProps {
   onSelectManga: (manga: MangaItem) => void;
@@ -13,7 +14,7 @@ const SHOWCASE_FALLBACKS: MangaItem[] = [
   {
     id: '32d76d19-8a05-4db0-9fc2-e0b0648fe9d0',
     title: 'Solo Leveling (Tôi Thăng Cấp Một Mình)',
-    cover_url: 'https://uploads.mangadex.org/covers/32d76d19-8a05-4db0-9fc2-e0b0648fe9d0/d2e1b1d7-b892-411a-9694-8bfd4fbbe388.jpg',
+    cover_url: 'https://uploads.mangadex.org/covers/32d76d19-8a05-4db0-9fc2-e0b0648fe9d0/e90bdc47-c8b9-4df7-b2c0-17641b645ee1.jpg.256.jpg',
     source: 'mangadex',
     description: '10 năm trước, sau khi "Cánh cổng" kết nối thế giới thực với thế giới quái vật mở ra, một số người dân bình thường đã nhận được sức mạnh thức tỉnh để săn lùng quái vật.',
     authors: ['Chugong', 'DUBU (REDICE STUDIO)'],
@@ -23,7 +24,7 @@ const SHOWCASE_FALLBACKS: MangaItem[] = [
   {
     id: 'a1c7c817-4e59-43b7-9365-09675a149a6f',
     title: 'One Piece (Đảo Hải Tặc)',
-    cover_url: 'https://uploads.mangadex.org/covers/a1c7c817-4e59-43b7-9365-09675a149a6f/a65824c8-3c32-4d22-b52b-741c305c4ec1.jpg',
+    cover_url: 'https://uploads.mangadex.org/covers/a1c7c817-4e59-43b7-9365-09675a149a6f/2f4aca53-64c7-46ac-ae85-3bc9b3169890.png',
     source: 'mangadex',
     description: 'Gol D. Roger là Vua Hải Tặc hùng mạnh nhất trong lịch sử. Trước lúc bị xử tử, ông đã tuyên bố về kho báu vĩ đại nhất One Piece nằm ở cuối Đại Hải Trình.',
     authors: ['Eiichiro Oda'],
@@ -31,9 +32,9 @@ const SHOWCASE_FALLBACKS: MangaItem[] = [
     genres: ['Action', 'Adventure', 'Comedy', 'Shounen'],
   },
   {
-    id: 'c52b2ce3-7f95-469c-96b0-474fb724fb32',
+    id: 'e896c48c-3150-437d-ba57-d8567eb399ae',
     title: 'Chainsaw Man (Thợ Săn Quỷ)',
-    cover_url: 'https://uploads.mangadex.org/covers/c52b2ce3-7f95-469c-96b0-474fb724fb32/9338f0fa-35e6-4d76-92f5-b77a7b8e5cfc.jpg',
+    cover_url: 'https://uploads.mangadex.org/covers/e896c48c-3150-437d-ba57-d8567eb399ae/fa06e4e4-ef2a-477b-bfb6-a2a88793620b.jpg.256.jpg',
     source: 'mangadex',
     description: 'Denji là một thanh niên nghèo khổ sống chung với chú quỷ cưa Pochita. Sau khi bị phản bội và sát hại, Denji hồi sinh thành Thợ săn quỷ Chainsaw Man.',
     authors: ['Tatsuki Fujimoto'],
@@ -212,19 +213,7 @@ export const BrowseView: React.FC<BrowseViewProps> = ({ onSelectManga }) => {
               : results.map((m) => (
                   <button key={m.id} onClick={() => onSelectManga(m)} className="group text-left cursor-pointer self-start">
                     <div className="cover aspect-[3/4] rounded-[3px] overflow-hidden bg-ink-800 ring-1 ring-white/10 group-hover:ring-2 group-hover:ring-son-400 transition-shadow">
-                      <div className="absolute inset-0 grid place-items-center text-slate-600">
-                        <BookOpen size={30} />
-                      </div>
-                      {m.cover_url && (
-                        <img
-                          src={m.cover_url}
-                          alt={m.title}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="absolute inset-0 w-full h-full object-cover"
-                          onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
-                        />
-                      )}
+                      <SmartCover url={m.cover_url} title={m.title} source={m.source} />
                     </div>
                     <h3 className="mt-2.5 text-[13px] font-semibold text-paper leading-snug line-clamp-2 group-hover:text-son-300 transition-colors">{m.title}</h3>
                     {m.authors.length > 0 && <p className="mt-0.5 text-xs text-slate-500 truncate">{m.authors.join(', ')}</p>}

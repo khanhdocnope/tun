@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { MangaItem, ChapterItem, DownloadTask } from '../types';
 import { invoke } from '@tauri-apps/api/core';
+import { SmartCover } from '../components/SmartCover';
 
 interface MangaDetailViewProps {
   manga: MangaItem;
@@ -176,21 +177,12 @@ export const MangaDetailView: React.FC<MangaDetailViewProps> = ({
         <div className="relative z-10 max-w-6xl mx-auto flex flex-col md:flex-row gap-6 sm:gap-10 items-center md:items-start text-center md:text-left">
           {/* Cover Card 3D Frame */}
           <div className="w-44 sm:w-60 aspect-[3/4] rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border-2 border-white/20 bg-[#182036] shrink-0 relative group">
-            {manga.cover_url ? (
-              <img
-                src={manga.cover_url}
-                alt={manga.title}
-                referrerPolicy="no-referrer"
-                className="relative z-10 w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-            ) : null}
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center -z-0 opacity-40">
-              <BookOpen size={48} className="text-slate-400" />
-            </div>
+            <SmartCover
+              url={manga.cover_url}
+              title={manga.title}
+              source={manga.source}
+              fallbackIconSize={48}
+            />
           </div>
 
           {/* Details & Action Buttons */}

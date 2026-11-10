@@ -37,12 +37,8 @@ pub struct HitomiSource {
 
 impl HitomiSource {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .build()
-            .unwrap_or_default();
         Self {
-            client,
+            client: crate::sources::new_manga_client(),
             gg_cache: Arc::new(RwLock::new(GgParams::default())),
         }
     }
@@ -117,13 +113,6 @@ impl HitomiSource {
         let primary_sub = format!("w{}", 1 + m_val);
         let alt_gold_sub = format!("w{}", 1 + (1 - m_val));
 
-        let sub_direct = if last2.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false) {
-            "b"
-        } else {
-            "a"
-        };
-        let alt_sub_direct = if sub_direct == "a" { "b" } else { "a" };
-
         let primary_url = format!(
             "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
             primary_sub, gg.gg_b, s_val, hash
@@ -132,31 +121,24 @@ impl HitomiSource {
             "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
             alt_gold_sub, gg.gg_b, s_val, hash
         );
-        let direct_url = format!(
-            "https://{}a.hitomi.la/webp/{}/{}/{}.webp",
-            sub_direct, last1, last2, hash
-        );
-        let alt_direct_url = format!(
-            "https://{}a.hitomi.la/webp/{}/{}/{}.webp",
-            alt_sub_direct, last1, last2, hash
+        let w3_url = format!(
+            "https://w3.gold-usergeneratedcontent.net/{}{}/{}.webp",
+            gg.gg_b, s_val, hash
         );
 
-        vec![primary_url, alt_gold_url, direct_url, alt_direct_url]
+        vec![primary_url, alt_gold_url, w3_url]
     }
 
     pub fn resolve_image_url(hash: &str) -> String {
         if hash.len() < 3 {
             return String::new();
         }
-        let last3 = &hash[hash.len() - 3..];
-        let sub = if last3.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false) {
-            "b"
-        } else {
-            "a"
-        };
-        let p1 = &hash[hash.len() - 1..];
-        let p2 = &hash[hash.len() - 3..hash.len() - 1];
-        format!("https://{}a.hitomi.la/webp/{}/{}/{}.webp", sub, p1, p2, hash)
+        let last1 = &hash[hash.len() - 1..];
+        let last2 = &hash[hash.len() - 3..hash.len() - 1];
+        format!(
+            "https://atn.gold-usergeneratedcontent.net/webpbigtn/{}/{}/{}.webp",
+            last1, last2, hash
+        )
     }
 }
 

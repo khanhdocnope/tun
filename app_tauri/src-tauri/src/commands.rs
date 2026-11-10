@@ -420,3 +420,34 @@ pub async fn save_settings(
     *s = settings;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn get_image_base64(url: String, source: Option<String>) -> Result<String, String> {
+    if url.is_empty() {
+        return Err("Empty image URL".to_string());
+    }
+    let client = crate::sources::new_manga_client();
+    let mut req = client.get(&url);
+    let src_ref = source.as_deref().unwrap_or("");
+    if src_ref == "hitomi" || url.contains("gold-usergeneratedcontent.net") || url.contains("hitomi.la") {
+        req = req.header("Referer", "https://hitomi.la/");
+    } else if src_ref == "cuutruyen" || url.contains("cuutruyen") {
+        req = req.header("Referer", "https://cuutruyen.net/");
+    } else if src_ref == "mangadex" || url.contains("mangadex.org") {
+        req = req.header("User-Agent", "MoeJect/1.0");
+    }
+
+    let resp = req.send().await.map_err(|e| format!("Fetch image failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}: {}", resp.status(), url));
+    }
+    let content_type = resp.headers().get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/jpeg")
+        .to_string();
+    let bytes = resp.bytes().await.map_err(|e| format!("Read image bytes failed: {}", e))?;
+
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", content_type, b64))
+}

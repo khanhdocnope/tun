@@ -10,11 +10,9 @@ pub struct CuutruyenSource {
 
 impl CuutruyenSource {
     pub fn new() -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .build()
-            .unwrap_or_default();
-        Self { client }
+        Self {
+            client: crate::sources::new_manga_client(),
+        }
     }
 
     pub fn descramble_image(raw_bytes: &[u8], drm_b64: &str) -> Result<Vec<u8>, String> {
@@ -108,6 +106,7 @@ impl MangaSource for CuutruyenSource {
             };
 
             let resp = self.client.get(&url)
+                .header(reqwest::header::REFERER, "https://cuutruyen.net/")
                 .send()
                 .await
                 .map_err(|e| format!("Cuutruyen search failed: {}", e))?;
@@ -143,6 +142,7 @@ impl MangaSource for CuutruyenSource {
         Box::pin(async move {
             let url = format!("https://cuutruyen.net/api/v2/mangas/{}/chapters", manga_id);
             let resp = self.client.get(&url)
+                .header(reqwest::header::REFERER, "https://cuutruyen.net/")
                 .send()
                 .await
                 .map_err(|e| format!("Cuutruyen chapters failed: {}", e))?;
@@ -181,6 +181,7 @@ impl MangaSource for CuutruyenSource {
         Box::pin(async move {
             let url = format!("https://cuutruyen.net/api/v2/chapters/{}", chapter_id);
             let resp = self.client.get(&url)
+                .header(reqwest::header::REFERER, "https://cuutruyen.net/")
                 .send()
                 .await
                 .map_err(|e| format!("Cuutruyen chapter pages failed: {}", e))?;

@@ -22,7 +22,7 @@ mod tests {
     fn test_hitomi_image_url_resolver() {
         let hash = "1234567890abcdef";
         let url = HitomiSource::resolve_image_url(hash);
-        assert!(url.contains("hitomi.la/webp"));
+        assert!(url.contains("gold-usergeneratedcontent.net/webpbigtn"));
         assert!(url.ends_with(".webp"));
     }
 

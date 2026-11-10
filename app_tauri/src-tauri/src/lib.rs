@@ -41,7 +41,8 @@ pub fn run() {
             clean_image,
             get_cleaner_status,
             get_settings,
-            save_settings
+            save_settings,
+            get_image_base64
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

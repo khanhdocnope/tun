@@ -113,11 +113,7 @@ pub async fn execute_download(
     task.downloaded_pages = initial_completed;
     let _ = app.emit("download-progress", &task);
 
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .timeout(Duration::from_secs(30))
-        .build()
-        .unwrap_or_default();
+    let client = crate::sources::new_manga_client();
 
     // --- 2. PARALLEL DOWNLOAD WITH HOST SEMAPHORE & RETRIES ---
     let max_parallel_workers = 6;
