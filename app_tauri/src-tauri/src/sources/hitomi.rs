@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct GgParams {
+    pub domain: String,
     pub gg_b: String,
     pub default_o: i32,
     pub case_o: i32,
@@ -21,7 +22,8 @@ pub struct GgParams {
 impl Default for GgParams {
     fn default() -> Self {
         Self {
-            gg_b: "1794056401/".to_string(),
+            domain: "gold-usergeneratedcontent.net".to_string(),
+            gg_b: "1794315601/".to_string(),
             default_o: 0,
             case_o: 1,
             cases: HashSet::new(),
@@ -52,8 +54,26 @@ impl HitomiSource {
         }
 
         let mut params = GgParams::default();
-        let url = "https://ltn.gold-usergeneratedcontent.net/gg.js";
-        if let Ok(resp) = self.client.get(url).header("Referer", "https://hitomi.la/").send().await {
+
+        // 1. Discover domain dynamically from common.js
+        let common_url = "https://ltn.gold-usergeneratedcontent.net/common.js";
+        if let Ok(resp) = self.client.get(common_url).header("Referer", "https://hitomi.la/").send().await {
+            if resp.status().is_success() {
+                if let Ok(common_text) = resp.text().await {
+                    if let Ok(re_domain) = Regex::new(r"const\s+domain2\s*=\s*'([^']+)'") {
+                        if let Some(caps) = re_domain.captures(&common_text) {
+                            if let Some(m) = caps.get(1) {
+                                params.domain = m.as_str().to_string();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fetch gg.js dynamically using the discovered domain
+        let url = format!("https://ltn.{}/gg.js", params.domain);
+        if let Ok(resp) = self.client.get(&url).header("Referer", "https://hitomi.la/").send().await {
             if resp.status().is_success() {
                 if let Ok(text) = resp.text().await {
                     if let Ok(re_b) = Regex::new(r"b:\s*'([^']+)'") {
@@ -114,30 +134,27 @@ impl HitomiSource {
         let alt_gold_sub = format!("w{}", 1 + (1 - m_val));
 
         let primary_url = format!(
-            "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
-            primary_sub, gg.gg_b, s_val, hash
+            "https://{}.{}/{}{}/{}.webp",
+            primary_sub, gg.domain, gg.gg_b, s_val, hash
         );
         let alt_gold_url = format!(
-            "https://{}.gold-usergeneratedcontent.net/{}{}/{}.webp",
-            alt_gold_sub, gg.gg_b, s_val, hash
-        );
-        let w3_url = format!(
-            "https://w3.gold-usergeneratedcontent.net/{}{}/{}.webp",
-            gg.gg_b, s_val, hash
+            "https://{}.{}/{}{}/{}.webp",
+            alt_gold_sub, gg.domain, gg.gg_b, s_val, hash
         );
 
-        vec![primary_url, alt_gold_url, w3_url]
+        vec![primary_url, alt_gold_url]
     }
 
-    pub fn resolve_image_url(hash: &str) -> String {
+    pub fn resolve_image_url(hash: &str, domain: &str) -> String {
         if hash.len() < 3 {
             return String::new();
         }
         let last1 = &hash[hash.len() - 1..];
         let last2 = &hash[hash.len() - 3..hash.len() - 1];
+        let d = if domain.is_empty() { "gold-usergeneratedcontent.net" } else { domain };
         format!(
-            "https://atn.gold-usergeneratedcontent.net/webpbigtn/{}/{}/{}.webp",
-            last1, last2, hash
+            "https://atn.{}/webpbigtn/{}/{}/{}.webp",
+            d, last1, last2, hash
         )
     }
 }
@@ -153,11 +170,14 @@ impl MangaSource for HitomiSource {
 
     fn search<'a>(&'a self, _query: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<MangaItem>, String>> + Send + 'a>> {
         Box::pin(async move {
+            let gg = self.ensure_gg().await;
+
             // Read first 24 gallery IDs from Nozomi index (each id is 4 bytes big endian)
             let bytes_to_read = 24 * 4;
             let range_header = format!("bytes=0-{}", bytes_to_read - 1);
+            let nozomi_url = format!("https://ltn.{}/index-all.nozomi", gg.domain);
 
-            let resp = self.client.get("https://ltn.gold-usergeneratedcontent.net/index-all.nozomi")
+            let resp = self.client.get(&nozomi_url)
                 .header(reqwest::header::RANGE, range_header)
                 .header(reqwest::header::REFERER, "https://hitomi.la/")
                 .send()
@@ -174,7 +194,7 @@ impl MangaSource for HitomiSource {
 
             let mut results = Vec::new();
             for id in gallery_ids.iter().take(12) {
-                let gal_url = format!("https://ltn.gold-usergeneratedcontent.net/galleries/{}.js", id);
+                let gal_url = format!("https://ltn.{}/galleries/{}.js", gg.domain, id);
                 if let Ok(gal_resp) = self.client.get(&gal_url).header(reqwest::header::REFERER, "https://hitomi.la/").send().await {
                     if let Ok(text) = gal_resp.text().await {
                         if let Some(json_str) = text.strip_prefix("var galleryinfo = ") {
@@ -186,7 +206,7 @@ impl MangaSource for HitomiSource {
                                     .unwrap_or("");
                                 
                                 let cover_url = if !first_file_hash.is_empty() {
-                                    Self::resolve_image_url(first_file_hash)
+                                    Self::resolve_image_url(first_file_hash, &gg.domain)
                                 } else {
                                     "".to_string()
                                 };
@@ -236,7 +256,7 @@ impl MangaSource for HitomiSource {
     fn get_pages<'a>(&'a self, chapter_id: &'a str) -> Pin<Box<dyn Future<Output = Result<Vec<PageItem>, String>> + Send + 'a>> {
         Box::pin(async move {
             let gg = self.ensure_gg().await;
-            let gal_url = format!("https://ltn.gold-usergeneratedcontent.net/galleries/{}.js", chapter_id);
+            let gal_url = format!("https://ltn.{}/galleries/{}.js", gg.domain, chapter_id);
             let resp = self.client.get(&gal_url)
                 .header(reqwest::header::REFERER, "https://hitomi.la/")
                 .send()

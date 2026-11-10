@@ -143,145 +143,147 @@ pub async fn execute_download(
             let mut candidate_urls = vec![page.url.clone()];
             candidate_urls.extend(page.fallback_urls.clone());
 
-            let mut attempts = 0;
             let mut success = false;
             let mut last_err = String::new();
+            let max_retries = 3;
 
-            while attempts < 3 && !success {
-                attempts += 1;
-
-                if cancel_flag.load(Ordering::SeqCst) {
-                    return Err("ERR_CANCELLED: Download cancelled by user".to_string());
-                }
-
-                // Rotate candidate URL if previous candidate failed
-                let candidate_idx = (attempts - 1) % candidate_urls.len();
-                let current_url = &candidate_urls[candidate_idx];
+            'candidate_loop: for current_url in &candidate_urls {
                 let host = HostGate::extract_host(current_url);
 
-                // Acquire per-host semaphore permit
-                let permit = host_gate.acquire(&host).await;
-                if permit.is_none() {
-                    last_err = format!("ERR_SEMAPHORE_CLOSED: Host gate closed for {}", host);
-                    continue;
-                }
+                for attempt in 1..=max_retries {
+                    if cancel_flag.load(Ordering::SeqCst) {
+                        return Err("ERR_CANCELLED: Download cancelled by user".to_string());
+                    }
 
-                let mut req = client.get(current_url);
-                if host.contains("mangadex.org") {
-                    req = req.header("User-Agent", "MoeJect/1.0");
-                } else if host.contains("hitomi.la") || host.contains("gold-usergeneratedcontent.net") {
-                    req = req.header("Referer", "https://hitomi.la/")
-                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
-                } else if host.contains("cuutruyen.net") {
-                    req = req.header("Referer", "https://cuutruyen.net/")
-                             .header("Accept", "image/avif,image/webp,image/png,image/*;q=0.8");
-                }
+                    // Acquire per-host semaphore permit
+                    let permit = host_gate.acquire(&host).await;
+                    if permit.is_none() {
+                        last_err = format!("ERR_SEMAPHORE_CLOSED: Host gate closed for {}", host);
+                        continue;
+                    }
 
-                match req.send().await {
-                    Ok(resp) => {
-                        let status = resp.status();
-                        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                            // HTTP 429: handle Retry-After header with jitter
-                            let retry_after = parse_retry_after(&resp, 3);
-                            let jitter_ms = calculate_jitter_ms(page.page_number as u64 + attempts as u64);
-                            let sleep_duration = retry_after + Duration::from_millis(jitter_ms);
-                            last_err = format!(
-                                "ERR_HTTP_429: Rate limited by {}. Waiting {:?} (jitter {}ms)",
-                                host, sleep_duration, jitter_ms
-                            );
-                            drop(permit); // Release permit while sleeping
-                            tokio::time::sleep(sleep_duration).await;
-                            continue;
-                        } else if status.is_success() {
-                            match resp.bytes().await {
-                                Ok(bytes) => {
-                                    drop(permit); // Released as soon as bytes are in memory
-                                    let mut final_bytes = bytes.to_vec();
+                    let mut req = client.get(current_url);
+                    if host.contains("mangadex.org") {
+                        req = req.header("User-Agent", "MoeJect/1.0");
+                    } else if host.contains("hitomi.la") || host.contains("gold-usergeneratedcontent.net") {
+                        req = req.header("Referer", "https://hitomi.la/")
+                                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+                    } else if host.contains("cuutruyen.net") {
+                        req = req.header("Referer", "https://cuutruyen.net/")
+                                 .header("Accept", "image/avif,image/webp,image/png,image/*;q=0.8");
+                    }
 
-                                    // DRM descrambler (Cuutruyen)
-                                    if let Some(ref drm_b64) = page.drm_data {
-                                        match CuutruyenSource::descramble_image(&final_bytes, drm_b64) {
-                                            Ok(descrambled) => {
-                                                final_bytes = descrambled;
+                    match req.send().await {
+                        Ok(resp) => {
+                            let status = resp.status();
+                            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                                // HTTP 429: handle Retry-After header with jitter
+                                let retry_after = parse_retry_after(&resp, 3);
+                                let jitter_ms = calculate_jitter_ms(page.page_number as u64 + attempt as u64);
+                                let sleep_duration = retry_after + Duration::from_millis(jitter_ms);
+                                last_err = format!(
+                                    "ERR_HTTP_429: Rate limited by {}. Waiting {:?} (jitter {}ms)",
+                                    host, sleep_duration, jitter_ms
+                                );
+                                drop(permit); // Release permit while sleeping
+                                tokio::time::sleep(sleep_duration).await;
+                                continue;
+                            } else if status == reqwest::StatusCode::NOT_FOUND {
+                                drop(permit);
+                                last_err = format!("ERR_HTTP_404: Not found for URL {}", current_url);
+                                // On 404, don't waste retries on this URL; proceed to next fallback
+                                break;
+                            } else if status.is_success() {
+                                match resp.bytes().await {
+                                    Ok(bytes) => {
+                                        drop(permit); // Released as soon as bytes are in memory
+                                        let mut final_bytes = bytes.to_vec();
+
+                                        // DRM descrambler (Cuutruyen)
+                                        if let Some(ref drm_b64) = page.drm_data {
+                                            match CuutruyenSource::descramble_image(&final_bytes, drm_b64) {
+                                                Ok(descrambled) => {
+                                                    final_bytes = descrambled;
+                                                }
+                                                Err(e) => {
+                                                    last_err = format!("ERR_DESCRAMBLE_FAILED: {}", e);
+                                                    continue;
+                                                }
                                             }
-                                            Err(e) => {
-                                                last_err = format!("ERR_DESCRAMBLE_FAILED: {}", e);
+                                        }
+
+                                        // Magic bytes validation
+                                        if let Some(ext) = detect_image_format(&final_bytes) {
+                                            let part_path = temp_dir.join(format!("page_{:04}.part", page.page_number));
+                                            let final_path = temp_dir.join(format!("page_{:04}.{}", page.page_number, ext));
+
+                                            if let Err(e) = fs::write(&part_path, &final_bytes) {
+                                                last_err = format!("ERR_IO_WRITE: Failed to write temp file: {}", e);
                                                 continue;
                                             }
+
+                                            if let Err(e) = fs::rename(&part_path, &final_path) {
+                                                last_err = format!("ERR_IO_RENAME: Failed to rename file: {}", e);
+                                                continue;
+                                            }
+
+                                            let count = downloaded_count.fetch_add(1, Ordering::SeqCst) + 1;
+                                            let progress_task = DownloadTask {
+                                                id: task_id.clone(),
+                                                manga_id: String::new(),
+                                                manga_title: String::new(),
+                                                chapter_id: String::new(),
+                                                chapter_title: String::new(),
+                                                status: DownloadStatus::Downloading,
+                                                total_pages,
+                                                downloaded_pages: count,
+                                                file_format: String::new(),
+                                                error_message: None,
+                                            };
+                                            let _ = app.emit("download-progress", &progress_task);
+                                            success = true;
+                                            break 'candidate_loop;
+                                        } else {
+                                            last_err = format!(
+                                                "ERR_INVALID_MAGIC_BYTES: Response from {} is not a valid image format",
+                                                current_url
+                                            );
                                         }
                                     }
-
-                                    // Magic bytes validation
-                                    if let Some(ext) = detect_image_format(&final_bytes) {
-                                        let part_path = temp_dir.join(format!("page_{:04}.part", page.page_number));
-                                        let final_path = temp_dir.join(format!("page_{:04}.{}", page.page_number, ext));
-
-                                        if let Err(e) = fs::write(&part_path, &final_bytes) {
-                                            last_err = format!("ERR_IO_WRITE: Failed to write temp file: {}", e);
-                                            continue;
-                                        }
-
-                                        if let Err(e) = fs::rename(&part_path, &final_path) {
-                                            last_err = format!("ERR_IO_RENAME: Failed to rename file: {}", e);
-                                            continue;
-                                        }
-
-                                        let count = downloaded_count.fetch_add(1, Ordering::SeqCst) + 1;
-                                        let progress_task = DownloadTask {
-                                            id: task_id.clone(),
-                                            manga_id: String::new(),
-                                            manga_title: String::new(),
-                                            chapter_id: String::new(),
-                                            chapter_title: String::new(),
-                                            status: DownloadStatus::Downloading,
-                                            total_pages,
-                                            downloaded_pages: count,
-                                            file_format: String::new(),
-                                            error_message: None,
-                                        };
-                                        let _ = app.emit("download-progress", &progress_task);
-                                        success = true;
-                                        break;
-                                    } else {
-                                        last_err = format!(
-                                            "ERR_INVALID_MAGIC_BYTES: Response from {} is not a valid image format",
-                                            current_url
-                                        );
+                                    Err(e) => {
+                                        drop(permit);
+                                        last_err = format!("ERR_READ_BYTES: {}", e);
                                     }
                                 }
-                                Err(e) => {
-                                    drop(permit);
-                                    last_err = format!("ERR_READ_BYTES: {}", e);
-                                }
-                            }
-                        } else {
-                            drop(permit);
-                            let code = if status.as_u16() == 403 {
-                                "ERR_HTTP_403_FORBIDDEN"
-                            } else if status.is_server_error() {
-                                "ERR_HTTP_5XX_SERVER"
                             } else {
-                                "ERR_HTTP_STATUS"
+                                drop(permit);
+                                let code = if status.as_u16() == 403 {
+                                    "ERR_HTTP_403_FORBIDDEN"
+                                } else if status.is_server_error() {
+                                    "ERR_HTTP_5XX_SERVER"
+                                } else {
+                                    "ERR_HTTP_STATUS"
+                                };
+                                last_err = format!("{}: {} for URL {}", code, status, current_url);
+                            }
+                        }
+                        Err(e) => {
+                            drop(permit);
+                            let err_type = if e.is_timeout() {
+                                "ERR_TIMEOUT"
+                            } else if e.is_connect() {
+                                "ERR_CONNECTION"
+                            } else {
+                                "ERR_NETWORK"
                             };
-                            last_err = format!("{}: {} for URL {}", code, status, current_url);
+                            last_err = format!("{}: {}", err_type, e);
                         }
                     }
-                    Err(e) => {
-                        drop(permit);
-                        let err_type = if e.is_timeout() {
-                            "ERR_TIMEOUT"
-                        } else if e.is_connect() {
-                            "ERR_CONNECTION"
-                        } else {
-                            "ERR_NETWORK"
-                        };
-                        last_err = format!("{}: {}", err_type, e);
-                    }
-                }
 
-                if !success && attempts < 3 {
-                    let backoff_ms = (500 * attempts as u64) + calculate_jitter_ms(page.page_number as u64);
-                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    if !success && attempt < max_retries {
+                        let backoff_ms = (500 * attempt as u64) + calculate_jitter_ms(page.page_number as u64 + attempt as u64);
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    }
                 }
             }
 

@@ -21,7 +21,7 @@ mod tests {
     #[test]
     fn test_hitomi_image_url_resolver() {
         let hash = "1234567890abcdef";
-        let url = HitomiSource::resolve_image_url(hash);
+        let url = HitomiSource::resolve_image_url(hash, "gold-usergeneratedcontent.net");
         assert!(url.contains("gold-usergeneratedcontent.net/webpbigtn"));
         assert!(url.ends_with(".webp"));
     }
