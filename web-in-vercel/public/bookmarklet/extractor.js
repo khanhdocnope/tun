@@ -149,6 +149,8 @@
     studioUrl: scriptOrigin + "/batch-studio",
     title: (document.title || "Manga_Chapter").replace(/[\\\/:\*\?"<>\|]/g, "_").trim(),
     hudVisible: true,
+    harvestRegistry: new Map(), // Kho lưu trữ bền vững chống Virtual Scroll unmount & recycling
+    discoveryCounter: 0,
   };
 
   // Try to detect cleaner chapter title from H1 or meta tags
@@ -350,102 +352,288 @@
     return results;
   }
 
-  // Quét toàn diện kết hợp cả Canvas & Images và sắp xếp theo vị trí trang (Khử trùng lặp đa tầng)
-  function scanAllPages() {
-    state.isScanning = true;
-    updateScanStatus("Đang quét nội dung...");
+  // Chụp ảnh thẻ <img> sang dataUrl để lưu trữ vĩnh viễn trong RAM trước khi Virtual Scroller gỡ phần tử khỏi DOM
+  function snapshotImgToDataUrl(img) {
+    if (!img) return null;
+    try {
+      const nw = img.naturalWidth || img.width || 0;
+      const nh = img.naturalHeight || img.height || 0;
+      if (nw < 100 || nh < 100) return null;
 
+      const offCanvas = document.createElement("canvas");
+      offCanvas.width = nw;
+      offCanvas.height = nh;
+      const ctx = offCanvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, nw, nh);
+      return offCanvas.toDataURL("image/jpeg", 0.95);
+    } catch (_) {
+      // Nếu bị chặn bởi tainted canvas CORS -> vẫn lưu lại src gốc để tải qua proxy hoặc direct fetch
+      return null;
+    }
+  }
+
+  // Thu thập và tích lũy các trang truyện đang xuất hiện trong DOM vào kho lưu trữ bền vững (Chống Virtual Scroller unmount & recycling)
+  function harvestCurrentDom() {
     const canvases = scanCanvases();
     const images = scanImages();
 
-    // Hợp nhất thông minh chống trùng giữa Canvas DRM và <img> thẻ ẩn
-    let merged = [];
-    if (canvases.length > 0 && images.length === 0) {
-      merged = canvases;
-    } else if (images.length > 0 && canvases.length === 0) {
-      merged = images;
-    } else if (images.length >= 4 && canvases.length < 3) {
-      // Trường hợp web ảnh thông thường: Canvas ít là widget/ad rác
-      merged = images;
-    } else if (canvases.length >= 4 && images.length < 3) {
-      // Trường hợp web Canvas DRM thuần túy
-      merged = canvases;
-    } else {
-      // Có cả hai: Loại bỏ bất kỳ ảnh img nào có tọa độ trùng lặp với canvas DRM
-      const nonOverlappingImages = images.filter((img) => {
-        return !canvases.some(
-          (c) => Math.abs(c.pos.top - img.pos.top) < 35 && Math.abs(c.pos.left - img.pos.left) < 35
-        );
-      });
-      merged = [...canvases, ...nonOverlappingImages];
+    let newCount = 0;
+
+    // 1. Thu thập Canvas DRM
+    for (const c of canvases) {
+      if (!c.dataUrl || c.dataUrl.length < 12000) continue;
+      // Khóa vân tay độc nhất cho Canvas: kích thước + độ dài base64 + 60 ký tự mẫu
+      const canvasKey = `canvas_${c.width}x${c.height}_${c.dataUrl.length}_${c.dataUrl.slice(35, 95)}`;
+      if (!state.harvestRegistry.has(canvasKey)) {
+        state.discoveryCounter++;
+        state.harvestRegistry.set(canvasKey, {
+          type: "canvas",
+          dataUrl: c.dataUrl,
+          src: c.dataUrl,
+          width: c.width,
+          height: c.height,
+          pos: c.pos,
+          order: c.pos.top,
+          discoveryIdx: state.discoveryCounter,
+          byteSize: c.byteSize,
+        });
+        newCount++;
+      }
     }
+
+    // 2. Thu thập thẻ <img>
+    for (const img of images) {
+      if (!img.src) continue;
+      const urlKey = normalizeUrlKey(img.src);
+      if (!urlKey) continue;
+
+      if (!state.harvestRegistry.has(urlKey)) {
+        state.discoveryCounter++;
+        // Chụp ngay snapshot sang dataUrl nếu ảnh đã nạp xong (tránh mất khi bị unmount)
+        let dataUrl = img.dataUrl;
+        if (!dataUrl && img.domElement && img.domElement.complete && (img.domElement.naturalWidth || 0) > 100) {
+          dataUrl = snapshotImgToDataUrl(img.domElement);
+        }
+
+        const harvestEntry = {
+          type: "image",
+          src: img.src,
+          dataUrl: dataUrl || null,
+          domElement: img.domElement,
+          width: img.width,
+          height: img.height,
+          pos: img.pos,
+          order: img.pos.top,
+          discoveryIdx: state.discoveryCounter,
+          byteSize: dataUrl ? Math.round((dataUrl.length * 3) / 4) : 0,
+        };
+
+        // Nếu ảnh chưa nạp xong, gắn bộ lắng nghe onload để snapshot ngay khoảnh khắc ảnh vừa load xong!
+        if (!dataUrl && img.domElement && !img.domElement.complete) {
+          const expectedSrc = img.src;
+          const capturedElement = img.domElement;
+          capturedElement.addEventListener("load", () => {
+            const currentSrc = capturedElement.currentSrc || capturedElement.src;
+            if (normalizeUrlKey(currentSrc) === normalizeUrlKey(expectedSrc)) {
+              const freshData = snapshotImgToDataUrl(capturedElement);
+              if (freshData && harvestEntry) {
+                harvestEntry.dataUrl = freshData;
+                harvestEntry.byteSize = Math.round((freshData.length * 3) / 4);
+              }
+            }
+          }, { once: true });
+        }
+
+        state.harvestRegistry.set(urlKey, harvestEntry);
+        newCount++;
+      } else {
+        // Nếu ảnh đã có trong registry nhưng chưa có dataUrl: cập nhật ngay khi ảnh hoàn tất
+        const existing = state.harvestRegistry.get(urlKey);
+        if (!existing.dataUrl && img.domElement && img.domElement.complete && (img.domElement.naturalWidth || 0) > 100) {
+          const freshDataUrl = snapshotImgToDataUrl(img.domElement);
+          if (freshDataUrl) {
+            existing.dataUrl = freshDataUrl;
+            existing.byteSize = Math.round((freshDataUrl.length * 3) / 4);
+          }
+        }
+      }
+    }
+
+    // Đồng bộ sang state.pages và sắp xếp theo thứ tự đọc
+    syncHarvestToPages();
+    return newCount;
+  }
+
+  // Đồng bộ và sắp xếp toàn bộ danh sách trang thu thập được
+  function syncHarvestToPages() {
+    const list = Array.from(state.harvestRegistry.values());
 
     // Sắp xếp tự nhiên theo vị trí từ trên xuống dưới (đọc xuôi)
-    merged.sort((a, b) => a.pos.top - b.pos.top || a.pos.left - b.pos.left);
+    list.sort((a, b) => a.order - b.order || a.discoveryIdx - b.discoveryIdx);
 
-    // BỘ LỌC CHỐNG LẶP CUỐI CÙNG: Triệt tiêu các phần tử có cùng vị trí trang hoặc cùng URL
-    const uniquePages = [];
-    for (let i = 0; i < merged.length; i++) {
-      const cur = merged[i];
-
-      // 1. Kiểm tra xem có trùng tọa độ đứng (< 25px) với trang đã thêm hay không
-      const isDuplicatePos = uniquePages.some(
-        (prev) => Math.abs(prev.pos.top - cur.pos.top) < 25 && Math.abs(prev.pos.left - cur.pos.left) < 25
+    // Lọc khử trùng tọa độ: nếu 1 canvas và 1 ảnh nằm cùng vị trí < 30px, giữ 1 bản
+    const nonOverlapping = [];
+    for (const item of list) {
+      const isOverlap = nonOverlapping.some((prev) =>
+        Math.abs(prev.pos.top - item.pos.top) < 30 &&
+        Math.abs(prev.pos.left - item.pos.left) < 30
       );
-      if (isDuplicatePos) continue;
-
-      // 2. Kiểm tra xem có trùng URL ảnh (đã chuẩn hóa) không
-      if (cur.src && !cur.src.startsWith("data:")) {
-        const curNorm = normalizeUrlKey(cur.src);
-        const isDuplicateSrc = uniquePages.some(
-          (prev) => prev.src && !prev.src.startsWith("data:") && normalizeUrlKey(prev.src) === curNorm
-        );
-        if (isDuplicateSrc) continue;
+      if (!isOverlap) {
+        nonOverlapping.push(item);
       }
-
-      // 3. Kiểm tra trùng dữ liệu base64
-      if (cur.dataUrl) {
-        const isDuplicateData = uniquePages.some((prev) => prev.dataUrl && prev.dataUrl === cur.dataUrl);
-        if (isDuplicateData) continue;
-      }
-
-      uniquePages.push(cur);
     }
 
-    state.pages = uniquePages;
-    state.selectedIndices = new Set(uniquePages.map((_, idx) => idx));
-    state.isScanning = false;
+    state.pages = nonOverlapping;
 
+    // Tự động giữ nguyên các trang người dùng đã chọn, và mặc định chọn các trang mới
+    const newSelected = new Set();
+    state.pages.forEach((_, idx) => newSelected.add(idx));
+    state.selectedIndices = newSelected;
+  }
+
+  // Quét nội dung hiện tại và tích lũy vào kho trang
+  function scanAllPages() {
+    state.isScanning = true;
+    updateScanStatus("Đang thu thập trang...");
+    harvestCurrentDom();
+    state.isScanning = false;
+    updateScanStatus("Sẵn sàng");
     renderHud();
   }
 
-  // Auto-scroll kích hoạt toàn bộ Lazy Load / Canvas rendering
+  // Live Harvester: Lắng nghe background DOM mutations và scroll để gom ảnh theo thời gian thực
+  let liveObserver = null;
+  let liveScrollHandler = null;
+  let liveScrollTimeout = null;
+
+  function initLiveHarvester() {
+    if (typeof MutationObserver !== "undefined" && !liveObserver) {
+      liveObserver = new MutationObserver((mutations) => {
+        let hasImageMutation = false;
+        for (const m of mutations) {
+          if (m.addedNodes && m.addedNodes.length > 0) {
+            hasImageMutation = true;
+            break;
+          }
+        }
+        if (hasImageMutation && !state.isScrolling) {
+          const added = harvestCurrentDom();
+          if (added > 0) {
+            renderHud();
+          }
+        }
+      });
+
+      try {
+        liveObserver.observe(document.body || document.documentElement, {
+          childList: true,
+          subtree: true,
+        });
+      } catch (_) {}
+    }
+
+    if (!liveScrollHandler) {
+      liveScrollHandler = () => {
+        if (state.isScrolling) return;
+        if (liveScrollTimeout) clearTimeout(liveScrollTimeout);
+        liveScrollTimeout = setTimeout(() => {
+          const added = harvestCurrentDom();
+          if (added > 0) {
+            renderHud();
+          }
+        }, 180);
+      };
+      window.addEventListener("scroll", liveScrollHandler, { passive: true });
+    }
+  }
+
+  function destroyLiveHarvester() {
+    if (liveObserver) {
+      try { liveObserver.disconnect(); } catch (_) {}
+      liveObserver = null;
+    }
+    if (liveScrollHandler) {
+      window.removeEventListener("scroll", liveScrollHandler);
+      liveScrollHandler = null;
+    }
+    if (liveScrollTimeout) {
+      clearTimeout(liveScrollTimeout);
+      liveScrollTimeout = null;
+    }
+  }
+
+  // Auto-scroll kích hoạt và thu thập lũy tiến toàn bộ Virtual Scroll / Lazy Load
   async function triggerAutoScroll() {
     if (state.isScrolling) return;
     state.isScrolling = true;
-    updateScanStatus("Đang cuộn kích hoạt ảnh...");
+    updateScanStatus("Bắt đầu cuộn thu thập Virtual Scroll...");
+    showToast("Đang cuộn từng nấc và thu thập toàn bộ trang... Vui lòng không đóng tab!", 4000);
 
-    const totalHeight = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight,
-      window.innerHeight * 5
-    );
-    const step = window.innerHeight * 0.8;
-    const numSteps = Math.ceil(totalHeight / step);
+    const progressBar = shadow ? shadow.getElementById("hudProgressFill") : null;
 
-    for (let i = 0; i <= numSteps; i++) {
-      window.scrollTo({ top: i * step, behavior: "smooth" });
-      updateScanStatus(`Cuộn trang ${Math.round((i / numSteps) * 100)}%...`);
-      await new Promise((r) => setTimeout(r, 160));
+    // 1. Quét nạp các trang ban đầu tại vị trí hiện tại
+    harvestCurrentDom();
+    renderHud();
+
+    // 2. Cuộn nhẹ lên đầu để đảm bảo bắt trọn các trang 1-6 đầu tiên
+    window.scrollTo({ top: 0, behavior: "instant" });
+    await new Promise((r) => setTimeout(r, 400));
+    harvestCurrentDom();
+    renderHud();
+
+    // 3. Tiến trình cuộn từng nấc lướt qua toàn bộ tài liệu
+    const viewportHeight = window.innerHeight || 800;
+    const scrollStep = Math.round(viewportHeight * 0.65);
+    let currentY = 0;
+    let consecutiveNoNewPages = 0;
+    let loopCount = 0;
+    const maxLoops = 350; // Cho phép chapter dài đến hàng trăm trang
+
+    while (loopCount < maxLoops) {
+      loopCount++;
+      const maxScrollY = Math.max(
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        window.innerHeight
+      ) - viewportHeight;
+
+      currentY += scrollStep;
+      if (currentY > maxScrollY) {
+        currentY = maxScrollY;
+      }
+
+      window.scrollTo({ top: currentY, behavior: "smooth" });
+
+      // Đợi cho Virtual Scroller / IntersectionObserver của web truyện kích hoạt mount các ảnh mới
+      await new Promise((r) => setTimeout(r, 320));
+
+      const newFound = harvestCurrentDom();
+      if (newFound > 0) {
+        consecutiveNoNewPages = 0;
+        renderHud();
+      } else {
+        consecutiveNoNewPages++;
+      }
+
+      const percent = maxScrollY > 0 ? Math.min(100, Math.round((currentY / maxScrollY) * 100)) : 100;
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      updateScanStatus(`Đang cuộn: Đã bắt ${state.pages.length} trang (${percent}%)...`);
+
+      // Nếu đã chạm đáy tài liệu và 3 nấc liên tiếp không có ảnh mới nào xuất hiện -> Hoàn tất!
+      if (currentY >= maxScrollY && consecutiveNoNewPages >= 3) {
+        break;
+      }
     }
 
-    // Cuộn nhẹ ngược lên đầu
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    await new Promise((r) => setTimeout(r, 300));
+    if (progressBar) progressBar.style.width = "100%";
+    setTimeout(() => { if (progressBar) progressBar.style.width = "0%"; }, 1200);
 
     state.isScrolling = false;
     neutralizeHostPageAdTraps();
-    scanAllPages();
+    updateScanStatus("Sẵn sàng");
+    renderHud();
+
+    showToast(`Đã thu thập trọn vẹn ${state.pages.length} trang truyện (Đã đánh bại Virtual Scroll)!`, 5000);
   }
 
   // -------------------------------------------------------------
@@ -919,8 +1107,8 @@
             <span id="hudStatusText">Sẵn sàng</span>
           </div>
           <div class="hud-actions">
-            <button class="btn-action btn-secondary" id="btnAutoScroll" title="Tự động cuộn êm để kích hoạt toàn bộ lazy-load">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>Cuộn quét trang
+            <button class="btn-action btn-secondary" id="btnAutoScroll" title="Cuộn từng nấc thu thập toàn bộ trang Virtual Scroll">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-right:4px;"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>Cuộn Thu Thập (Virtual Scroll)
             </button>
             <button class="btn-action btn-secondary" id="btnToggleSelectAll" title="Chọn / Bỏ chọn tất cả">
               Đảo chọn
@@ -955,6 +1143,7 @@
 
     // Bind HUD events
     const closeHud = () => {
+      destroyLiveHarvester();
       cleanupAdShield();
       host.remove();
       window.__mangaExtractorHost = null;
@@ -975,8 +1164,10 @@
     shadow.getElementById("btnRefreshScan").addEventListener("click", (e) => {
       e.preventDefault();
       neutralizeHostPageAdTraps();
+      state.harvestRegistry.clear();
+      state.discoveryCounter = 0;
       scanAllPages();
-      showToast("Đã quét lại toàn bộ trang!");
+      showToast("Đã làm mới bộ nhớ và quét lại toàn bộ trang!");
     });
 
     shadow.getElementById("btnAutoScroll").addEventListener("click", (e) => {
@@ -1052,15 +1243,19 @@
 
       let dataUrl = p.dataUrl;
       if (!dataUrl && p.domElement && p.domElement.complete) {
-        try {
-          // Trích xuất trực tiếp từ thẻ img đã render trên trang (vượt rào CORS)
-          const offCanvas = document.createElement("canvas");
-          offCanvas.width = p.domElement.naturalWidth || p.domElement.width;
-          offCanvas.height = p.domElement.naturalHeight || p.domElement.height;
-          const ctx = offCanvas.getContext("2d");
-          ctx.drawImage(p.domElement, 0, 0);
-          dataUrl = offCanvas.toDataURL("image/jpeg", 0.95);
-        } catch (_) {}
+        // Chống tái sử dụng DOM node (Recycled Element Trap): Chỉ vẽ nếu src hiện tại của thẻ vẫn khớp với URL trang
+        const curDomSrc = p.domElement.currentSrc || p.domElement.src;
+        const isMatchingDom = !p.src || !curDomSrc || normalizeUrlKey(curDomSrc) === normalizeUrlKey(p.src);
+        if (isMatchingDom) {
+          try {
+            const offCanvas = document.createElement("canvas");
+            offCanvas.width = p.domElement.naturalWidth || p.domElement.width;
+            offCanvas.height = p.domElement.naturalHeight || p.domElement.height;
+            const ctx = offCanvas.getContext("2d");
+            ctx.drawImage(p.domElement, 0, 0);
+            dataUrl = offCanvas.toDataURL("image/jpeg", 0.95);
+          } catch (_) {}
+        }
       }
 
       preparedImages.push({
@@ -1210,18 +1405,22 @@
 
         let blob = null;
 
-        // Lớp 1: Thử trích xuất từ DOM img canvas nếu không bị tainted
+        // Lớp 1: Thử trích xuất từ DOM img canvas nếu không bị tainted VÀ chưa bị recycled
         if (p.domElement && p.domElement.complete) {
-          try {
-            const canvas = document.createElement("canvas");
-            canvas.width = p.domElement.naturalWidth || p.domElement.width;
-            canvas.height = p.domElement.naturalHeight || p.domElement.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(p.domElement, 0, 0);
-            blob = await new Promise((res, rej) => {
-              canvas.toBlob((b) => (b ? res(b) : rej()), "image/jpeg", 0.95);
-            });
-          } catch (_) {}
+          const curDomSrc = p.domElement.currentSrc || p.domElement.src;
+          const isMatchingDom = !p.src || !curDomSrc || normalizeUrlKey(curDomSrc) === normalizeUrlKey(p.src);
+          if (isMatchingDom) {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = p.domElement.naturalWidth || p.domElement.width;
+              canvas.height = p.domElement.naturalHeight || p.domElement.height;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(p.domElement, 0, 0);
+              blob = await new Promise((res, rej) => {
+                canvas.toBlob((b) => (b ? res(b) : rej()), "image/jpeg", 0.95);
+              });
+            } catch (_) {}
+          }
         }
 
         // Lớp 2: Thử fetch trực tiếp
@@ -1357,5 +1556,6 @@
   // BOOTSTRAP EXECUTION
   // -------------------------------------------------------------
   createHudDOM();
+  initLiveHarvester();
   scanAllPages();
 })();
