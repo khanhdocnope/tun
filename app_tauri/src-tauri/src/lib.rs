@@ -34,6 +34,7 @@ pub fn run() {
             get_manga_chapters,
             get_chapter_pages,
             start_download,
+            start_browser_download,
             cancel_download,
             get_download_queue,
             get_library_books,

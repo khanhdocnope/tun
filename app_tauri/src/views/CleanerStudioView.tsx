@@ -14,12 +14,25 @@ import {
 import { CleanResponse } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 
-export const CleanerStudioView: React.FC = () => {
-  const [originalImage, setOriginalImage] = useState<string | null>(null);
+interface CleanerStudioViewProps {
+  initialImage?: string | null;
+}
+
+export const CleanerStudioView: React.FC<CleanerStudioViewProps> = ({ initialImage }) => {
+  const [originalImage, setOriginalImage] = useState<string | null>(initialImage || null);
   const [cleanedImage, setCleanedImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [timeTaken, setTimeTaken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (initialImage) {
+      setOriginalImage(initialImage);
+      setCleanedImage(null);
+      setTimeTaken(null);
+      setError(null);
+    }
+  }, [initialImage]);
 
   // Mobile active preview tab
   const [mobileTab, setMobileTab] = useState<'original' | 'cleaned'>('original');

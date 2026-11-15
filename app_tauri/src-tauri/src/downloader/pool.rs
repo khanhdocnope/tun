@@ -171,6 +171,10 @@ pub async fn execute_download(
                     } else if host.contains("cuutruyen.net") {
                         req = req.header("Referer", "https://cuutruyen.net/")
                                  .header("Accept", "image/avif,image/webp,image/png,image/*;q=0.8");
+                    } else {
+                        req = req.header("Referer", format!("https://{}/", host))
+                                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36")
+                                 .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
                     }
 
                     match req.send().await {

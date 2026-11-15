@@ -23,7 +23,7 @@ impl Default for GgParams {
     fn default() -> Self {
         Self {
             domain: "gold-usergeneratedcontent.net".to_string(),
-            gg_b: "1794315601/".to_string(),
+            gg_b: "1794718801/".to_string(),
             default_o: 0,
             case_o: 1,
             cases: HashSet::new(),

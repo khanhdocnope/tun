@@ -25,6 +25,10 @@ pub fn new_manga_client() -> reqwest::Client {
         .resolve("cuutruyen.net", "104.21.40.80:443".parse().unwrap())
         .resolve("cuutruyen.net", "172.67.182.143:443".parse().unwrap())
         .resolve("hitomi.la", "185.165.169.231:443".parse().unwrap())
+        .resolve("gold-usergeneratedcontent.net", "216.230.225.130:443".parse().unwrap())
+        .resolve("ltn.gold-usergeneratedcontent.net", "216.230.225.130:443".parse().unwrap())
+        .resolve("w1.gold-usergeneratedcontent.net", "23.237.164.106:443".parse().unwrap())
+        .resolve("w2.gold-usergeneratedcontent.net", "23.237.164.106:443".parse().unwrap())
         .build()
         .unwrap_or_default()
 }

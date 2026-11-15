@@ -103,3 +103,20 @@ export interface SourceCatalogEntry {
   tags: string[];
 }
 
+export interface BrowserTab {
+  id: string;
+  title: string;
+  url: string;
+  isLoading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  detectedPages: string[];
+}
+
+export interface BookmarkItem {
+  id: string;
+  title: string;
+  url: string;
+  icon?: string;
+}
+

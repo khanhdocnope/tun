@@ -17,12 +17,16 @@ import { invoke } from '@tauri-apps/api/core';
 interface ReaderViewProps {
   onlineChapter?: ChapterItem;
   offlineBook?: LibraryBook;
+  browserPages?: PageItem[];
+  browserTitle?: string;
   onClose: () => void;
 }
 
 export const ReaderView: React.FC<ReaderViewProps> = ({
   onlineChapter,
   offlineBook,
+  browserPages,
+  browserTitle,
   onClose,
 }) => {
   const [mode, setMode] = useState<'webtoon' | 'manga'>('webtoon');
@@ -41,12 +45,16 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const hideTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (onlineChapter) {
+    if (browserPages && browserPages.length > 0) {
+      setPages(browserPages);
+      setLoading(false);
+      setError(null);
+    } else if (onlineChapter) {
       loadOnlinePages();
     } else if (offlineBook) {
       loadOfflinePage(0);
     }
-  }, [onlineChapter, offlineBook]);
+  }, [onlineChapter, offlineBook, browserPages]);
 
   // Auto-hide controls after 4 seconds of inactivity
   useEffect(() => {
@@ -162,7 +170,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   };
 
-  const title = onlineChapter
+  const title = browserTitle
+    ? browserTitle
+    : onlineChapter
     ? onlineChapter.title
     : offlineBook
     ? `${offlineBook.manga_title} - ${offlineBook.chapter_title}`
@@ -254,7 +264,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         {/* WEBTOON MODE (Continuous Vertical Scroll) */}
         {!loading && !error && mode === 'webtoon' && (
           <div className="w-full h-full overflow-y-auto flex flex-col items-center py-16 px-0 sm:px-4">
-            {onlineChapter &&
+            {(onlineChapter || browserPages) &&
               pages.map((p, idx) => (
                 <div key={idx} className="w-full max-w-3xl my-0 relative">
                   <img
@@ -289,7 +299,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className="absolute left-0 top-0 bottom-0 w-1/4 z-10 cursor-w-resize" title="Chạm để lùi trang" />
             <div className="absolute right-0 top-0 bottom-0 w-1/4 z-10 cursor-e-resize" title="Chạm để sang trang" />
 
-            {onlineChapter && pages[currentPage] && (
+            {(onlineChapter || browserPages) && pages[currentPage] && (
               <img
                 src={pages[currentPage].url}
                 alt={`Trang ${currentPage + 1}`}

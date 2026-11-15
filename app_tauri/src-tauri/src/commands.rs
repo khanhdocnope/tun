@@ -305,6 +305,74 @@ pub async fn start_download(
 }
 
 #[tauri::command]
+pub async fn start_browser_download(
+    app: AppHandle,
+    urls: Vec<String>,
+    manga_title: String,
+    chapter_title: String,
+    format: Option<String>,
+    _referer: Option<String>,
+    _cookies: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    if urls.is_empty() {
+        return Err("Danh sách URL ảnh từ trình duyệt trống".to_string());
+    }
+
+    let download_dir = {
+        let s = state.settings.lock().await;
+        s.download_dir.clone()
+    };
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let task_id = format!("browser-{}", timestamp);
+
+    let pages: Vec<PageItem> = urls
+        .into_iter()
+        .enumerate()
+        .map(|(i, url)| PageItem {
+            page_number: i + 1,
+            url,
+            drm_data: None,
+            fallback_urls: vec![],
+        })
+        .collect();
+
+    let task = DownloadTask {
+        id: task_id.clone(),
+        manga_id: "browser".to_string(),
+        manga_title,
+        chapter_title,
+        chapter_id: "browser".to_string(),
+        total_pages: pages.len(),
+        downloaded_pages: 0,
+        status: DownloadStatus::Downloading,
+        file_format: format.unwrap_or_else(|| "cbz".to_string()),
+        error_message: None,
+    };
+
+    {
+        let mut q = state.queue.lock().await;
+        q.push(task.clone());
+    }
+
+    let cancel_flag = state.task_manager.register(&task.id).await;
+    let host_gate = state.host_gate.clone();
+    let task_manager = state.task_manager.clone();
+    let task_id_clone = task.id.clone();
+
+    tokio::spawn(async move {
+        let _ = execute_download(app, task, pages, download_dir, host_gate, cancel_flag).await;
+        task_manager.unregister(&task_id_clone).await;
+    });
+
+    Ok(task_id)
+}
+
+#[tauri::command]
 pub async fn cancel_download(
     task_id: String,
     state: State<'_, AppState>,
