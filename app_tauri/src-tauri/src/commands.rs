@@ -18,7 +18,7 @@ use crate::sources::MangaSource;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, State, Url, WebviewUrl};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -518,4 +518,127 @@ pub async fn get_image_base64(url: String, source: Option<String>) -> Result<Str
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:{};base64,{}", content_type, b64))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserBounds {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[tauri::command]
+pub async fn open_browser_pane(
+    app: AppHandle,
+    url: String,
+    bounds: BrowserBounds,
+) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        let window = app.get_window("main").ok_or("Không tìm thấy cửa sổ chính")?;
+        let pos = LogicalPosition::new(bounds.x, bounds.y);
+        let size = LogicalSize::new(bounds.width.max(100.0), bounds.height.max(100.0));
+
+        if let Some(webview) = app.get_webview("manga-browser-pane") {
+            let _ = webview.set_position(pos);
+            let _ = webview.set_size(size);
+            if let Ok(parsed) = url.parse::<Url>() {
+                let _ = webview.navigate(parsed);
+            }
+            let _ = webview.show();
+            return Ok(());
+        }
+
+        let parsed = url.parse::<Url>().map_err(|e| format!("URL không hợp lệ: {}", e))?;
+        let webview_builder = tauri::webview::WebviewBuilder::new(
+            "manga-browser-pane",
+            WebviewUrl::External(parsed),
+        );
+
+        window.add_child(webview_builder, pos, size)
+            .map_err(|e| format!("Lỗi tạo native browser pane: {}", e))?;
+        Ok(())
+    }
+    #[cfg(not(desktop))]
+    {
+        Err("Child webview không hỗ trợ trên nền tảng này".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn hide_browser_pane(app: AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(webview) = app.get_webview("manga-browser-pane") {
+            let _ = webview.hide();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_browser_bounds(app: AppHandle, bounds: BrowserBounds) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(webview) = app.get_webview("manga-browser-pane") {
+            let pos = LogicalPosition::new(bounds.x, bounds.y);
+            let size = LogicalSize::new(bounds.width.max(100.0), bounds.height.max(100.0));
+            let _ = webview.set_position(pos);
+            let _ = webview.set_size(size);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_navigate(app: AppHandle, url: String) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(webview) = app.get_webview("manga-browser-pane") {
+            if let Ok(parsed) = url.parse::<Url>() {
+                let _ = webview.navigate(parsed);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_action(app: AppHandle, action: String) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(webview) = app.get_webview("manga-browser-pane") {
+            match action.as_str() {
+                "back" => { let _ = webview.eval("window.history.back()"); }
+                "forward" => { let _ = webview.eval("window.history.forward()"); }
+                "reload" => { let _ = webview.reload(); }
+                _ => {}
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn browser_eval(app: AppHandle, script: String) -> Result<String, String> {
+    #[cfg(desktop)]
+    {
+        let webview = app.get_webview("manga-browser-pane").ok_or("Trình duyệt chưa sẵn sàng")?;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let tx_cell = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+        webview.eval_with_callback(script, move |res| {
+            if let Ok(mut lock) = tx_cell.lock() {
+                if let Some(sender) = lock.take() {
+                    let _ = sender.send(res);
+                }
+            }
+        }).map_err(|e| format!("Lỗi eval: {}", e))?;
+
+        rx.await.map_err(|e| format!("Lỗi nhận kết quả eval: {}", e))
+    }
+    #[cfg(not(desktop))]
+    {
+        Err("Không hỗ trợ eval trên nền tảng này".to_string())
+    }
 }

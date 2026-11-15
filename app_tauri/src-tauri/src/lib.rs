@@ -43,7 +43,13 @@ pub fn run() {
             get_cleaner_status,
             get_settings,
             save_settings,
-            get_image_base64
+            get_image_base64,
+            open_browser_pane,
+            hide_browser_pane,
+            update_browser_bounds,
+            browser_navigate,
+            browser_action,
+            browser_eval
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -51,6 +51,13 @@ export function App() {
     };
   }, []);
 
+  // Hide native browser pane when navigating away from browser view or opening reader
+  useEffect(() => {
+    if (activeTab !== 'browser' || readerOnlineChapter || readerOfflineBook || readerBrowserPages) {
+      invoke('hide_browser_pane').catch(() => {});
+    }
+  }, [activeTab, readerOnlineChapter, readerOfflineBook, readerBrowserPages]);
+
   const handleSelectManga = (manga: MangaItem) => {
     setSelectedManga(manga);
   };
