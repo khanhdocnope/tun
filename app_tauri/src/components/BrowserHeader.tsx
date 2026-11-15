@@ -70,8 +70,8 @@ export const BrowserHeader: React.FC<BrowserHeaderProps> = ({
     } else if (val.includes('.') && !val.includes(' ')) {
       onNavigate(`https://${val}`);
     } else {
-      // Treat as search query via DuckDuckGo
-      onNavigate(`https://duckduckgo.com/?q=${encodeURIComponent(val)}`);
+      // Treat as search query via Google
+      onNavigate(`https://www.google.com/search?q=${encodeURIComponent(val)}`);
     }
   };
 
