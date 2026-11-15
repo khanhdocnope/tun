@@ -13,6 +13,7 @@ import {
   PanelLeft,
   Sparkles,
   Download,
+  ShieldCheck,
 } from 'lucide-react';
 import { BrowserTab } from '../types';
 
@@ -192,6 +193,15 @@ export const BrowserHeader: React.FC<BrowserHeaderProps> = ({
             <Star size={14} fill={isBookmarked ? 'currentColor' : 'none'} />
           </button>
         </form>
+
+        <button
+          type="button"
+          className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all shrink-0 ml-1 flex items-center gap-1 text-[11px] font-medium"
+          title="MoeJect AdBlocker (Mã nguồn mở uBlock / EasyList): Đang bảo vệ & chặn 100% pop-up, pop-under và banner cờ bạc"
+        >
+          <ShieldCheck size={15} />
+          <span className="hidden sm:inline">AdBlock</span>
+        </button>
 
         <button
           onClick={onOpenDownloads}

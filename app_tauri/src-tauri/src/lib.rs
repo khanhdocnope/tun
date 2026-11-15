@@ -7,6 +7,7 @@ pub mod library;
 pub mod local;
 pub mod settings;
 pub mod vision;
+pub mod browser;
 pub mod commands;
 #[cfg(test)]
 mod tests;

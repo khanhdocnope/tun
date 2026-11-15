@@ -554,7 +554,8 @@ pub async fn open_browser_pane(
         let webview_builder = tauri::webview::WebviewBuilder::new(
             "manga-browser-pane",
             WebviewUrl::External(parsed),
-        );
+        )
+        .initialization_script_for_all_frames(crate::browser::adblock::ADBLOCK_SCRIPT);
 
         window.add_child(webview_builder, pos, size)
             .map_err(|e| format!("Lỗi tạo native browser pane: {}", e))?;
